@@ -1,0 +1,209 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+html,
+body,
+#root {
+  overflow-x: hidden;
+  max-width: 100%;
+  background: #FAF9F5;
+  color: #1a1a1a;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Pure Black Dark Theme for Whole Application */
+html.dark,
+html.dark body,
+html.dark #root,
+html.dark main,
+html.dark section,
+html.dark article,
+html.dark footer,
+html.dark [class*="bg-[#FAF9F5]"],
+html.dark [class*="bg-[#f8f9f3]"],
+html.dark [class*="bg-[#f0f1eb]"],
+html.dark [class*="from-[#f8f9f3]"],
+html.dark [class*="to-[#f0f1eb]"] {
+  background-color: #000000 !important;
+  background-image: none !important;
+  color: #ffffff !important;
+}
+
+/* Dark mode header & dock background - Unified #0D0D0D */
+html.dark header,
+html.dark .mac-os-dock-container {
+  background: #0d0d0d !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+}
+
+html.dark header nav,
+html.dark nav {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dark [class*="bg-white"],
+html.dark [class*="bg-gray-50"],
+html.dark [class*="bg-gray-100"] {
+  background-color: #0d0d0d !important;
+  color: #ffffff !important;
+}
+
+html.dark [class*="border-gray-100"],
+html.dark [class*="border-gray-200"] {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* All text colors in dark mode */
+html.dark h1,
+html.dark h2,
+html.dark h3,
+html.dark h4,
+html.dark h5,
+html.dark h6,
+html.dark label,
+html.dark [class*="text-[#0D3A1D]"],
+html.dark [class*="text-gray-900"],
+html.dark [class*="text-gray-800"],
+html.dark [class*="text-gray-700"] {
+  color: #ffffff !important;
+}
+
+html.dark p,
+html.dark [class*="text-gray-600"],
+html.dark [class*="text-gray-500"],
+html.dark [class*="text-gray-400"] {
+  color: #a3a3a3 !important;
+}
+
+html.dark [class*="text-[#93B733]"],
+html.dark [class*="text-[#4E700F]"] {
+  color: #93B733 !important;
+}
+
+/* Inputs, buttons, selects */
+html.dark input:not([type="range"]),
+html.dark select,
+html.dark textarea {
+  background-color: #171717 !important;
+  color: #ffffff !important;
+  border-color: #262626 !important;
+}
+
+html.dark input[type="range"],
+html.dark .dual-range {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+html.dark .shadow-sm,
+html.dark .shadow-md,
+html.dark .shadow-lg,
+html.dark .shadow-xl {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.8) !important;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+  
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+body {
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+
+@keyframes slide-left {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes slide-right {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-left {
+  animation: slide-left var(--speed, 60s) linear infinite;
+}
+
+.animate-slide-right {
+  animation: slide-right var(--speed, 60s) linear infinite;
+}
+
+/* Dual Range Slider Styling for Light & Dark Mode */
+.dual-range {
+  position: absolute;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  height: 24px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  outline: none !important;
+  pointer-events: none;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  overflow: visible !important;
+}
+
+.dual-range::-webkit-slider-thumb {
+  pointer-events: auto;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  width: 22px;
+  height: 22px;
+  background: #93B733 !important;
+  border-radius: 50% !important;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border: 2.5px solid #ffffff !important;
+  position: relative;
+  z-index: 50;
+  margin-top: 0 !important;
+}
+
+.dual-range::-moz-range-thumb {
+  pointer-events: auto;
+  appearance: none !important;
+  width: 22px;
+  height: 22px;
+  background: #93B733 !important;
+  border-radius: 50% !important;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border: 2.5px solid #ffffff !important;
+  position: relative;
+  z-index: 50;
+}
+
+html.dark .dual-range::-webkit-slider-thumb {
+  border-color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8) !important;
+}
+
+html.dark .dual-range::-moz-range-thumb {
+  border-color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8) !important;
+}
