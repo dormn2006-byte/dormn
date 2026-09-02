@@ -81,7 +81,7 @@ connectDB().then(() => {
     }
   }, 5 * 60 * 1000);
 
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log("");
     console.log("========================================");
     console.log("  SERVER IS RUNNING!");
