@@ -26,27 +26,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.use(cors());
-app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
-// Rate Limiters
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: "Too many requests from this IP, please try again later." }
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { success: false, message: "Too many login attempts. Please try again after 15 minutes." }
-});
-
-app.use("/api/", globalLimiter);
-app.use("/api/auth/login", authLimiter);
-app.use("/api/auth/register", authLimiter);
+app.use(express.urlencoded({ extended: true }));
 
 // Automated Deployment Webhook Endpoint
 app.post("/api/v1/webhook/deploy", (req, res) => {
@@ -92,6 +73,25 @@ app.post("/api/v1/webhook/deploy", (req, res) => {
     console.log(`[Webhook] Stdout: ${stdout}`);
   });
 });
+
+// Rate Limiters
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Too many requests from this IP, please try again later." }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: "Too many login attempts. Please try again after 15 minutes." }
+});
+
+app.use("/api/", globalLimiter);
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
 
 // Routes
 app.use("/api/auth", authRoutes);
