@@ -46,8 +46,9 @@ app.post("/api/v1/webhook/deploy", (req, res) => {
 
   // Protect buffers from length mismatches
   const signatureBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expectedSignature);
+  const expectedBuffer = Buffer.from(secret); // Match directly against the raw secret variable
 
+  // Run the validation check safely
   if (signatureBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
     return res.status(403).json({ success: false, message: "Forbidden signature mismatch" });
   }
