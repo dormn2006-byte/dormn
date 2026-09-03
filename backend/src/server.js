@@ -109,7 +109,7 @@ app.use("/api/clubs", clubRoutes);
 app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.get("/", (req, res) => {
-  res.send("PG Platform Backend Running [U V1.0.1]");
+  res.send("PG Platform Backend Running [U V1.0.2]");
 });
 
 // Connect to MongoDB, then start server + cron
