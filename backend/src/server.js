@@ -15,6 +15,11 @@ import path from "path";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import clubRoutes from "./routes/clubRoutes.js";
 
+// Node built-in modules for webhook processing
+import { exec } from "child_process";
+import crypto from "crypto";
+import fs from "fs";
+
 const app = express();
 const PORT = process.env.PORT || 8000;
 const __filename = fileURLToPath(import.meta.url);
@@ -41,6 +46,51 @@ const authLimiter = rateLimit({
 app.use("/api/", globalLimiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
+
+// Automated Deployment Webhook Endpoint
+app.post("/api/v1/webhook/deploy", (req, res) => {
+  const signature = req.headers["x-hub-signature-256"];
+  const secret = process.env.WEBHOOK_SECRET;
+
+  if (!signature || !secret) {
+    return res.status(401).json({ success: false, message: "Unauthorized missing credentials" });
+  }
+
+  // Validate payload signature using fixed-time comparison
+  const hmac = crypto.createHmac("sha256", secret);
+  const expectedSignature = "sha256=" + hmac.update(JSON.stringify(req.body)).digest("hex");
+
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+    return res.status(403).json({ success: false, message: "Forbidden signature mismatch" });
+  }
+
+  // Safely write the incoming .env content if present in payload
+  if (req.body.secure_env_payload) {
+    try {
+      const envPath = path.join(process.cwd(), ".env");
+      fs.writeFileSync(envPath, req.body.secure_env_payload, "utf8");
+      console.log("[Webhook] .env configuration file updated successfully.");
+    } catch (err) {
+      console.error("[Webhook] File write error:", err.message);
+    }
+  }
+
+  // Respond quickly to prevent GitHub workflow timeouts
+  res.status(200).json({ success: true, message: "Deployment sync initiated." });
+
+  // Execute Git pull and trigger a background task restart
+  const taskName = process.env.SERVICE_TASK_NAME || "DormnBackendService";
+  const deployCmd = `cmd.exe /c cd ${process.cwd()} && git pull && timeout /t 2 && schtasks /end /tn "${taskName}" && schtasks /run /tn "${taskName}"`;
+
+  exec(deployCmd, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`[Webhook] Exec error: ${error.message}`);
+      return;
+    }
+    if (stderr) console.warn(`[Webhook] Stderr: ${stderr}`);
+    console.log(`[Webhook] Stdout: ${stdout}`);
+  });
+});
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -72,7 +122,6 @@ connectDB().then(() => {
         console.log("[Auto-Cancel] Cancelled " + result.modifiedCount + " paused booking(s)");
       }
     } catch (err) {
-      // Don't spam logs for transient connection issues
       if (err.message && err.message.includes("timed out")) {
         console.warn("[Auto-Cancel] Skipped — MongoDB connection pool temporarily unavailable");
       } else {
