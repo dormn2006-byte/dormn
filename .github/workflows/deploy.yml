@@ -14,13 +14,7 @@ jobs:
 
       - name: Trigger Instant Sync & Inject Secrets
         run: |
-          # Send the instant deployment alert using pure, escape-safe JSON
+          # Send the instant deployment alert using url-encoded form fields to handle newlines safely
           curl -X POST "https://b.dormn.com/api/v1/webhook/deploy" \
-            -H "Content-Type: application/json" \
             -H "X-Hub-Signature-256: ${{ secrets.WEBHOOK_SIGNATURE_HASH }}" \
-            --data-raw "$(cat << 'EOF'
-          {
-            "secure_env_payload": "${{ secrets.LIVE_ENV_VARIABLES }}"
-          }
-          EOF
-          )"
+            --data-urlencode "secure_env_payload=${{ secrets.LIVE_ENV_VARIABLES }}"
