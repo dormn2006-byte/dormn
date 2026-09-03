@@ -14,11 +14,7 @@ jobs:
 
       - name: Trigger Instant Sync & Inject Secrets
         run: |
-          # Construct the raw .env content using secure GitHub Secrets
-          RAW_ENV_PAYLOAD="${{ secrets.LIVE_ENV_VARIABLES }}"
-          
-          # Send the instant deployment alert directly to the correct backend route
+          # Send the instant deployment alert cleanly using form fields
           curl -X POST "https://b.dormn.com/api/v1/webhook/deploy" \
-            -H "Content-Type: application/json" \
             -H "X-Hub-Signature-256: ${{ secrets.WEBHOOK_SIGNATURE_HASH }}" \
-            -d "{\"secure_env_payload\": \"$RAW_ENV_PAYLOAD\"}"
+            --data-urlencode "secure_env_payload=${{ secrets.LIVE_ENV_VARIABLES }}"
