@@ -112,7 +112,13 @@ export const registerUser = async (req, res) => {
       cleanGender = "prefer_not_to_say";
     }
 
-    if (role === "student" || role === "owner") {
+    // Public self-registration allows 'student' or 'owner'. Restrict administrative roles.
+    let targetRole = role;
+    if (!["student", "owner"].includes(targetRole)) {
+      targetRole = "student";
+    }
+
+    if (targetRole === "student" || targetRole === "owner") {
       if (!cleanGender || !["male", "female", "prefer_not_to_say"].includes(cleanGender)) {
         return res.status(400).json({ success: false, message: "Please select your gender (Male, Female, or Prefer not to say)" });
       }
@@ -135,13 +141,13 @@ export const registerUser = async (req, res) => {
       full_name,
       email,
       password: hashedPassword,
-      role,
+      role: targetRole,
       phone,
       profile_image,
       gender: cleanGender,
       is_email_verified: 0,
       auth_provider: "local",
-      ...(role === "owner" && {
+      ...(targetRole === "owner" && {
         subscription_tier: "free",
         subscription_status: "trial",
         subscription_started_at: new Date(),

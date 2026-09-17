@@ -351,11 +351,13 @@ export default function MyPG() {
         </div>
 
         {/* Bottom macOS Dock */}
-        <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center pointer-events-none">
-          <div className="pointer-events-auto">
-            <MacOSDock apps={DOCK_APPS} variant="resident" onAppClick={handleDockClick} openApps={[activeAction]} />
+        {hasEnrolledPG && (
+          <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center pointer-events-none">
+            <div className="pointer-events-auto">
+              <MacOSDock apps={DOCK_APPS} variant="resident" onAppClick={handleDockClick} openApps={[activeAction]} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }
@@ -701,11 +703,13 @@ export default function MyPG() {
       </main>
 
       {/* ── BOTTOM MACOS DOCK (All 7 Features from Image) ── */}
-      <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center pointer-events-none">
-        <div className="pointer-events-auto">
-          <MacOSDock apps={DOCK_APPS} variant="resident" onAppClick={handleDockClick} openApps={activeAction ? [activeAction] : ['/my-pg']} />
+      {hasEnrolledPG && (
+        <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center pointer-events-none">
+          <div className="pointer-events-auto">
+            <MacOSDock apps={DOCK_APPS} variant="resident" onAppClick={handleDockClick} openApps={activeAction ? [activeAction] : ['/my-pg']} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
