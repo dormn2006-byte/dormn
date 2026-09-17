@@ -1,18 +1,51 @@
-import { useState, useEffect, useMemo, memo } from 'react';
+import { useState, useEffect, useMemo, useContext, memo } from 'react';
 import { ArrowLeft, Bell, CheckCircle2, Clock, Wrench, Trash2 } from 'lucide-react';
+import { AuthContext } from '../../context/AuthContext';
 
-const NOTICES_KEY = 'dormn_resident_notices';
 const formatDT = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A';
 
 const ResidentNotices = memo(({ onBack }) => {
+  const { user } = useContext(AuthContext);
+  const userKey = user?.id ? `u_${user.id}` : user?.email ? `e_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}` : null;
+  const userNoticesKey = userKey ? `dormn_resident_notices_${userKey}` : null;
+
   const [notices, setNotices] = useState([]);
   const [activeTab, setActiveTab] = useState('unread');
 
   useEffect(() => {
-    try { setNotices(JSON.parse(localStorage.getItem(NOTICES_KEY) || '[]')); } catch { setNotices([]); }
-  }, []);
+    try {
+      const stored = userNoticesKey ? JSON.parse(localStorage.getItem(userNoticesKey) || '[]') : [];
+      const legacy = JSON.parse(localStorage.getItem('dormn_resident_notices') || '[]');
+      const filteredLegacy = Array.isArray(legacy) ? legacy.filter(n => {
+        if (!user) return false;
+        if (n.student_id && user.id && String(n.student_id) === String(user.id)) return true;
+        if (n.student_email && user.email && n.student_email === user.email) return true;
+        return false;
+      }) : [];
 
-  const save = (updated) => { setNotices(updated); localStorage.setItem(NOTICES_KEY, JSON.stringify(updated)); };
+      const combined = [...(Array.isArray(stored) ? stored : []), ...filteredLegacy];
+      const map = new Map();
+      combined.forEach(n => { if (n.id) map.set(n.id, n); });
+      const finalNotices = Array.from(map.values());
+      setNotices(finalNotices);
+
+      // Clean up legacy unscoped key
+      localStorage.removeItem('dormn_resident_notices');
+      if (userNoticesKey && finalNotices.length > 0) {
+        localStorage.setItem(userNoticesKey, JSON.stringify(finalNotices));
+      }
+    } catch {
+      setNotices([]);
+    }
+  }, [userNoticesKey, user]);
+
+  const save = (updated) => {
+    setNotices(updated);
+    if (userNoticesKey) {
+      try { localStorage.setItem(userNoticesKey, JSON.stringify(updated)); } catch {}
+    }
+    localStorage.removeItem('dormn_resident_notices');
+  };
   const markRead = (id) => save(notices.map(n => n.id === id ? { ...n, read: true } : n));
   const markAllRead = () => save(notices.map(n => ({ ...n, read: true })));
   const clearAll = () => save([]);
@@ -28,10 +61,13 @@ const ResidentNotices = memo(({ onBack }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 py-2">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center text-xs sm:text-sm font-bold text-gray-500 hover:text-[#0D3A1D] dark:text-gray-400 dark:hover:text-white transition-colors cursor-pointer">
-          <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Dashboard
+    <div className="max-w-4xl mx-auto space-y-5">
+      <div className="flex items-center justify-between mb-2 pb-3 border-b border-gray-200/80 dark:border-white/10">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-[#0D3A1D] dark:hover:text-[#93B733] transition shadow-xs cursor-pointer active:scale-95"
+        >
+          <ArrowLeft size={16} /> <span>Back to My PG</span>
         </button>
         <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">My Notices</span>
       </div>

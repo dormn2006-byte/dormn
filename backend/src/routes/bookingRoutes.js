@@ -8,21 +8,25 @@ import {
   getOwnerBookingsController,
   updateBookingStatusController,
   cancelBookingController,
+  getMyPgs,
+  requestStayCancellationController,
+  getOwnerCancellationsController,
+  handleStayCancellationController,
 } from "../controllers/bookingController.js";
-
-import { getMyPgs } from "../controllers/bookingController.js";
 
 import {
   protect,
   ownerOnly,
+  requireVerifiedEmail,
 } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Create Booking Request (Student)
+// Create Booking Request (Student - requires verified email)
 router.post(
   "/create",
   protect,
+  requireVerifiedEmail,
   createBookingController
 );
 
@@ -58,4 +62,28 @@ router.put(
   updateBookingStatusController
 );
 
-export default router;
+// ── Stay Cancellation Endpoints ──
+// Student requests cancellation for enrolled PG
+router.post(
+  "/request-stay-cancellation",
+  protect,
+  requestStayCancellationController
+);
+
+// Owner fetches cancellation requests for their PGs
+router.get(
+  "/owner-cancellations",
+  protect,
+  ownerOnly,
+  getOwnerCancellationsController
+);
+
+// Owner approves/rejects cancellation request
+router.post(
+  "/handle-stay-cancellation",
+  protect,
+  ownerOnly,
+  handleStayCancellationController
+);
+
+export default router;

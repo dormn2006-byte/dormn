@@ -1,7 +1,4 @@
-import PG from "../schemas/pgSchema.js";
-import User from "../schemas/userSchema.js";
-import SavedPG from "../schemas/savedPGSchema.js";
-import Booking from "../schemas/bookingSchema.js";
+import db from "../config/db.js";
 
 // Create New PG
 export const createPG = async (pgData) => {
@@ -23,8 +20,158 @@ export const createPG = async (pgData) => {
     sharing_options,
   } = pgData;
 
-  const pg = await PG.create({
+  const query = `
+    INSERT INTO pgs (
+      owner_id,
+      title,
+      description,
+      pg_type,
+      price,
+      address,
+      city,
+      area,
+      nearby_college,
+      available_rooms,
+      amenities,
+      rules,
+      profile_image,
+      google_map_link,
+      status,
+      sharing_options
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const [result] = await db.execute(query, [
     owner_id,
+    title,
+    description,
+    pg_type,
+    price,
+    address,
+    city,
+    area,
+    nearby_college,
+    available_rooms,
+    amenities,
+    rules,
+    profile_image,
+    google_map_link,
+    'pending',
+    sharing_options, // NEW: Insert into database
+  ]);
+
+  return result;
+};
+
+// Get All PGs
+export const getAllPGs = async () => {
+  const query = `
+    SELECT
+      pgs.*,
+      users.full_name AS owner_name,
+      users.email AS owner_email,
+      COALESCE((
+        SELECT COUNT(*) FROM bookings b 
+        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
+      ), 0) AS occupied_spots,
+      GREATEST(0, CAST(COALESCE(pgs.available_rooms, 0) AS SIGNED) - COALESCE((
+        SELECT COUNT(*) FROM bookings b 
+        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
+      ), 0)) AS spots_left
+    FROM pgs
+    LEFT JOIN users ON pgs.owner_id = users.id
+    WHERE pgs.status = 'approved'
+      AND (
+        users.role != 'owner'
+        OR users.subscription_status IS NULL
+        OR users.subscription_status IN ('trial', 'active')
+        OR users.subscription_expires_at > NOW()
+      )
+    ORDER BY (spots_left > 0) DESC, pgs.created_at DESC
+  `;
+
+  const [rows] = await db.execute(query);
+
+  return rows;
+};
+
+// Get Single PG By ID
+export const getPGById = async (id) => {
+  // Fetch PG details
+  const pgQuery = `
+    SELECT
+      pgs.*,
+      users.full_name AS owner_name,
+      users.email AS owner_email,
+      users.phone AS owner_phone,
+      COALESCE((
+        SELECT COUNT(*) FROM bookings b 
+        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
+      ), 0) AS occupied_spots,
+      GREATEST(0, CAST(COALESCE(pgs.available_rooms, 0) AS SIGNED) - COALESCE((
+        SELECT COUNT(*) FROM bookings b 
+        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
+      ), 0)) AS spots_left
+    FROM pgs
+    JOIN users ON pgs.owner_id = users.id
+    WHERE pgs.id = ?
+  `;
+
+  const [pgRows] = await db.execute(pgQuery, [id]);
+
+  if (pgRows.length === 0) {
+    return null;
+  }
+
+  const pg = pgRows[0];
+
+  // Fetch gallery images
+  const imageQuery = `
+    SELECT
+      id,
+      image_url,
+      display_order,
+      is_cover
+    FROM pg_images
+    WHERE pg_id = ?
+    ORDER BY display_order ASC
+  `;
+
+  const [images] = await db.execute(imageQuery, [id]);
+
+  // Attach gallery to PG object
+  pg.gallery = images;
+
+  return pg;
+};
+
+// Get PGs By Owner
+export const getPGsByOwner = async (ownerId) => {
+  const query = `
+    SELECT 
+      pgs.*,
+      COALESCE((
+        SELECT COUNT(*) FROM bookings b 
+        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
+      ), 0) AS occupied_spots,
+      GREATEST(0, CAST(COALESCE(pgs.available_rooms, 0) AS SIGNED) - COALESCE((
+        SELECT COUNT(*) FROM bookings b 
+        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
+      ), 0)) AS spots_left
+    FROM pgs
+    WHERE owner_id = ?
+    ORDER BY created_at DESC
+  `;
+
+  const [rows] = await db.execute(query, [ownerId]);
+
+  return rows;
+};
+
+// Update PG
+export const updatePG = async (id, pgData) => {
+  const {
     title,
     description,
     pg_type,
@@ -38,176 +185,251 @@ export const createPG = async (pgData) => {
     rules,
     google_map_link,
     profile_image,
-    sharing_options,
-    status: "pending",
-  });
+    sharing_options, // NEW: Extract sharing options
+  } = pgData;
 
-  return { insertId: pg._id };
-};
+  const query = `
+    UPDATE pgs
+    SET
+      title = ?,
+      description = ?,
+      pg_type = ?,
+      price = ?,
+      address = ?,
+      city = ?,
+      area = ?,
+      nearby_college = ?,
+      available_rooms = ?,
+      amenities = ?,
+      rules = ?,
+      google_map_link = ?,
+      profile_image = ?,
+      sharing_options = ?
+    WHERE id = ?
+  `;
 
-// Get All PGs (approved only, with owner info)
-export const getAllPGs = async () => {
-  const pgs = await PG.find({ status: "approved" })
-    .sort({ created_at: -1 })
-    .populate("owner_id", "full_name email")
-    .lean();
+  const [result] = await db.execute(query, [
+    title,
+    description,
+    pg_type,
+    price,
+    address,
+    city,
+    area,
+    nearby_college,
+    available_rooms,
+    amenities,
+    rules,
+    google_map_link,
+    profile_image,
+    sharing_options, // NEW: Update in database
+    id,
+  ]);
 
-  // Flatten owner info to match old API shape
-  return pgs.map((pg) => ({
-    ...pg,
-    id: pg._id,
-    owner_name: pg.owner_id?.full_name || "",
-    owner_email: pg.owner_id?.email || "",
-    owner_id: pg.owner_id?._id || pg.owner_id,
-  }));
-};
-
-// Get Single PG By ID (with owner info + gallery)
-export const getPGById = async (id) => {
-  // Validate MongoDB ObjectId format before querying
-  if (!id || !/^[a-fA-F0-9]{24}$/.test(id)) {
-    return null;
-  }
-
-  const pg = await PG.findById(id)
-    .populate("owner_id", "full_name email phone")
-    .lean();
-
-  if (!pg) return null;
-
-  return {
-    ...pg,
-    id: pg._id,
-    owner_name: pg.owner_id?.full_name || "",
-    owner_email: pg.owner_id?.email || "",
-    owner_phone: pg.owner_id?.phone || "",
-    owner_id: pg.owner_id?._id || pg.owner_id,
-  };
-};
-
-// Get PGs By Owner
-export const getPGsByOwner = async (ownerId) => {
-  const pgs = await PG.find({ owner_id: ownerId })
-    .sort({ created_at: -1 })
-    .lean();
-
-  return pgs.map((pg) => ({ ...pg, id: pg._id }));
-};
-
-// Update PG
-export const updatePG = async (id, pgData) => {
-  return await PG.findByIdAndUpdate(id, pgData, { new: true });
+  return result;
 };
 
 // Delete PG
 export const deletePG = async (id) => {
-  return await PG.findByIdAndDelete(id);
+  const query = `DELETE FROM pgs WHERE id = ?`;
+
+  const [result] = await db.execute(query, [id]);
+
+  return result;
 };
 
-// Save Multiple PG Images (appends to gallery subdocument array)
+// Save Multiple PG Images
 export const savePGImages = async (pgId, images) => {
-  if (!images || images.length === 0) return;
+  if (!images || images.length === 0) {
+    return;
+  }
 
-  const galleryDocs = images.map((img, i) => ({
-    image_url: img,
-    display_order: i + 1,
-    is_cover: i === 0 ? 1 : 0,
-  }));
+  const query = `
+    INSERT INTO pg_images (
+      pg_id,
+      image_url,
+      display_order,
+      is_cover
+    )
+    VALUES (?, ?, ?, ?)
+  `;
 
-  await PG.findByIdAndUpdate(pgId, {
-    $push: { gallery: { $each: galleryDocs } },
-  });
+  for (let i = 0; i < images.length; i++) {
+    await db.execute(query, [
+      pgId,
+      images[i],
+      i + 1,
+      i === 0 ? 1 : 0,
+    ]);
+  }
 };
-
 // ==========================================
 // SAVED PGS (FAVORITES) MODELS
 // ==========================================
 
 // Toggle Save/Unsave a PG
 export const toggleSavePG = async (userId, pgId) => {
-  const existing = await SavedPG.findOne({ user_id: userId, pg_id: pgId });
+  // First, check if the user has already saved this PG
+  const checkQuery = `SELECT * FROM saved_pgs WHERE user_id = ? AND pg_id = ?`;
+  const [existing] = await db.execute(checkQuery, [userId, pgId]);
 
-  if (existing) {
-    await SavedPG.deleteOne({ _id: existing._id });
+  if (existing.length > 0) {
+    // If it exists, UN-SAVE it (Delete)
+    const deleteQuery = `DELETE FROM saved_pgs WHERE user_id = ? AND pg_id = ?`;
+    await db.execute(deleteQuery, [userId, pgId]);
     return { isSaved: false, message: "PG removed from saved list" };
   } else {
-    await SavedPG.create({ user_id: userId, pg_id: pgId });
+    // If it doesn't exist, SAVE it (Insert)
+    const insertQuery = `INSERT INTO saved_pgs (user_id, pg_id) VALUES (?, ?)`;
+    await db.execute(insertQuery, [userId, pgId]);
     return { isSaved: true, message: "PG saved successfully" };
   }
 };
 
 // Get all PGs saved by a specific user
 export const getSavedPGsByUser = async (userId) => {
-  const saved = await SavedPG.find({ user_id: userId })
-    .sort({ created_at: -1 })
-    .lean();
+  const query = `
+    SELECT 
+      pgs.*,
+      users.full_name AS owner_name,
+      users.email AS owner_email,
+      COALESCE((
+        SELECT COUNT(*) FROM bookings b 
+        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
+      ), 0) AS occupied_spots,
+      GREATEST(0, CAST(COALESCE(pgs.available_rooms, 0) AS SIGNED) - COALESCE((
+        SELECT COUNT(*) FROM bookings b 
+        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
+      ), 0)) AS spots_left
+    FROM pgs
+    JOIN saved_pgs ON pgs.id = saved_pgs.pg_id
+    LEFT JOIN users ON pgs.owner_id = users.id
+    WHERE saved_pgs.user_id = ? AND pgs.status = 'approved'
+      AND (
+        users.role != 'owner'
+        OR users.subscription_status IS NULL
+        OR users.subscription_status IN ('trial', 'active')
+        OR users.subscription_expires_at > NOW()
+      )
+    ORDER BY (spots_left > 0) DESC, saved_pgs.created_at DESC
+  `;
 
-  const pgIds = saved.map((s) => s.pg_id);
-
-  const pgs = await PG.find({ _id: { $in: pgIds }, status: "approved" })
-    .populate("owner_id", "full_name email")
-    .lean();
-
-  return pgs.map((pg) => ({
-    ...pg,
-    id: pg._id,
-    owner_name: pg.owner_id?.full_name || "",
-    owner_email: pg.owner_id?.email || "",
-    owner_id: pg.owner_id?._id || pg.owner_id,
-  }));
+  const [rows] = await db.execute(query, [userId]);
+  return rows;
 };
 
 // ==========================================
-// ADVANCED SEARCH & FILTER MODELS
+// NEW ADVANCED SEARCH & FILTER MODELS
 // ==========================================
 
 // Get distinct locations and landmarks for frontend dropdowns
 export const getFilterOptions = async () => {
-  const cities = await PG.distinct("city", { status: "approved", city: { $ne: "" } });
-  const areas = await PG.distinct("area", { status: "approved", area: { $ne: "" } });
-  const colleges = await PG.distinct("nearby_college", { status: "approved", nearby_college: { $ne: "" } });
+  // We only fetch distinct options from 'approved' PGs to ensure we don't show empty search results
+  const cityQuery = `SELECT DISTINCT city FROM pgs WHERE status = 'approved' AND city IS NOT NULL AND city != ''`;
+  const areaQuery = `SELECT DISTINCT area FROM pgs WHERE status = 'approved' AND area IS NOT NULL AND area != ''`;
+  const collegeQuery = `SELECT DISTINCT nearby_college FROM pgs WHERE status = 'approved' AND nearby_college IS NOT NULL AND nearby_college != ''`;
 
-  return { cities, areas, colleges };
+  const [cities] = await db.execute(cityQuery);
+  const [areas] = await db.execute(areaQuery);
+  const [colleges] = await db.execute(collegeQuery);
+
+  return {
+    cities: cities.map(row => row.city),
+    areas: areas.map(row => row.area),
+    colleges: colleges.map(row => row.nearby_college),
+  };
 };
 
 // Advanced dynamic search query
 export const searchPGs = async (filters) => {
-  const { pg_type, city, area, nearby_college, min_price, max_price } = filters;
+  const { pg_type, city, area, nearby_college, min_price, max_price, amenity, keyword } = filters;
 
-  const query = { status: "approved" };
+  let query = `
+    SELECT
+      pgs.*,
+      users.full_name AS owner_name,
+      users.email AS owner_email,
+      COALESCE((
+        SELECT COUNT(*) FROM bookings b 
+        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
+      ), 0) AS occupied_spots,
+      GREATEST(0, CAST(COALESCE(pgs.available_rooms, 0) AS SIGNED) - COALESCE((
+        SELECT COUNT(*) FROM bookings b 
+        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
+      ), 0)) AS spots_left
+    FROM pgs
+    LEFT JOIN users ON pgs.owner_id = users.id
+    WHERE pgs.status = 'approved'
+      AND (
+        users.role != 'owner'
+        OR users.subscription_status IS NULL
+        OR users.subscription_status IN ('trial', 'active')
+        OR users.subscription_expires_at > NOW()
+      )
+  `;
+  
+  const params = [];
 
-  if (pg_type) query.pg_type = pg_type;
-  if (city) query.city = city;
-  if (area) query.area = area;
-  if (nearby_college) query.nearby_college = nearby_college;
-  if (min_price || max_price) {
-    query.price = {};
-    if (min_price) query.price.$gte = Number(min_price);
-    if (max_price) query.price.$lte = Number(max_price);
+  // Dynamically append WHERE clauses only if the user provided the filter
+  if (pg_type) {
+    query += ` AND pgs.pg_type = ?`;
+    params.push(pg_type);
+  }
+  
+  if (city) {
+    query += ` AND pgs.city = ?`;
+    params.push(city);
+  }
+  
+  if (area) {
+    query += ` AND pgs.area = ?`;
+    params.push(area);
+  }
+  
+  if (nearby_college) {
+    query += ` AND pgs.nearby_college = ?`;
+    params.push(nearby_college);
   }
 
-  const pgs = await PG.find(query)
-    .sort({ created_at: -1 })
-    .populate("owner_id", "full_name email")
-    .lean();
+  if (amenity) {
+    query += ` AND pgs.amenities LIKE ?`;
+    params.push(`%${amenity}%`);
+  }
 
-  return pgs.map((pg) => ({
-    ...pg,
-    id: pg._id,
-    owner_name: pg.owner_id?.full_name || "",
-    owner_email: pg.owner_id?.email || "",
-    owner_id: pg.owner_id?._id || pg.owner_id,
-  }));
+  if (keyword) {
+    query += ` AND (pgs.title LIKE ? OR pgs.city LIKE ? OR pgs.area LIKE ? OR pgs.address LIKE ? OR pgs.amenities LIKE ?)`;
+    const kw = `%${keyword}%`;
+    params.push(kw, kw, kw, kw, kw);
+  }
+  
+  if (min_price) {
+    query += ` AND pgs.price >= ?`;
+    params.push(Number(min_price));
+  }
+  
+  if (max_price) {
+    query += ` AND pgs.price <= ?`;
+    params.push(Number(max_price));
+  }
+
+  // Finalize query with sorting: Available PGs first (spots_left > 0), full/filled PGs at the bottom
+  query += ` ORDER BY (spots_left > 0) DESC, pgs.created_at DESC`;
+
+  const [rows] = await db.execute(query, params);
+  
+  return rows;
 };
-
 // ==========================================
-// OWNER ANALYTICS MODEL
+// OWNER ANALYTICS MODEL (FIXED)
 // ==========================================
 export const getOwnerAnalyticsData = async (ownerId) => {
-  const user = await User.findById(ownerId).lean();
-  const subscriptionTier = user?.subscription_tier || "Pro Tier";
+  // Fetch owner subscription tier directly from database
+  const [userRows] = await db.execute(`SELECT subscription_tier FROM users WHERE id = ?`, [ownerId]);
+  const subscriptionTier = userRows[0]?.subscription_tier || "Pro Tier";
 
-  const pgs = await PG.find({ owner_id: ownerId }).lean();
+  // 1. Fetch all PGs owned by this user
+  const pgsQuery = `SELECT * FROM pgs WHERE owner_id = ?`;
+  const [pgs] = await db.execute(pgsQuery, [ownerId]);
 
   if (pgs.length === 0) {
     return {
@@ -216,6 +438,9 @@ export const getOwnerAnalyticsData = async (ownerId) => {
       approvedPGs: 0,
       pendingPGs: 0,
       totalRooms: 0,
+      totalSpots: 0,
+      occupiedSpots: 0,
+      spotsLeft: 0,
       totalStudents: 0,
       totalBookings: 0,
       estimatedMonthlyRevenue: 0,
@@ -226,22 +451,30 @@ export const getOwnerAnalyticsData = async (ownerId) => {
     };
   }
 
-  const pgIds = pgs.map(p => p._id);
+  const pgIds = pgs.map(p => p.id);
 
-  const bookings = await Booking.find({ pg_id: { $in: pgIds } })
-    .sort({ _id: -1 })
-    .populate("pg_id", "title city price")
-    .lean();
+  // 2. Fetch all bookings for these PGs
+  const placeholders = pgIds.map(() => '?').join(',');
+  const bookingsQuery = `
+    SELECT b.*, p.title AS pg_title, p.city 
+    FROM bookings b
+    JOIN pgs p ON b.pg_id = p.id
+    WHERE b.pg_id IN (${placeholders})
+    ORDER BY b.id DESC
+  `;
+  const [bookings] = await db.execute(bookingsQuery, pgIds);
 
-  const approvedBookings = bookings.filter(b => b.status === 'approved');
+  // 3. Process calculations
+  const approvedBookings = bookings.filter(b => b.status === 'approved' || b.payment_status === 'paid');
   const pendingBookings = bookings.filter(b => b.status === 'pending');
   const rejectedBookings = bookings.filter(b => b.status === 'rejected');
 
-  const estimatedMonthlyRevenue = approvedBookings.reduce(
-    (sum, b) => sum + Number(b.booked_price || b.pg_id?.price || 0), 0
-  );
-
+  const estimatedMonthlyRevenue = approvedBookings.reduce((sum, b) => sum + Number(b.booked_price || b.price || 0), 0);
+  
   const totalRooms = pgs.reduce((sum, p) => sum + Number(p.available_rooms || 0), 0);
+  const totalSpots = totalRooms;
+  const occupiedSpots = approvedBookings.length;
+  const spotsLeft = Math.max(0, totalSpots - occupiedSpots);
 
   const pgTypeBreakdown = {
     boys: pgs.filter(p => p.pg_type?.toLowerCase() === 'boys').length,
@@ -255,6 +488,9 @@ export const getOwnerAnalyticsData = async (ownerId) => {
     approvedPGs: pgs.filter(p => p.status === 'approved').length,
     pendingPGs: pgs.filter(p => p.status === 'pending').length,
     totalRooms,
+    totalSpots,
+    occupiedSpots,
+    spotsLeft,
     totalStudents: approvedBookings.length,
     totalBookings: bookings.length,
     estimatedMonthlyRevenue,
@@ -265,17 +501,18 @@ export const getOwnerAnalyticsData = async (ownerId) => {
       rejected: rejectedBookings.length,
     },
     topPerformingPGs: pgs.map(pg => {
-      const pgApproved = approvedBookings.filter(
-        b => (b.pg_id?._id || b.pg_id).toString() === pg._id.toString()
-      );
+      const pgApproved = approvedBookings.filter(b => b.pg_id === pg.id);
+      const pgCapacity = Number(pg.available_rooms || 0);
+      const pgOccupied = pgApproved.length;
       return {
-        id: pg._id,
+        id: pg.id,
         title: pg.title,
         city: pg.city,
+        totalSpots: pgCapacity,
+        occupiedSpots: pgOccupied,
+        spotsLeft: Math.max(0, pgCapacity - pgOccupied),
         studentsCount: pgApproved.length,
-        revenue: pgApproved.reduce(
-          (sum, b) => sum + Number(b.booked_price || pg.price || 0), 0
-        )
+        revenue: pgApproved.reduce((sum, b) => sum + Number(b.booked_price || pg.price || 0), 0)
       };
     }).sort((a, b) => b.revenue - a.revenue)
   };

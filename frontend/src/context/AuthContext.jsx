@@ -1,7 +1,18 @@
-import { createContext, useState } from "react";
+import { createContext, useState, useEffect } from "react";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext();
+
+const purgeLegacyCaches = () => {
+  try {
+    localStorage.removeItem("dormn_resident_requests");
+    localStorage.removeItem("dormn_resident_notices");
+    localStorage.removeItem("dormn_resident_notifications");
+    localStorage.removeItem("dormn_student_profile");
+    localStorage.removeItem("dormn_registration_form");
+    localStorage.removeItem("dormn_kyc_enrollments");
+  } catch {}
+};
 
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
@@ -17,8 +28,13 @@ const AuthProvider = ({ children }) => {
     localStorage.getItem("token") || null
   );
 
+  useEffect(() => {
+    purgeLegacyCaches();
+  }, []);
+
   // Login Function
   const login = (userData, jwtToken) => {
+    purgeLegacyCaches();
     setUser(userData);
     setToken(jwtToken);
 
@@ -33,6 +49,20 @@ const AuthProvider = ({ children }) => {
 
     localStorage.removeItem("user");
     localStorage.removeItem("token");
+    purgeLegacyCaches();
+  };
+
+  // Update User Profile / Verification state
+  const updateUser = (updatedFields) => {
+    setUser((prev) => {
+      const merged = { ...prev, ...updatedFields };
+      try {
+        localStorage.setItem("user", JSON.stringify(merged));
+      } catch (err) {
+        console.error("Failed to update user in localStorage", err);
+      }
+      return merged;
+    });
   };
 
   return (
@@ -42,6 +72,7 @@ const AuthProvider = ({ children }) => {
         token,
         login,
         logout,
+        updateUser,
       }}
     >
       {children}

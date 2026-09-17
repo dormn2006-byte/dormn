@@ -1,20 +1,19 @@
-import mongoose from "mongoose";
+import mysql from "mysql2/promise";
+import dotenv from "dotenv";
 
-const connectDB = async (retries = 3, delay = 5000) => {
-  for (let i = 1; i <= retries; i++) {
-    try {
-      await mongoose.connect(process.env.MONGO_URI);
-      console.log(`MongoDB Connected: ${mongoose.connection.host}`);
-      return;
-    } catch (error) {
-      console.error(`MongoDB Connection Attempt ${i}/${retries} Failed: ${error.message}`);
-      if (i < retries) {
-        console.log(`Retrying in ${delay / 1000}s...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
-  }
-  console.error("MongoDB: All connection attempts failed. Server will keep running but database operations will fail.");
-};
+dotenv.config();
 
-export default connectDB;
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
+
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  charset: 'utf8mb4',
+});
+
+export default pool;

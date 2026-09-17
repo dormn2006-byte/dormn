@@ -13,6 +13,7 @@ const quickLinks = [
 const legalAndOwnerLinks = [
   { name: "Privacy Policy", path: "/privacy" },
   { name: "Terms & Conditions", path: "/terms" },
+  { name: "Cookie Policy", path: "/cookies" },
   { name: "Student Portal", path: "/auth?role=student" },
   { name: "Owner Portal", path: "/auth?role=owner" },
 ];
@@ -233,6 +234,18 @@ const Footer = () => {
             <Link to="/terms" className="hover:text-white transition">
               Terms &amp; Conditions
             </Link>
+            <span>•</span>
+            <Link to="/cookies" className="hover:text-white transition">
+              Cookie Policy
+            </Link>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('dormn_open_cookie_preferences'))}
+              className="hover:text-[#93B733] transition cursor-pointer"
+            >
+              Cookie Settings
+            </button>
             <span>•</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-[#93B733]/15 border border-[#93B733]/30 px-2.5 py-0.5 text-[11px] font-bold text-[#93B733]">
               <ShieldCheck size={13} /> Verified

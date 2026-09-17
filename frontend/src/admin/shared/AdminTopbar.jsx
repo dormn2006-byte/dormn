@@ -73,32 +73,32 @@ const AdminTopbar = ({ sidebarOpen, setSidebarOpen, isCollapsed, toggleCollapse 
 
   return (
     <header className="sticky top-0 z-30 border-b border-gray-200 dark:border-white/10 bg-white/80 dark:bg-[#070b1a]/80 backdrop-blur-2xl transition-colors duration-300">
-      <div className="flex items-center justify-between px-4 py-4 md:px-6 lg:px-8">
+      <div className="flex items-center justify-between px-3.5 py-2.5 sm:px-4 sm:py-3 md:px-6 md:py-4 lg:px-8">
         {/* Left Section */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
           {/* Mobile Menu */}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white transition hover:bg-gray-100 dark:hover:bg-white/10 xl:hidden"
+            className="flex h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white transition hover:bg-gray-100 dark:hover:bg-white/10 xl:hidden shrink-0"
           >
-            <Menu size={20} />
+            <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           {/* Title */}
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight text-gray-900 dark:text-white truncate leading-tight">
               {title}
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-[11px] sm:text-xs md:text-sm text-gray-500 dark:text-gray-400 truncate max-w-[180px] xs:max-w-[240px] sm:max-w-none">
               {subtitle}
             </p>
           </div>
         </div>
 
         {/* Right Section */}
-        <div className="flex items-center gap-3 md:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3 md:gap-4 shrink-0">
           {/* Search */}
-          <div className="hidden items-center gap-3 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-3 backdrop-blur-xl md:flex">
+          <div className="hidden items-center gap-3 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-2.5 backdrop-blur-xl md:flex">
             <Search size={18} className="text-gray-400" />
 
             <input
@@ -111,20 +111,18 @@ const AdminTopbar = ({ sidebarOpen, setSidebarOpen, isCollapsed, toggleCollapse 
           {/* Notification Button */}
           <button 
             onClick={() => navigate("/owner/notifications")}
-            className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white transition hover:bg-gray-100 dark:hover:bg-white/10"
+            className="relative flex h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white transition hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
             title="View Notifications"
           >
-            <Bell size={20} />
+            <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
 
             {hasUnread && (
-              <div className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-pink-500 shadow-sm animate-pulse"></div>
+              <div className="absolute right-2 top-2 sm:right-2.5 sm:top-2.5 h-2 w-2 rounded-full bg-pink-500 shadow-sm animate-pulse"></div>
             )}
           </button>
 
           {/* Theme Switch */}
-          <ThemeSwitch className="!h-11 !w-11 border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white" />
-
-
+          <ThemeSwitch className="!h-9 !w-9 sm:!h-10 sm:!w-10 md:!h-11 md:!w-11 border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white shrink-0" />
         </div>
       </div>
     </header>

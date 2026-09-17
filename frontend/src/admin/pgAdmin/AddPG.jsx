@@ -4,9 +4,11 @@ import {
   Upload, ImagePlus, MapPin, Wifi, Snowflake, ShieldCheck, Utensils,
   IndianRupee, Plus, X, Sparkles, Building2, Check, ArrowRight,
   ArrowLeft, Clock, BedDouble, CheckCircle2, AlertCircle, FileText,
-  Home, Phone, User as UserIcon, HelpCircle, ChevronRight, Eye, Users
+  Home, Phone, User as UserIcon, HelpCircle, ChevronRight, Eye, Users,
+  Copy, ExternalLink, MessageSquare, Share2, CreditCard
 } from "lucide-react";
 import api from "../../services/api";
+import CollegeCombobox from "../../components/ui/CollegeCombobox";
 
 /* ═══════════════════════════════════════════
    DEFAULT AMENITIES LIST
@@ -27,10 +29,10 @@ const DEFAULT_AMENITIES = [
 ];
 
 /* ═══════════════════════════════════════════
-   MEDIUM ILLUSTRATED STUDENT CHARACTER AVATARS
+   COMPACT ILLUSTRATED STUDENT CHARACTER AVATARS
    ═══════════════════════════════════════════ */
 const BoyCharacter = memo(({ isSelected }) => (
-  <svg viewBox="0 0 64 64" className="w-13 h-13 sm:w-14 sm:h-14 transition-transform group-hover:scale-105 drop-shadow-sm" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg viewBox="0 0 64 64" className="w-8 h-8 sm:w-11 sm:h-11 transition-transform group-hover:scale-105 drop-shadow-sm" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="32" cy="32" r="30" className={isSelected ? "fill-blue-400/25" : "fill-blue-500/10 dark:fill-blue-500/20"} />
     <path d="M16 58C16 48 23 44 32 44C41 44 48 48 48 58" className={isSelected ? "fill-blue-400" : "fill-blue-600 dark:fill-blue-500"} />
     <path d="M26 44L32 50L38 44" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -48,7 +50,7 @@ const BoyCharacter = memo(({ isSelected }) => (
 BoyCharacter.displayName = "BoyCharacter";
 
 const GirlCharacter = memo(({ isSelected }) => (
-  <svg viewBox="0 0 64 64" className="w-13 h-13 sm:w-14 sm:h-14 transition-transform group-hover:scale-105 drop-shadow-sm" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg viewBox="0 0 64 64" className="w-8 h-8 sm:w-11 sm:h-11 transition-transform group-hover:scale-105 drop-shadow-sm" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="32" cy="32" r="30" className={isSelected ? "fill-rose-400/25" : "fill-rose-500/10 dark:fill-rose-500/20"} />
     <path d="M18 24C16 35 18 44 22 47C23 44 24 38 24 35" fill="#7D4F27" />
     <path d="M46 24C48 35 46 44 42 47C41 44 40 38 40 35" fill="#7D4F27" />
@@ -69,7 +71,7 @@ const GirlCharacter = memo(({ isSelected }) => (
 GirlCharacter.displayName = "GirlCharacter";
 
 const DuoCharacter = memo(({ isSelected }) => (
-  <svg viewBox="0 0 64 64" className="w-13 h-13 sm:w-14 sm:h-14 transition-transform group-hover:scale-105 drop-shadow-sm" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg viewBox="0 0 64 64" className="w-8 h-8 sm:w-11 sm:h-11 transition-transform group-hover:scale-105 drop-shadow-sm" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="32" cy="32" r="30" className={isSelected ? "fill-purple-400/25" : "fill-purple-500/10 dark:fill-purple-500/20"} />
     <path d="M10 58C10 50 16 46 23 46C27 46 30 48 32 52C28 54 26 56 26 58" className={isSelected ? "fill-blue-400" : "fill-blue-600 dark:fill-blue-500"} />
     <circle cx="22" cy="27" r="9" fill="#FCD5B5" />
@@ -121,6 +123,8 @@ export default function AddPG() {
   const [submittedPg, setSubmittedPg] = useState(null);
   const [loading, setLoading] = useState(false);
   const [hasExistingPgs, setHasExistingPgs] = useState(false);
+  const [payoutStatus, setPayoutStatus] = useState({ loading: true, isConfigured: true });
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
 
   // Form Data State
   const [formData, setFormData] = useState({
@@ -152,19 +156,35 @@ export default function AddPG() {
   const [newAmenityInput, setNewAmenityInput] = useState("");
 
   useEffect(() => {
-    const checkPgs = async () => {
+    const checkStatus = async () => {
       try {
-        const { data } = await api.get("/pg/owner/my-pgs").catch(() => ({ data: {} }));
-        const pgs = data?.pgs || [];
+        const [pgsRes, payoutRes] = await Promise.all([
+          api.get("/pg/owner/my-pgs").catch(() => ({ data: {} })),
+          api.get("/auth/payout-status").catch(() => ({ data: {} })),
+        ]);
+        const pgs = pgsRes.data?.pgs || [];
         setHasExistingPgs(pgs.length > 0);
+
+        const isConfigured = Boolean(payoutRes.data?.is_configured);
+        setPayoutStatus({
+          loading: false,
+          isConfigured,
+        });
+
+        if (!isConfigured) {
+          // Keep on step 0 if not configured
+          return;
+        }
+
         if (pgs.length > 0 && searchParams.get("start") === "1") {
           setCurrentStep(1);
         }
       } catch (err) {
-        console.error("Check PGs Error:", err);
+        console.error("Check Status Error:", err);
+        setPayoutStatus({ loading: false, isConfigured: false });
       }
     };
-    checkPgs();
+    checkStatus();
   }, [searchParams]);
 
   const handleChange = (e) => {
@@ -175,13 +195,22 @@ export default function AddPG() {
   };
 
   const handleSharingCheckboxChange = (roomType) => {
-    setSharingOptions((prev) => ({
-      ...prev,
-      [roomType]: {
-        ...prev[roomType],
-        available: !prev[roomType].available,
-      },
-    }));
+    setSharingOptions((prev) => {
+      const willBeAvailable = !prev[roomType].available;
+      const base = Math.max(1000, Number(formData.price) || 6000);
+      const fallbackNonAc = roomType === "single" ? base : roomType === "double" ? Math.round(base * 0.85) : Math.round(base * 0.72);
+      const fallbackAc = fallbackNonAc + (roomType === "single" ? 1500 : 1200);
+
+      return {
+        ...prev,
+        [roomType]: {
+          ...prev[roomType],
+          available: willBeAvailable,
+          ac_price: willBeAvailable && !prev[roomType].ac_price ? String(fallbackAc) : prev[roomType].ac_price,
+          non_ac_price: willBeAvailable && !prev[roomType].non_ac_price ? String(fallbackNonAc) : prev[roomType].non_ac_price,
+        },
+      };
+    });
   };
 
   const handleSharingPriceChange = (roomType, field, value) => {
@@ -247,6 +276,10 @@ export default function AddPG() {
         alert("Please select a PG Type (Boys, Girls, or Boys & Girls).");
         return false;
       }
+      if (!formData.description.trim()) {
+        alert("Please enter the Property Description.");
+        return false;
+      }
     } else if (step === 2) {
       if (!formData.city.trim()) {
         alert("Please enter the City.");
@@ -266,11 +299,27 @@ export default function AddPG() {
         alert("Please select at least one Room Sharing type or enter available rooms.");
         return false;
       }
+      if (!formData.rules.trim()) {
+        alert("Please enter the Property Rules & Policies.");
+        return false;
+      }
     }
     return true;
   };
 
+  const handleStartOnboarding = () => {
+    if (!payoutStatus.isConfigured) {
+      setShowPayoutModal(true);
+      return;
+    }
+    setCurrentStep(1);
+  };
+
   const handleNext = () => {
+    if (!payoutStatus.isConfigured) {
+      setShowPayoutModal(true);
+      return;
+    }
     if (validateStep(currentStep)) {
       setCurrentStep((prev) => Math.min(prev + 1, 5));
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -284,7 +333,32 @@ export default function AddPG() {
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!validateStep(1) || !validateStep(2)) return;
+    if (!payoutStatus.isConfigured) {
+      setShowPayoutModal(true);
+      return;
+    }
+    if (!validateStep(1)) {
+      setCurrentStep(1);
+      return;
+    }
+    if (!validateStep(2)) {
+      setCurrentStep(2);
+      return;
+    }
+    if (!validateStep(3)) {
+      setCurrentStep(3);
+      return;
+    }
+    if (!formData.description.trim()) {
+      alert("Please enter the Property Description.");
+      setCurrentStep(1);
+      return;
+    }
+    if (!formData.rules.trim()) {
+      alert("Please enter the Property Rules & Policies.");
+      setCurrentStep(3);
+      return;
+    }
 
     try {
       setLoading(true);
@@ -300,8 +374,25 @@ export default function AddPG() {
       data.append("nearby_college", formData.nearby_college);
       data.append("available_rooms", formData.available_rooms || "1");
       data.append("rules", formData.rules);
-      data.append("amenities", JSON.stringify(selectedAmenities));
-      data.append("sharing_options", JSON.stringify(sharingOptions));
+      // Ensure sharing_options is populated even if owner skipped Step 3 toggles
+      const hasAnySharingConfigured = Object.values(sharingOptions).some(
+        (opt) => opt.available && (opt.ac_price || opt.non_ac_price)
+      );
+
+      let finalSharing = sharingOptions;
+      if (!hasAnySharingConfigured) {
+        const base = Math.max(1000, Number(formData.price) || 6000);
+        finalSharing = {
+          single: { available: true, ac_price: String(Math.round(base * 1.25)), non_ac_price: String(base) },
+          double: { available: true, ac_price: String(Math.round(base * 1.05)), non_ac_price: String(Math.round(base * 0.85)) },
+          triple: { available: true, ac_price: String(Math.round(base * 0.95)), non_ac_price: String(Math.round(base * 0.72)) },
+        };
+      }
+
+      data.append("sharing_options", JSON.stringify(finalSharing));
+
+      const finalAmenities = Array.from(new Set([...selectedAmenities, ...customAmenities]));
+      data.append("amenities", JSON.stringify(finalAmenities));
 
       if (selectedImages.length > 0) {
         selectedImages.forEach((img) => {
@@ -313,9 +404,10 @@ export default function AddPG() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
+      const pgId = response?.data?.pgId || response?.data?.pg?.id;
       const createdPg = response?.data?.pg || {
         ...formData,
-        id: "new",
+        id: pgId || "new",
         status: "pending",
       };
 
@@ -337,9 +429,9 @@ export default function AddPG() {
      ═══════════════════════════════════════════ */
   if (currentStep === 0) {
     return (
-      <div className="min-h-[calc(100vh-150px)] flex items-center justify-center py-6 px-4 animate-fadeIn">
+      <div className="min-h-[calc(100vh-140px)] flex items-center justify-center py-6 px-4 animate-fadeIn">
         {/* Big Spacious Hero Banner Centered */}
-        <div className="w-full max-w-5xl relative overflow-hidden rounded-[2.5rem] border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-10 sm:p-16 lg:p-20 text-center shadow-2xl">
+        <div className="w-full max-w-5xl relative overflow-hidden rounded-[2.5rem] border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-8 sm:p-14 lg:p-20 text-center shadow-2xl">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733] font-black text-xs sm:text-sm uppercase tracking-widest mb-6">
             <Sparkles className="w-4 h-4" /> Property Onboarding Portal
           </div>
@@ -348,14 +440,45 @@ export default function AddPG() {
             List Your PG on Dormn in <span className="text-[#93B733]">5 Easy Steps</span>
           </h1>
 
-          <p className="mt-5 text-base sm:text-xl font-medium text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed">
-            Reach thousands of verified student tenants, automate monthly rent collection with Razorpay, and manage resident verification effortlessly.
+          <p className="mt-5 text-sm sm:text-base lg:text-xl font-medium text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed">
+            Add your property details, photos, and pricing to start accepting student bookings.
           </p>
 
-          <div className="mt-10 sm:mt-12 flex flex-wrap items-center justify-center gap-4">
+          {/* Bank & Payout Warning if not configured */}
+          {!payoutStatus.loading && !payoutStatus.isConfigured && (
+            <div className="mt-8 p-5 sm:p-6 rounded-3xl border-2 border-amber-500/40 bg-amber-500/10 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 max-w-2xl mx-auto animate-fadeIn">
+              <div className="flex items-start gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                  <CreditCard size={22} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm sm:text-base font-black text-gray-900 dark:text-white">
+                      Bank Account & Payout Details Required
+                    </h4>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white shadow-xs">
+                      Required
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
+                    Before listing your PG, you must configure your bank account so student rent payments and token bookings can be deposited to your account.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate("/owner/profile?tab=payouts")}
+                className="whitespace-nowrap px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition shadow-md hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5 shrink-0"
+              >
+                <span>Fill Details in Profile</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          )}
+
+          <div className="mt-8 sm:mt-12 flex flex-wrap items-center justify-center gap-4">
             <button
-              onClick={() => setCurrentStep(1)}
-              className="inline-flex items-center gap-3 rounded-2xl bg-[#0D3A1D] hover:bg-[#16502a] dark:bg-[#93B733] dark:hover:bg-[#82a32d] px-9 py-4.5 text-base sm:text-lg font-black text-white dark:text-[#0D3A1D] shadow-xl hover:shadow-[#93B733]/30 transition active:scale-[0.98]"
+              onClick={handleStartOnboarding}
+              className="inline-flex items-center gap-3 rounded-2xl bg-[#0D3A1D] hover:bg-[#16502a] dark:bg-[#93B733] dark:hover:bg-[#82a32d] px-7 sm:px-10 py-4 sm:py-5 text-base sm:text-lg font-black text-white dark:text-[#0D3A1D] shadow-xl hover:shadow-[#93B733]/30 transition active:scale-[0.98] cursor-pointer"
             >
               <span>{hasExistingPgs ? "+ Add Another Property" : "Start PG Onboarding"}</span>
               <ArrowRight className="w-5 h-5" />
@@ -364,7 +487,7 @@ export default function AddPG() {
             {hasExistingPgs && (
               <button
                 onClick={() => navigate("/owner/my-pgs")}
-                className="inline-flex items-center gap-2.5 rounded-2xl border-2 border-gray-300 dark:border-white/15 bg-white dark:bg-[#181818] px-7 py-4.5 text-base font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition"
+                className="inline-flex items-center gap-2.5 rounded-2xl border-2 border-gray-300 dark:border-white/15 bg-white dark:bg-[#181818] px-6 sm:px-8 py-4 sm:py-5 text-base font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition cursor-pointer"
               >
                 <Building2 className="w-5 h-5 text-[#93B733]" />
                 View My Properties
@@ -490,6 +613,23 @@ export default function AddPG() {
         </div>
       </div>
 
+      {/* Missing Payout Alert Banner */}
+      {!payoutStatus.loading && !payoutStatus.isConfigured && (
+        <div className="p-4 rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2.5 text-xs sm:text-sm text-amber-900 dark:text-amber-200 font-bold">
+            <AlertCircle size={20} className="text-amber-500 shrink-0" />
+            <span>Bank & Payout details missing! You must configure your bank account before submitting this PG.</span>
+          </div>
+          <button
+            onClick={() => navigate("/owner/profile?tab=payouts")}
+            className="whitespace-nowrap px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition shadow-xs cursor-pointer flex items-center gap-1.5 shrink-0"
+          >
+            <span>Fill Bank Details</span>
+            <ArrowRight size={13} />
+          </button>
+        </div>
+      )}
+
       {/* Sleek Step Progress Moving Line */}
       <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-3 sm:p-4 shadow-xs">
         <div className="flex items-center justify-between gap-2 sm:gap-2.5">
@@ -572,7 +712,7 @@ export default function AddPG() {
                   <input
                     type="text"
                     name="mobile"
-                    placeholder="e.g. +91 98765 43210"
+                    placeholder="+91 XXXXXXXXXX"
                     value={formData.mobile}
                     onChange={handleChange}
                     className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:border-[#93B733] focus:bg-white dark:focus:bg-[#1c1c1c] transition"
@@ -598,12 +738,12 @@ export default function AddPG() {
                 </div>
               </div>
 
-              {/* PG Type with Medium Character Avatars */}
+              {/* PG Type with Compact Character Avatars in a Row */}
               <div>
-                <label className="mb-2.5 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
                   Select PG Type <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3.5">
                   {PG_TYPES.map(({ id, label, tag, Component }) => {
                     const isSelected = formData.pg_type === id;
                     return (
@@ -611,17 +751,17 @@ export default function AddPG() {
                         key={id}
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, pg_type: id }))}
-                        className={`group relative flex flex-col items-center justify-center rounded-2xl border-2 p-4 sm:p-5 transition-all duration-200 active:scale-[0.98] ${
+                        className={`group relative flex flex-col items-center justify-center rounded-xl sm:rounded-2xl border-2 p-2 sm:p-4 transition-all duration-200 active:scale-[0.98] ${
                           isSelected
                             ? "border-[#0D3A1D] dark:border-[#93B733] bg-[#0D3A1D] text-white shadow-md ring-2 ring-[#93B733]/40 scale-[1.01]"
                             : "border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] text-gray-900 dark:text-gray-100 hover:border-[#93B733]/50"
                         }`}
                       >
-                        <div className="mb-2.5">
+                        <div className="mb-1 sm:mb-2">
                           <Component isSelected={isSelected} />
                         </div>
-                        <div className="font-bold text-base">{label}</div>
-                        <div className={`text-xs font-medium mt-0.5 ${isSelected ? "text-gray-300" : "text-gray-500 dark:text-gray-400"}`}>
+                        <div className="font-bold text-xs sm:text-sm text-center leading-tight">{label}</div>
+                        <div className={`text-[9px] sm:text-xs font-medium mt-0.5 text-center truncate w-full ${isSelected ? "text-gray-300" : "text-gray-500 dark:text-gray-400"}`}>
                           {tag}
                         </div>
                       </button>
@@ -633,11 +773,12 @@ export default function AddPG() {
               {/* Description */}
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                  Property Description & Highlights
+                  Property Description & Highlights <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   rows={3}
                   name="description"
+                  required
                   placeholder="Describe your PG, key highlights, food quality, safety features, proximity to universities..."
                   value={formData.description}
                   onChange={handleChange}
@@ -694,13 +835,10 @@ export default function AddPG() {
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
                     Nearby College / Landmark
                   </label>
-                  <input
-                    type="text"
-                    name="nearby_college"
-                    placeholder="e.g. Near Amity University Gate 2 / City Metro Station"
+                  <CollegeCombobox
                     value={formData.nearby_college}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:border-[#93B733]"
+                    onChange={val => setFormData(prev => ({ ...prev, nearby_college: val }))}
+                    placeholder="Search Indian college or type custom landmark..."
                   />
                 </div>
 
@@ -817,10 +955,10 @@ export default function AddPG() {
                 })}
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 pt-1">
+              <div className="space-y-4 pt-1">
                 <div>
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                    Total Available Rooms
+                    Total Capacity / Spots Available
                   </label>
                   <input
                     type="number"
@@ -834,16 +972,20 @@ export default function AddPG() {
 
                 <div>
                   <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                    Curfew / Gate Rules
+                    Property Rules & Policies <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <textarea
+                    rows={3}
                     name="rules"
-                    placeholder="e.g. 10:30 PM Gate Closing"
+                    required
+                    placeholder="e.g. Gate closes at 10:30 PM, Visitors allowed until 8:00 PM, No smoking or alcohol allowed on premises (separate multiple rules with commas or new lines)"
                     value={formData.rules}
                     onChange={handleChange}
-                    className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:border-[#93B733]"
+                    className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:border-[#93B733] focus:bg-white dark:focus:bg-[#1c1c1c] transition"
                   />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Clear house rules ensure tenants understand curfews, visitor policies, and stay regulations.
+                  </p>
                 </div>
               </div>
             </div>
@@ -1014,6 +1156,8 @@ export default function AddPG() {
                   <p><strong>Location:</strong> {formData.area ? `${formData.area}, ${formData.city}` : "—"}</p>
                   <p><strong>Amenities:</strong> {selectedAmenities.length} selected</p>
                   <p><strong>Photos:</strong> {selectedImages.length} attached</p>
+                  <p className="sm:col-span-2"><strong>Description:</strong> <span className="text-gray-600 dark:text-gray-400 line-clamp-2">{formData.description || "—"}</span></p>
+                  <p className="sm:col-span-2"><strong>Rules:</strong> <span className="text-gray-600 dark:text-gray-400 line-clamp-2">{formData.rules || "—"}</span></p>
                 </div>
               </div>
             </div>
@@ -1108,6 +1252,61 @@ export default function AddPG() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Payout Details Required Modal */}
+      {showPayoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-500 border border-amber-500/25 flex items-center justify-center mx-auto shadow-sm">
+              <CreditCard size={28} />
+            </div>
+            <div>
+              <h3 className="text-lg sm:text-xl font-black text-gray-900 dark:text-white">
+                Fill Bank & Payout Details to Add a PG
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 leading-relaxed">
+                To list your property and receive student booking payments & rent deposits directly into your bank account, you must configure your settlement details first.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                <span>Beneficiary Name & Bank Name</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                <span>Account Number & IFSC Code</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                <span>Instant UPI ID for Direct Settlements</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowPayoutModal(false)}
+                className="flex-1 rounded-xl border border-gray-300 dark:border-white/15 px-4 py-3 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
+              >
+                Later
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPayoutModal(false);
+                  navigate("/owner/profile?tab=payouts");
+                }}
+                className="flex-1 rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] dark:bg-[#93B733] dark:hover:bg-[#82a32d] text-white dark:text-[#0D3A1D] px-4 py-3 text-xs font-black transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
+              >
+                <span>Fill Details Now</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -19,7 +19,7 @@ const HeroVisual = ({ featuredPG }) => {
             src={
               featuredPG?.profile_image
                 ? `${IMAGE_BASE_URL}/uploads/${featuredPG.profile_image}`
-                : featuredPG?.image || "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1200&auto=format&fit=crop"
+                : featuredPG?.image || "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=450&q=70&fm=webp"
             }
             alt="Luxury Student PG"
             width={400}
@@ -28,7 +28,7 @@ const HeroVisual = ({ featuredPG }) => {
             fetchPriority="high"
             onError={(e) => {
               e.target.onerror = null;
-              e.target.src = "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1200&auto=format&fit=crop";
+              e.target.src = "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=450&q=70&fm=webp";
             }}
             className="block h-full w-full bg-gray-100 object-cover transition-transform duration-1000 group-hover:scale-110"
           />

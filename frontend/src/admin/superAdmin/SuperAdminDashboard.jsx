@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../../services/api";
 import {
   Building2,
   CheckCircle,
@@ -10,7 +10,6 @@ import {
   BookOpenCheck,
   IndianRupee,
   XCircle,
-  Music,
 } from "lucide-react";
 import AdminCard from "../shared/AdminCard";
 import { AuthContext } from "../../context/AuthContext";
@@ -19,25 +18,19 @@ const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { token } = useContext(AuthContext);
+  const { token, user } = useContext(AuthContext);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const API_BASE_URL =
-          import.meta.env.VITE_API_URL || "https://api.dormn.com/api";
-
-        const response = await axios.get(
-          `${API_BASE_URL}/superadmin/dashboard-stats`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const response = await api.get("/superadmin/dashboard-stats");
         setStats(response.data.stats);
       } catch (err) {
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          navigate("/404", { replace: true });
+          return;
+        }
         setError(
           err.response?.data?.message ||
             "Failed to load dashboard statistics."
@@ -48,11 +41,11 @@ const Dashboard = () => {
     };
 
     fetchStats();
-  }, [token]);
+  }, [token, navigate]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-white bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center text-white bg-slate-950 font-medium">
         Loading dashboard...
       </div>
     );
@@ -136,14 +129,6 @@ const Dashboard = () => {
             className="rounded-xl bg-orange-500/20 px-4 py-3 text-sm font-semibold text-orange-300 transition hover:bg-orange-500/30"
           >
             Manage Reviews
-          </button>
-
-          <button
-            onClick={() => navigate("/superadmin/manage-clubs")}
-            className="rounded-xl bg-fuchsia-500/20 px-4 py-3 text-sm font-semibold text-fuchsia-300 transition hover:bg-fuchsia-500/30"
-          >
-            <Music size={16} className="mr-2 inline" />
-            Manage Clubs
           </button>
         </div>
       </div>

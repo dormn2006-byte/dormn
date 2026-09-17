@@ -73,6 +73,7 @@ const MyBookings = () => {
     setPayingBookingId(booking.id);
     try {
       const orderRes = await api.post("/payments/create-order", {
+        booking_id: Number(booking.id || booking.booking_id),
         pg_id: Number(booking.pg_id),
         owner_id: Number(booking.owner_id),
         amount_in_rupees: amount

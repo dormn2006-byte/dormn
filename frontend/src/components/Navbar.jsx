@@ -1,21 +1,44 @@
 import { useLocation, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useContext, useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
-import { motion } from "framer-motion";
 import { AuthContext } from "../context/AuthContext";
 import { AudioContext } from "../context/audioContextValue";
-import MacOSDock from "./ui/mac-os-dock";
 import { ThemeSwitch } from "./ui/theme-switch-button";
 import {
-  ChevronDown, LayoutDashboard, LogOut, Music, Pause, Play, SkipForward,
-  Building2, Menu, X, ChevronRight, Dumbbell, CalendarHeart, Bot
+  ChevronDown, ChevronRight, LayoutDashboard, LogOut, Music, Pause, Play, SkipForward,
+  Building2, Menu, X, Dumbbell, CalendarHeart, Bot, Home, ShieldAlert
 } from "lucide-react";
+import MacOSDock from "./ui/mac-os-dock";
+import EmailVerificationModal from "./auth/EmailVerificationModal";
 
-const TOP_NAV_TABS = [
+const NAV_TABS = [
   { id: "dormn", label: "Dormn", icon: Building2, path: "/" },
+  { id: "my-pg", label: "My PG", icon: Home, path: "/my-pg" },
   { id: "events", label: "Events", icon: CalendarHeart, path: "/events" },
   { id: "gym", label: "Gym", icon: Dumbbell, path: "/gym" },
   { id: "dr-dormn", label: "Dr.Dormn", icon: Bot, path: "/dr-dormn" },
 ];
+
+const DOCK_APPS = [
+  { id: "/", name: "Home", icon: "/icons/home.webp" },
+  { id: "/pgs", name: "Explore", icon: "/icons/explore.webp" },
+  { id: "/blogs", name: "Blogs", icon: "/icons/blog.webp" },
+  { id: "/about", name: "About Us", icon: "/icons/aboutus.webp" },
+  { id: "/faqs", name: "FAQs", icon: "/icons/faq.webp" },
+  { id: "/contact", name: "Contact", icon: "/icons/contact.webp" }
+];
+
+const DRAWER_LINKS = [
+  { path: "/pgs", name: "Explore PGs", subtitle: "Browse & discover verified hostels", icon: "/icons/explore.webp" },
+  { path: "/faqs", name: "FAQs & Guide", subtitle: "Common resident questions & policies", icon: "/icons/faq.webp" },
+  { path: "/contact", name: "Contact Support", subtitle: "24/7 dedicated tenant assistance", icon: "/icons/contact.webp" }
+];
+
+const DASHBOARD_ROUTES = {
+  superadmin: "/superadmin/dashboard",
+  owner: "/owner/dashboard",
+  event_admin: "/event-admin/dashboard",
+  event_manager: "/event-admin/dashboard"
+};
 
 const Navbar = () => {
   const location = useLocation();
@@ -31,39 +54,37 @@ const Navbar = () => {
   ), [isMyPg, location.pathname]);
 
   const currentActiveTab = useMemo(() => {
-    if (location.pathname.startsWith("/events") || location.pathname.startsWith("/clubs")) return "events";
-    if (location.pathname.startsWith("/gym")) return "gym";
-    if (location.pathname.startsWith("/dr-dormn")) return "dr-dormn";
-    if (isMyPg) {
-      const tab = searchParams.get("tab");
-      if (tab === "events" || tab === "gym" || tab === "dr-dormn") return tab;
-    }
-    return "dormn";
-  }, [location.pathname, isMyPg, searchParams]);
+    const p = location.pathname;
+    if (p.startsWith("/my-pg")) return "my-pg";
+    if (p.startsWith("/events")) return "events";
+    if (p.startsWith("/gym")) return "gym";
+    if (p.startsWith("/dr-dormn")) return "dr-dormn";
+    if (p === "/" || /^\/(pgs|about|faqs|contact|blogs)/.test(p)) return "dormn";
+    return "";
+  }, [location.pathname]);
+
+  const activeDockAppId = useMemo(() => {
+    const p = location.pathname;
+    if (p === "/") return "/";
+    if (p.startsWith("/pg")) return "/pgs";
+    if (p.startsWith("/blogs")) return "/blogs";
+    if (p.startsWith("/about")) return "/about";
+    if (p.startsWith("/faqs")) return "/faqs";
+    if (p.startsWith("/contact")) return "/contact";
+    return p;
+  }, [location.pathname]);
 
   const handleTabClick = useCallback((tab) => {
-    if (isMyPg) {
-      if (tab.id === "dormn") {
-        setSearchParams({}, { replace: true });
-      } else {
-        setSearchParams({ tab: tab.id }, { replace: true });
-      }
+    if (tab.id === "my-pg" && isMyPg) {
+      setSearchParams({}, { replace: true });
     } else {
       navigate(tab.path);
     }
   }, [isMyPg, navigate, setSearchParams]);
 
-  const dockApps = useMemo(() => [
-    { id: "/", name: "Home", icon: "/icons/home.webp" },
-    { id: "/pgs", name: "Explore", icon: "/icons/explore.webp" },
-    { id: "/blogs", name: "Blogs", icon: "/icons/blog.webp" },
-    { id: "/about", name: "About Us", icon: "/icons/aboutus.webp" },
-    { id: "/faqs", name: "FAQs", icon: "/icons/faq.webp" },
-    { id: "/contact", name: "Contact", icon: "/icons/contact.webp" }
-  ], []);
-
   const [hideMobileDock, setHideMobileDock] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const lastScrollY = useRef(0);
   const profileMenuRef = useRef(null);
@@ -77,11 +98,11 @@ const Navbar = () => {
           const currentY = window.scrollY;
           const atBottom = (window.innerHeight + currentY) >= (document.documentElement.scrollHeight - 50);
 
-          if (currentY < 10 || atBottom) {
+          if (currentY < 120 || atBottom) {
             setHideMobileDock(false);
-          } else if (currentY > lastScrollY.current + 5) {
+          } else if (currentY > lastScrollY.current + 70) {
             setHideMobileDock(true);
-          } else if (currentY < lastScrollY.current - 5) {
+          } else if (currentY < lastScrollY.current - 35) {
             setHideMobileDock(false);
           }
 
@@ -121,87 +142,76 @@ const Navbar = () => {
 
   const getDashboardPath = useCallback(() => {
     if (!user) return "/";
-    return user.role === "superadmin"
-      ? "/superadmin/dashboard"
-      : user.role === "owner"
-      ? "/owner/dashboard"
-      : "/student/dashboard";
+    return DASHBOARD_ROUTES[user.role] || "/student/dashboard";
   }, [user]);
+
+  const isEventsPage = location.pathname.startsWith("/events");
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-gray-200/50 dark:border-white/10 bg-white/90 dark:bg-[#0d0d0d] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1600px] h-20 items-center justify-between px-4 sm:px-6 md:px-8 lg:px-10">
+      <header className={`sticky top-0 z-50 w-full border-none border-b-0 sm:border-b backdrop-blur-xl ${
+        isEventsPage
+          ? "events-header border-purple-200/70 dark:border-purple-500/20 bg-white/95 dark:bg-[#06080F]/90 shadow-xs"
+          : "sm:border-gray-200/50 sm:dark:border-white/10 bg-white/90 dark:bg-black sm:dark:bg-[#0d0d0d]"
+      }`}>
+        <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1600px] h-12 sm:h-20 items-center justify-between px-3 sm:px-6 md:px-8 lg:px-10 border-none sm:border-b-0">
           
-          <Link to="/" className="flex items-center gap-2.5 sm:gap-3 group shrink-0">
+          <Link to="/" className="flex items-center gap-2 sm:gap-3 group shrink-0">
             <img
-              src="/logo-sm.webp"
-              alt="Dormn Logo"
-              className="h-10 w-10 md:h-12 md:w-12 lg:h-14 lg:w-14 object-contain transition-transform duration-300 group-hover:rotate-6"
+              src={isEventsPage ? "/events-logo.png" : "/logo-sm.webp"}
+              alt={isEventsPage ? "Dormn Events Logo" : "Dormn Logo"}
+              className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 lg:h-14 lg:w-14 object-contain transition-transform duration-300 group-hover:rotate-6"
             />
             <div>
-              <h1 className="text-xl font-black tracking-tight text-[#0D3A1D] dark:text-white sm:text-2xl leading-none">
+              <span className={`text-lg font-black tracking-tight sm:text-2xl leading-none block ${
+                isEventsPage ? "text-purple-950 dark:text-white" : "text-[#0D3A1D] dark:text-white"
+              }`}>
                 Dormn
-              </h1>
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#4E700F] dark:text-[#93B733] leading-none mt-1 sm:text-[11px]">
-                Next Gen Housing
+              </span>
+              <p className={`text-[8px] font-extrabold uppercase tracking-widest leading-none mt-0.5 sm:mt-1 sm:text-[11px] ${
+                isEventsPage ? "text-pink-600 dark:text-pink-400" : "text-[#4E700F] dark:text-[#93B733]"
+              }`}>
+                {isEventsPage ? "Events & Nightlife" : "Next Gen Housing"}
               </p>
             </div>
           </Link>
 
-          {/* Central Area: The 4 Crisp Tabs (Dormn, Events, Gym, Dr.Dormn) */}
+          {/* Central Area: The Core Navigation Tabs (Big Capsule / Pill Style) */}
           <nav className="hidden sm:flex items-center justify-center flex-1 mx-2 lg:mx-4">
-            <div className="flex items-center gap-2 md:gap-4">
-              {TOP_NAV_TABS.map((tab) => {
-                const Icon = tab.icon;
+            <div className="flex items-center gap-2.5 sm:gap-3 lg:gap-3.5">
+              {NAV_TABS.map((tab) => {
                 const isActive = currentActiveTab === tab.id;
-                const displayLabel = tab.id === "dormn" ? (isDashboard ? "My PG" : "Dormn") : tab.label;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => handleTabClick(tab)}
-                    className={`relative flex items-center gap-2.5 px-5 py-2.5 sm:px-6 sm:py-3 rounded-2xl text-base sm:text-lg font-black tracking-tight transition-all duration-200 whitespace-nowrap select-none ${
+                    className={`relative flex items-center justify-center px-4 sm:px-5 lg:px-6 py-2 sm:py-2.5 rounded-full text-sm sm:text-base lg:text-lg font-black tracking-tight transition-all duration-200 whitespace-nowrap select-none ${
                       isActive
-                        ? "text-[#0D3A1D] dark:text-[#93B733] scale-105"
-                        : "text-gray-600 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white opacity-85 hover:opacity-100 hover:scale-105"
+                        ? "bg-[#93B733] text-gray-950 border border-[#7d9e26] shadow-[inset_0_3px_6px_rgba(0,0,0,0.65),inset_0_1px_2px_rgba(0,0,0,0.5)] translate-y-[0.5px]"
+                        : "bg-white dark:bg-black text-gray-800 dark:text-white border border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700 hover:text-gray-950 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-neutral-900 active:scale-95"
                     }`}
                   >
-                    <Icon
-                      className={`w-5 h-5 sm:w-6 sm:h-6 shrink-0 transition-transform ${
-                        isActive ? "text-[#0D3A1D] dark:text-[#93B733]" : "text-gray-500 dark:text-gray-300"
-                      }`}
-                      strokeWidth={isActive ? 2.8 : 2.2}
-                    />
-                    <span>{displayLabel}</span>
-
-                    {/* Precise, smoothly animated underline matching exact active tab */}
-                    {isActive && (
-                      <motion.div
-                        layoutId="topNavActiveTabUnderline"
-                        className="absolute -bottom-1 left-2 right-2 h-[3.5px] bg-[#0D3A1D] dark:bg-[#93B733] rounded-full shadow-[0_0_12px_rgba(147,183,51,0.7)]"
-                        transition={{ type: "spring", stiffness: 450, damping: 32 }}
-                      />
-                    )}
+                    <span>{tab.label}</span>
                   </button>
                 );
               })}
             </div>
           </nav>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {audioContext && (
               <div className="lg:hidden relative" ref={mobileMusicRef}>
                 <button
                   onClick={audioContext.toggleOpen}
                   aria-label={audioContext.isOpen ? "Close music player" : "Open music player"}
-                  className={`flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-2xl border-2 transition-all duration-300 shadow-sm ${
+                  className={`flex h-8 w-8 sm:h-11 sm:w-11 items-center justify-center rounded-xl sm:rounded-2xl border-2 transition-all duration-300 shadow-sm ${
                     audioContext.isPlaying 
                       ? "border-[#93B733] bg-[#93B733] text-white shadow-[#93B733]/30" 
                       : "border-gray-200/80 bg-white/90 text-[#93B733] hover:border-[#93B733]"
                   }`}
                   title="Background Music"
                 >
-                  <Music size={18} className={audioContext.isPlaying ? "animate-spin-slow" : ""} />
+                  <Music className={`w-3.5 h-3.5 sm:w-[18px] sm:h-[18px] ${audioContext.isPlaying ? "animate-spin-slow" : ""}`} />
                 </button>
 
                 {audioContext.isOpen && (
@@ -233,27 +243,37 @@ const Navbar = () => {
             )}
 
             {user ? (
-              <div className="flex items-center gap-3">
-                <ThemeSwitch />
+              <div className="flex items-center gap-1.5 sm:gap-3">
+                <ThemeSwitch className="h-7 w-7 sm:h-9 sm:w-9" />
                 <div className="relative" ref={profileMenuRef}>
                   <button
                     onClick={() => setIsProfileMenuOpen(prev => !prev)}
-                    className="flex items-center gap-2.5 rounded-2xl border-2 border-gray-200/80 dark:border-white/10 bg-white/90 dark:bg-[#121212]/90 px-3 py-1.5 shadow-sm hover:border-[#93B733]/50 hover:shadow-md transition-all duration-200 active:scale-[0.98]"
+                    className={`flex items-center gap-1.5 sm:gap-2.5 rounded-xl sm:rounded-2xl border-2 px-2 py-1 sm:px-3 sm:py-1.5 shadow-sm transition-all duration-200 active:scale-[0.98] ${
+                      isEventsPage
+                        ? "border-purple-200/80 dark:border-purple-500/30 bg-white/90 dark:bg-[#0D0B1C]/90 hover:border-pink-500/60"
+                        : "border-gray-200/80 dark:border-white/10 bg-white/90 dark:bg-[#121212]/90 hover:border-[#93B733]/50 hover:shadow-md"
+                    }`}
                     aria-label="User Profile Menu"
                   >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0D3A1D] dark:bg-[#93B733] text-white dark:text-[#0D3A1D] font-black text-sm uppercase shadow-sm">
+                    <div className={`flex h-7 w-7 sm:h-9 sm:w-9 items-center justify-center rounded-lg sm:rounded-xl font-black text-xs sm:text-sm uppercase shadow-sm ${
+                      isEventsPage
+                        ? "bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-pink-500/20"
+                        : "bg-[#0D3A1D] dark:bg-[#93B733] text-white dark:text-[#0D3A1D]"
+                    }`}>
                       {user.name ? user.name.charAt(0) : (user.email ? user.email.charAt(0) : "U")}
                     </div>
 
                     <div className="hidden sm:flex flex-col text-left leading-tight">
-                      <span className="text-xs font-black text-[#0D3A1D] dark:text-white truncate max-w-[100px]">
+                      <span className="text-xs font-black text-gray-900 dark:text-white truncate max-w-[100px]">
                         {user.name || "My Account"}
                       </span>
-                      <span className="text-[10px] font-extrabold uppercase text-[#4E700F] dark:text-[#93B733]">
+                      <span className={`text-[10px] font-extrabold uppercase ${
+                        isEventsPage ? "text-purple-600 dark:text-pink-400" : "text-[#4E700F] dark:text-[#93B733]"
+                      }`}>
                         {user.role || "User"}
                       </span>
                     </div>
-                    <ChevronDown className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isProfileMenuOpen ? "rotate-180" : ""}`} />
+                    <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isProfileMenuOpen ? "rotate-180" : ""}`} />
                   </button>
 
                   {isProfileMenuOpen && (
@@ -287,6 +307,22 @@ const Navbar = () => {
                         </button>
                       )}
 
+                      {user && !user.is_email_verified && user.auth_provider !== "google" && (
+                        <button
+                          onClick={() => {
+                            setIsProfileMenuOpen(false);
+                            setShowEmailVerificationModal(true);
+                          }}
+                          className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-all mt-1"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                            Verify Email
+                          </span>
+                          <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-amber-500/20">Action</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
                           setIsProfileMenuOpen(false);
@@ -306,26 +342,35 @@ const Navbar = () => {
                 {isMyPg && (
                   <button
                     onClick={() => setIsDrawerOpen(true)}
-                    className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 border-gray-200/80 dark:border-white/10 bg-white/90 dark:bg-[#121212]/90 text-[#0D3A1D] dark:text-gray-200 hover:border-[#93B733] hover:text-[#93B733] transition-all duration-200 shadow-sm active:scale-95 shrink-0"
+                    className="flex h-8 w-8 sm:h-11 sm:w-11 items-center justify-center rounded-xl sm:rounded-2xl border-2 border-gray-200/80 dark:border-white/10 bg-white/90 dark:bg-[#121212]/90 text-[#0D3A1D] dark:text-gray-200 hover:border-[#93B733] hover:text-[#93B733] transition-all duration-200 shadow-sm active:scale-95 shrink-0"
                     title="Menu"
                     aria-label="Navigation Menu"
                   >
-                    <Menu size={20} />
+                    <Menu size={16} className="sm:hidden" />
+                    <Menu size={20} className="hidden sm:inline" />
                   </button>
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 sm:gap-3">
                 <Link
                   to="/auth?role=owner&mode=signup"
-                  className="hidden sm:inline-flex rounded-2xl border-2 border-gray-200 bg-white px-6 py-2.5 text-base font-extrabold text-[#0D3A1D] transition-all hover:bg-gray-50 hover:border-gray-300"
+                  className={`hidden sm:inline-flex rounded-2xl border-2 px-6 py-2.5 text-base font-extrabold transition-all ${
+                    isEventsPage
+                      ? "border-purple-200 dark:border-purple-500/30 bg-white/90 dark:bg-[#0D0B1C]/90 text-purple-950 dark:text-purple-200 hover:border-pink-500/50"
+                      : "border-gray-200 bg-white text-[#0D3A1D] hover:bg-gray-50 hover:border-gray-300"
+                  }`}
                 >
                   Become an Owner
                 </Link>
-                <ThemeSwitch />
+                <ThemeSwitch className="h-7 w-7 sm:h-9 sm:w-9" />
                 <Link
                   to="/auth"
-                  className="rounded-2xl bg-[#0D3A1D] px-6 py-2.5 text-base font-extrabold text-white transition-all hover:bg-[#07130B] shadow-[0_4px_12px_rgba(13,58,29,0.15)]"
+                  className={`rounded-xl sm:rounded-2xl px-3.5 py-1.5 sm:px-6 sm:py-2.5 text-xs sm:text-base font-extrabold text-white transition-all ${
+                    isEventsPage
+                      ? "bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 hover:from-purple-500 hover:to-pink-500 shadow-[0_4px_16px_rgba(236,72,153,0.3)]"
+                      : "bg-[#0D3A1D] hover:bg-[#07130B] shadow-[0_4px_12px_rgba(13,58,29,0.15)]"
+                  }`}
                 >
                   Sign In
                 </Link>
@@ -333,47 +378,38 @@ const Navbar = () => {
             )}
           </div>
         </div>
-      </header>
 
-      {/* Mobile: 4 Core Tabs for Resident & Utility Views */}
-      {(isMyPg || currentActiveTab !== "dormn") ? (
-        <div className={`sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-[#0a0a0a]/95 backdrop-blur-xl border-t border-gray-200/50 dark:border-white/10 transition-all duration-300 ${hideMobileDock ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
-          <div className="flex items-center justify-around px-2 py-2">
-            {TOP_NAV_TABS.map((tab) => {
-              const Icon = tab.icon;
+        {/* Mobile Sub-Header: The Navigation Tabs (Big Capsule / Pill Style) */}
+        <nav className="mobile-subnav sm:hidden px-2 py-2 bg-black dark:bg-black border-none border-b-0 shadow-none">
+          <div className="flex items-center justify-between gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+            {NAV_TABS.map((tab) => {
               const isActive = currentActiveTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   onClick={() => handleTabClick(tab)}
-                  className={`relative flex flex-col items-center gap-1 py-1.5 px-3 rounded-xl transition-all duration-200 ${
+                  className={`flex-1 min-w-0 flex items-center justify-center py-2 px-2.5 rounded-full text-[11px] font-black tracking-tight transition-all select-none whitespace-nowrap ${
                     isActive
-                      ? "text-[#0D3A1D] dark:text-[#93B733]"
-                      : "text-gray-500 dark:text-gray-300"
+                      ? "bg-[#93B733] text-gray-950 border border-[#7d9e26] shadow-[inset_0_3px_6px_rgba(0,0,0,0.65),inset_0_1px_2px_rgba(0,0,0,0.5)] translate-y-[0.5px]"
+                      : "bg-black dark:bg-black text-gray-200 dark:text-gray-200 border border-neutral-800 hover:border-neutral-700"
                   }`}
                 >
-                  <Icon className="w-5 h-5" strokeWidth={isActive ? 2.8 : 2} />
-                  <span className={`text-[11px] ${isActive ? "font-black" : "font-semibold"}`}>{tab.label}</span>
-                  {isActive && (
-                    <motion.div
-                      layoutId="myPgActiveMobileTabUnderline"
-                      className="absolute -bottom-1 w-6 h-[2.5px] bg-[#0D3A1D] dark:bg-[#93B733] rounded-full shadow-[0_0_8px_rgba(147,183,51,0.7)]"
-                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
-                    />
-                  )}
+                  <span className="truncate">{tab.label}</span>
                 </button>
               );
             })}
           </div>
-        </div>
-      ) : (
-        /* Floating Bottom MacOS Dock: ONLY for Dormn marketing pages */
-        <div className={`fixed bottom-4 left-0 right-0 z-50 flex justify-center pointer-events-none transition-all duration-300 ${hideMobileDock ? 'translate-y-32 opacity-0' : 'translate-y-0 opacity-100'}`}>
+        </nav>
+      </header>
+
+      {/* Floating Bottom MacOS Dock: Visible on both mobile and laptop */}
+      {!isMyPg && currentActiveTab === "dormn" && (
+        <div className={`flex fixed bottom-3 sm:bottom-4 left-0 right-0 z-50 justify-center px-2 pointer-events-none transition-transform transition-opacity duration-300 ease-out will-change-transform ${hideMobileDock ? 'translate-y-32 opacity-0' : 'translate-y-0 opacity-100'}`}>
           <div className="pointer-events-auto">
             <MacOSDock
-              apps={dockApps}
+              apps={DOCK_APPS}
               onAppClick={handleAppClick}
-              openApps={[location.pathname]}
+              openApps={[activeDockAppId]}
             />
           </div>
         </div>
@@ -417,26 +453,7 @@ const Navbar = () => {
               </div>
 
               <div className="mt-6 space-y-3.5">
-                {[
-                  {
-                    path: "/pgs",
-                    name: "Explore PGs",
-                    subtitle: "Browse & discover verified hostels",
-                    icon: "/icons/explore.webp"
-                  },
-                  {
-                    path: "/faqs",
-                    name: "FAQs & Guide",
-                    subtitle: "Common resident questions & policies",
-                    icon: "/icons/faq.webp"
-                  },
-                  {
-                    path: "/contact",
-                    name: "Contact Support",
-                    subtitle: "24/7 dedicated tenant assistance",
-                    icon: "/icons/contact.webp"
-                  }
-                ].map((item) => (
+                {DRAWER_LINKS.map((item) => (
                   <button
                     key={item.path}
                     onClick={() => {
@@ -476,6 +493,16 @@ const Navbar = () => {
           </aside>
         </>
       )}
+
+      {/* Global Email Verification Modal */}
+      <EmailVerificationModal
+        isOpen={showEmailVerificationModal}
+        onClose={() => setShowEmailVerificationModal(false)}
+        userEmail={user?.email}
+        onSuccess={() => {
+          setShowEmailVerificationModal(false);
+        }}
+      />
     </>
   );
 };

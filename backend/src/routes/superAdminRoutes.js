@@ -24,125 +24,32 @@ import superAdminMiddleware from "../middleware/superAdminMiddleware.js";
 
 const router = express.Router();
 
-// Dashboard Stats
-router.get(
-  "/dashboard-stats",
-  protect,
-  superAdminMiddleware,
-  getDashboardStats
-);
+// 🛡️ All routes in this router require superadmin authorization
+router.use(protect, superAdminMiddleware);
 
-// PG Management
-router.get(
-  "/pgs",
-  protect,
-  superAdminMiddleware,
-  getAllPGs
-);
+// Platform & Directory Metrics
+router.get("/dashboard-stats", getDashboardStats);
+router.get("/pgs", getAllPGs);
+router.get("/pending-pgs", getPendingPGs);
 
-router.get(
-  "/pending-pgs",
-  protect,
-  superAdminMiddleware,
-  getPendingPGs
-);
+// Property Moderation Actions (with alias support)
+router.put(["/approve-pg/:id", "/pg/:id/approve"], approvePG);
+router.put(["/reject-pg/:id", "/pg/:id/reject"], rejectPG);
+router.put("/block-pg/:id", blockPG);
+router.delete(["/delete-pg/:id", "/pg/:id"], deletePG);
 
-router.put(
-  "/approve-pg/:id",
-  protect,
-  superAdminMiddleware,
-  approvePG
-);
+// User & Entity Management
+router.get("/all-users", getAllUsers);
+router.get("/all-bookings", getAllBookings);
+router.get("/owners", getAllOwners);
+router.get("/students", getAllStudents);
+router.delete("/delete-user/:id", deleteUser);
 
-router.put(
-  "/reject-pg/:id",
-  protect,
-  superAdminMiddleware,
-  rejectPG
-);
-
-router.put(
-  "/block-pg/:id",
-  protect,
-  superAdminMiddleware,
-  blockPG
-);
-
-router.delete(
-  "/delete-pg/:id",
-  protect,
-  superAdminMiddleware,
-  deletePG
-);
-
-// User Management
-router.get(
-  "/all-users",
-  protect,
-  superAdminMiddleware,
-  getAllUsers
-);
-
-router.get(
-  "/all-bookings",
-  protect,
-  superAdminMiddleware,
-  getAllBookings
-);
-
-router.get(
-  "/owners",
-  protect,
-  superAdminMiddleware,
-  getAllOwners
-);
-
-router.get(
-  "/students",
-  protect,
-  superAdminMiddleware,
-  getAllStudents
-);
-
-router.delete(
-  "/delete-user/:id",
-  protect,
-  superAdminMiddleware,
-  deleteUser
-);
-router.get(
-  "/owner-pgs/:ownerId",
-  protect,
-  superAdminMiddleware,
-  getOwnerPGs
-);
-
-router.get(
-  "/pg/:id",
-  protect,
-  superAdminMiddleware,
-  getPGDetails
-);
-
-router.get(
-  "/owner/:id",
-  protect,
-  superAdminMiddleware,
-  getOwnerDetails
-);
-
-router.get(
-  "/student/:id",
-  protect,
-  superAdminMiddleware,
-  getStudentDetails
-);
-
-router.get(
-  "/student-bookings/:studentId",
-  protect,
-  superAdminMiddleware,
-  getStudentBookings
-);
+// Entity Details
+router.get("/owner-pgs/:ownerId", getOwnerPGs);
+router.get("/pg/:id", getPGDetails);
+router.get("/owner/:id", getOwnerDetails);
+router.get("/student/:id", getStudentDetails);
+router.get("/student-bookings/:studentId", getStudentBookings);
 
 export default router;

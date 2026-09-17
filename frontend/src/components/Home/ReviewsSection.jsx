@@ -3,12 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Star, PlusCircle, X, CheckCircle2 } from "lucide-react";
 import Container from "../../layouts/Container";
 import { CardStack } from "../ui/CardStack";
-import axios from "axios";
-
-// 🚀 SMART URL: Connects to 8000 locally, and standard /api on production
-const API_BASE_URL = window.location.hostname === "localhost" 
-  ? "http://localhost:3000/api" 
-  : "/api";
+import api from "../../services/api";
 
 const ReviewsSection = () => {
   const navigate = useNavigate(); 
@@ -30,7 +25,7 @@ const ReviewsSection = () => {
   useEffect(() => {
     const fetchReviews = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/reviews`);
+        const response = await api.get("/reviews");
         if (response.data.success) {
           setReviews(response.data.reviews); 
         }
@@ -103,21 +98,16 @@ const ReviewsSection = () => {
         return;
       }
 
-      await axios.post(
-        `${API_BASE_URL}/reviews/create`,
+      await api.post(
+        "/reviews/create",
         {
           rating: formData.rating,
           description: formData.description.trim(),
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
         }
       );
 
       // Refresh the reviews directly from the backend to guarantee accuracy
-      const refresh = await axios.get(`${API_BASE_URL}/reviews`);
+      const refresh = await api.get("/reviews");
       if (refresh.data.success) {
         setReviews(refresh.data.reviews);
       }

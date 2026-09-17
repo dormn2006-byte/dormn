@@ -14,14 +14,26 @@ import {
   Save
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import api from "../../services/api";
 
 const OwnerProfileModal = ({ isOpen, onClose, initialTab = "profile" }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [subData, setSubData] = useState(null);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  useEffect(() => {
+    if (isOpen) {
+      api.get("/subscriptions/my-subscription")
+        .then(res => {
+          if (res.data?.success) setSubData(res.data.data);
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
 
   const [formData, setFormData] = useState({
     fullName: user?.full_name || user?.name || "Owner",
@@ -214,23 +226,47 @@ const OwnerProfileModal = ({ isOpen, onClose, initialTab = "profile" }) => {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2.5">
                     <Zap size={22} className="text-emerald-500 dark:text-emerald-400" />
-                    <span className="text-2xl font-black">Pro Owner Tier</span>
+                    <span className="text-2xl font-black">
+                      {subData?.tier ? `${subData.tier.charAt(0).toUpperCase() + subData.tier.slice(1)} Owner Tier` : (user?.subscription_tier ? `${user.subscription_tier.charAt(0).toUpperCase() + user.subscription_tier.slice(1)} Owner Tier` : "Free Tier")}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-emerald-500 px-3.5 py-1 text-[10px] font-black text-white uppercase tracking-wider shadow-sm">
-                    Active Plan
+                  <span className={`rounded-full px-3.5 py-1 text-[10px] font-black uppercase tracking-wider shadow-sm ${
+                    (subData?.status || user?.subscription_status) === 'expired'
+                      ? 'bg-red-500 text-white'
+                      : (subData?.status || user?.subscription_status) === 'trial'
+                      ? 'bg-amber-500 text-white'
+                      : (subData?.status || user?.subscription_status) === 'cancelled'
+                      ? 'bg-gray-500 text-white'
+                      : 'bg-emerald-500 text-white'
+                  }`}>
+                    {(subData?.status || user?.subscription_status) === 'trial' ? 'Free Trial' : ((subData?.status || user?.subscription_status) ? (subData?.status || user?.subscription_status).toUpperCase() : 'ACTIVE')}
                   </span>
                 </div>
                 <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-5">
-                  Enjoy unlimited property listings, top #1 search placement, AI analytics, and instant student booking notifications.
+                  {(subData?.tier || user?.subscription_tier) === 'pro'
+                    ? "Enjoy unlimited property listings, top #1 search placement, AI analytics, and instant student booking notifications."
+                    : (subData?.tier || user?.subscription_tier) === 'standard'
+                    ? "Up to 5 PG listings with featured search placement, team collaboration, and enhanced analytics."
+                    : "Trial mode: 1 PG listing. Upgrade to standard or pro to list more properties and get priority student search placement."}
                 </p>
                 <div className="grid grid-cols-2 gap-4 text-xs font-bold pt-3 border-t border-emerald-500/20">
                   <div>
                     <span className="text-gray-500 dark:text-gray-400 block text-[10px] uppercase font-bold">Billing Cycle</span>
-                    <span className="text-sm font-black">Monthly Subscription</span>
+                    <span className="text-sm font-black">
+                      {subData?.cycle ? `${subData.cycle.charAt(0).toUpperCase() + subData.cycle.slice(1)} Subscription` : ((subData?.status || user?.subscription_status) === 'trial' ? "30-Day Free Trial" : "Monthly Subscription")}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-gray-500 dark:text-gray-400 block text-[10px] uppercase font-bold">Renewal Date</span>
-                    <span className="text-sm font-black">Nov 30, 2026</span>
+                    <span className="text-gray-500 dark:text-gray-400 block text-[10px] uppercase font-bold">
+                      {(subData?.status || user?.subscription_status) === 'cancelled' ? 'Access Until' : 'Renewal / Expiry Date'}
+                    </span>
+                    <span className="text-sm font-black">
+                      {subData?.expires_at
+                        ? new Date(subData.expires_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                        : (subData?.days_remaining !== undefined && subData.days_remaining !== null
+                          ? `${subData.days_remaining} days left`
+                          : "N/A")}
+                    </span>
                   </div>
                 </div>
               </div>

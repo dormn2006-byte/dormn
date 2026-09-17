@@ -3,59 +3,40 @@ import {
   registerUser,
   loginUser,
   requestOTP,
+  forgotPassword,
+  resetPassword,
+  googleAuth,
+  changePassword,
+  updateProfile,
+  getProfile,
+  updatePayoutDetails,
+  getPayoutStatus,
+  sendVerificationOTP,
+  verifyEmailOTP,
+  getVerificationStatus,
 } from "../controllers/authController.js";
-import {
-  protect,
-  adminOnly,
-  ownerOnly,
-} from "../middleware/authMiddleware.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Test Route
-router.get("/test", (req, res) => {
-  res.json({
-    success: true,
-    message: "Auth route working successfully",
-  });
-});
-router.get("/deployment-test", (req, res) => {
-  res.json({
-    success: true,
-    message: "Latest code deployed successfully",
-  });
-});
-// Register Route
+// Public Routes
 router.post("/register", registerUser);
-
-// Login Route
 router.post("/login", loginUser);
-
+router.post("/google", googleAuth);
 router.post("/request-otp", requestOTP);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
 
-// Protected User Route
-router.get("/profile", protect, (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Protected profile route accessed",
-    user: req.user,
-  });
-});
+// Email Verification Routes (Protected or with email body fallback)
+router.post("/send-verification-otp", protect, sendVerificationOTP);
+router.post("/verify-email-otp", protect, verifyEmailOTP);
+router.get("/verification-status", protect, getVerificationStatus);
 
-// Admin Only Route
-router.get("/admin", protect, adminOnly, (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Welcome Admin",
-  });
-});
-
-// PG Owner Only Route
-router.get("/owner", protect, ownerOnly, (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Welcome PG Owner",
-  });
-});
+// Protected Profile & Security Routes
+router.get("/profile", protect, getProfile);
+router.put("/profile", protect, updateProfile);
+router.get("/payout-status", protect, getPayoutStatus);
+router.put("/payout-details", protect, updatePayoutDetails);
+router.put("/change-password", protect, changePassword);
 
 export default router;

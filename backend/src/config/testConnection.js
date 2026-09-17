@@ -1,10 +1,12 @@
-import mongoose from "mongoose";
+import pool from "./db.js";
 
 const testDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("MongoDB Connected Successfully");
-    mongoose.connection.close();
+    const connection = await pool.getConnection();
+
+    console.log("MySQL Connected Successfully");
+
+    connection.release();
   } catch (error) {
     console.log("Database Connection Failed");
     console.log(error);

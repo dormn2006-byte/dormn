@@ -3,12 +3,17 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import AuthProvider from './context/AuthContext.jsx'
+import { GoogleOAuthProvider } from '@react-oauth/google'
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "1004316251240-r5p1b06hf1ookme259e5l39lrojbgf05.apps.googleusercontent.com";
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </GoogleOAuthProvider>
   </StrictMode>,
 )
 

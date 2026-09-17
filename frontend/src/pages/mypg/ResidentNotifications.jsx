@@ -1,12 +1,17 @@
-import { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useContext, memo } from 'react';
 import { ArrowLeft, Bell, CheckCircle2, Clock, Wrench, BookOpenCheck, Trash2, Check, IndianRupee, X } from 'lucide-react';
+import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
 
-const NOTIF_KEY = 'dormn_resident_notifications';
-const LS_KEY = 'dormn_resident_requests';
-const formatDT = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A';
+const formatDT = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A';
 
 const ResidentNotifications = memo(({ onBack }) => {
+  const { user } = useContext(AuthContext);
+  const userKey = user?.id ? `u_${user.id}` : user?.email ? `e_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}` : null;
+  const userNotifKey = userKey ? `dormn_resident_notifications_${userKey}` : null;
+  const userReqKey = userKey ? `dormn_resident_requests_${userKey}` : null;
+  const userNoticesKey = userKey ? `dormn_resident_notices_${userKey}` : null;
+
   const [notifications, setNotifications] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
   const [selectedNotif, setSelectedNotif] = useState(null);
@@ -29,9 +34,22 @@ const ResidentNotifications = memo(({ onBack }) => {
     } catch {}
 
     try {
-      const reqs = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+      let reqs = [];
+      const apiReqs = await api.get('/maintenance/student').catch(() => null);
+      if (apiReqs?.data?.success && Array.isArray(apiReqs.data.requests)) {
+        reqs = apiReqs.data.requests;
+      } else if (userReqKey) {
+        reqs = JSON.parse(localStorage.getItem(userReqKey) || '[]');
+      }
+
       if (Array.isArray(reqs)) {
         reqs.forEach(r => {
+          const isMine = !user ? false :
+            (r.student_id && user.id && String(r.student_id) === String(user.id)) ||
+            (r.student_email && user.email && r.student_email === user.email) ||
+            (!r.student_id && !r.student_email);
+          if (!isMine) return;
+
           if (r.status === 'in_progress') {
             list.push({ id: `notif-ip-${r.id}`, type: 'maintenance_update', category: 'Maintenance In Progress', title: `Work In Progress: ${r.title}`, message: `PG Owner marked issue "${r.title}" as In Progress. Staff assigned.`, note: r.resolution_note || 'Owner assigned technician.', status: 'in_progress', created_at: r.filed_at || r.created_at || new Date().toISOString(), read: false });
           } else if (r.status === 'resolved' || r.status === 'closed') {
@@ -42,12 +60,17 @@ const ResidentNotifications = memo(({ onBack }) => {
     } catch {}
 
     try {
-      const stored = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
-      const notices = JSON.parse(localStorage.getItem('dormn_resident_notices') || '[]');
+      const stored = userNotifKey ? JSON.parse(localStorage.getItem(userNotifKey) || '[]') : [];
+      const notices = userNoticesKey ? JSON.parse(localStorage.getItem(userNoticesKey) || '[]') : [];
       [...(Array.isArray(stored) ? stored : []), ...(Array.isArray(notices) ? notices : [])].forEach(n => {
         if (n.id && !String(n.id).includes('init') && !String(n.title || '').includes('Dormn Stay has been approved')) list.push(n);
       });
     } catch {}
+
+    // Clean up legacy unscoped keys
+    localStorage.removeItem('dormn_resident_notifications');
+    localStorage.removeItem('dormn_resident_notices');
+    localStorage.removeItem('dormn_resident_requests');
 
     const map = new Map();
     list.forEach(i => {
@@ -57,7 +80,7 @@ const ResidentNotifications = memo(({ onBack }) => {
 
     const dedup = Array.from(map.values()).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
     setNotifications(dedup);
-  }, []);
+  }, [user, userKey, userNotifKey, userReqKey, userNoticesKey]);
 
   useEffect(() => {
     fetchNotifs();
@@ -67,7 +90,13 @@ const ResidentNotifications = memo(({ onBack }) => {
     return () => { window.removeEventListener('storage', sync); window.removeEventListener('dormn_request_updated', sync); };
   }, [fetchNotifs]);
 
-  const save = (up) => { setNotifications(up); localStorage.setItem(NOTIF_KEY, JSON.stringify(up)); };
+  const save = (up) => {
+    setNotifications(up);
+    if (userNotifKey) {
+      try { localStorage.setItem(userNotifKey, JSON.stringify(up)); } catch {}
+    }
+    localStorage.removeItem('dormn_resident_notifications');
+  };
   const markRead = (id) => save(notifications.map(n => n.id === id ? { ...n, read: true } : n));
   const markAllRead = () => save(notifications.map(n => ({ ...n, read: true })));
   const clearAll = () => save([]);
@@ -91,12 +120,15 @@ const ResidentNotifications = memo(({ onBack }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 py-2">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center text-xs sm:text-sm font-bold text-gray-500 hover:text-[#0D3A1D] dark:text-gray-400 dark:hover:text-white transition-colors cursor-pointer">
-          <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Dashboard
+    <div className="max-w-4xl mx-auto space-y-5">
+      <div className="flex items-center justify-between mb-2 pb-3 border-b border-gray-200/80 dark:border-white/10">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-[#0D3A1D] dark:hover:text-[#93B733] transition shadow-xs cursor-pointer active:scale-95"
+        >
+          <ArrowLeft size={16} /> <span>Back to My PG</span>
         </button>
-        <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">Owner Notifications</span>
+        <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">Notifications Center</span>
       </div>
 
       <div>
