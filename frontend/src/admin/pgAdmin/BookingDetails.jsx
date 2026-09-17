@@ -1,4 +1,4 @@
-import Topbar from "./components/Topbar";
+import AdminTopbar from "../shared/AdminTopbar";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api, { IMAGE_BASE_URL } from "../../services/api";
@@ -55,7 +55,7 @@ const BookingDetails = () => {
       <div className="overflow-y-auto p-3 sm:p-5 lg:p-8">
         <div className="mx-auto max-w-7xl space-y-8">
           {/* Topbar */}
-          <Topbar title="PG Details" />
+          <AdminTopbar />
 
           {/* Hero Section */}
           <div className="rounded-[1.5rem] sm:rounded-[2rem] border border-gray-200 bg-white p-4 sm:p-6 lg:p-7 shadow-sm">

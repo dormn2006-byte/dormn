@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useContext, memo, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useContext, memo, useMemo, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Wrench, CheckCircle2, Clock, AlertTriangle,
-  Send, Sparkles, ChevronRight, X,
+  Send, Sparkles, ChevronRight, ChevronDown, Check, X,
   Wifi, Snowflake, ShowerHead, Droplets, Shirt, Zap,
   Utensils, Lightbulb, HelpCircle, ShieldCheck, MapPin, User, Building2
 } from 'lucide-react';
@@ -49,32 +49,81 @@ const getAmenityConfig = (name) => {
 
 const formatDT = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A';
 
-const getInitialRequests = () => [
-  {
-    id: 'req-1787822400001',
-    pg_id: 1,
-    pg_title: 'Dormn Luxury Stay (Sector 62)',
-    student_id: 101,
-    student_name: 'Sudhanshu Gummadidala',
-    student_phone: '+91 98765 43210',
-    category: 'Electrical & Lighting',
-    location: 'My Room / Bed Area',
-    title: 'Tube light flickering in Room 204',
-    description: 'The tube light keeps flickering constantly. Needs replacement.',
-    priority: 'Normal',
-    status: 'open',
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-    filed_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-    closed_at: null,
-    resolution_note: ''
-  }
-];
+const getInitialRequests = () => [];
+
+const CustomSelect = ({ value, onChange, options, icon: Icon = MapPin, label = "Select Location" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all text-left cursor-pointer select-none ${
+          isOpen
+            ? 'border-[#93B733] bg-white dark:bg-[#181818] ring-2 ring-[#93B733]/30 shadow-md'
+            : 'border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-gray-900 dark:text-white hover:border-gray-300 dark:hover:border-white/20'
+        }`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Icon className="w-4 h-4 text-[#93B733] shrink-0" />
+          <span className="font-bold truncate">{value || label}</span>
+        </div>
+        <ChevronDown
+          className={`w-4 h-4 text-gray-400 transition-transform duration-200 shrink-0 ${
+            isOpen ? 'rotate-180 text-[#93B733]' : ''
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl border border-gray-200 dark:border-white/15 bg-white/95 dark:bg-[#181818]/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in-50 zoom-in-95 duration-150 max-h-60 overflow-y-auto">
+          {options.map((opt) => {
+            const isSelected = opt === value;
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => {
+                  onChange(opt);
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all text-left cursor-pointer ${
+                  isSelected
+                    ? 'bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733]'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/[0.06]'
+                }`}
+              >
+                <span className="truncate">{opt}</span>
+                {isSelected && <Check className="w-4 h-4 text-[#93B733] shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function MaintenanceRequests({ pgInfo, onBack }) {
   const { user } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('active');
   const [requests, setRequests] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
+
+  const userKey = user?.id ? `u_${user.id}` : user?.email ? `e_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}` : null;
+  const storageKey = userKey ? `dormn_resident_requests_${userKey}` : null;
 
   // Form State
   const [selectedAmenity, setSelectedAmenity] = useState(null);
@@ -102,20 +151,54 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
   }, [pgInfo]);
 
   useEffect(() => {
-    try {
-      let local = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
-      if (!Array.isArray(local) || local.length === 0) {
-        local = getInitialRequests();
-        localStorage.setItem(LS_KEY, JSON.stringify(local));
+    // Purge legacy global key to prevent cross-user leak on shared browser
+    try { localStorage.removeItem('dormn_resident_requests'); } catch {}
+
+    const fetchStudentTickets = async () => {
+      try {
+        const local = storageKey ? JSON.parse(localStorage.getItem(storageKey) || '[]') : [];
+        const safeLocal = (Array.isArray(local) ? local : []).filter(l =>
+          (l.student_id && user?.id && String(l.student_id) === String(user.id)) ||
+          (l.student_email && user?.email && l.student_email === user.email)
+        );
+
+        const res = await api.get('/maintenance/student').catch(() => null);
+
+        if (res?.data?.success && Array.isArray(res.data.requests)) {
+          const dbReqs = res.data.requests.map(r => ({
+            id: r.id,
+            pg_id: r.pg_id,
+            pg_title: r.pg_title || pgInfo?.title || 'My PG Stay',
+            student_id: r.student_id,
+            category: r.category,
+            location: r.location || '',
+            title: r.title,
+            description: r.description || '',
+            priority: r.priority || 'Normal',
+            status: r.status,
+            created_at: r.created_at,
+            filed_at: r.created_at,
+            resolution_note: r.resolution_note || '',
+          }));
+          const dbIds = new Set(dbReqs.map(r => String(r.id)));
+          setRequests([...dbReqs, ...safeLocal.filter(l => !dbIds.has(String(l.id)))]);
+        } else {
+          setRequests(safeLocal);
+        }
+      } catch {
+        setRequests([]);
       }
-      setRequests(local);
-    } catch { setRequests(getInitialRequests()); }
-  }, []);
+    };
+    fetchStudentTickets();
+  }, [pgInfo, storageKey, user]);
 
   const saveRequests = (updated) => {
     setRequests(updated);
-    localStorage.setItem(LS_KEY, JSON.stringify(updated));
+    if (storageKey) {
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+    }
     try {
+      localStorage.removeItem('dormn_resident_requests');
       window.dispatchEvent(new Event('storage'));
       window.dispatchEvent(new CustomEvent('dormn_request_updated'));
     } catch {}
@@ -136,6 +219,7 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
       pg_id: pgInfo?.id || pgInfo?.pg_id || 1,
       pg_title: pgInfo?.title || pgInfo?.pg_name || 'My PG Stay',
       student_id: user?.id,
+      student_email: user?.email,
       student_name: user?.name || user?.full_name || 'Resident',
       student_phone: user?.phone || 'On file',
       category: selectedAmenity === 'Others' ? (otherText || 'Other Maintenance') : selectedAmenity,
@@ -150,7 +234,21 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
       resolution_note: ''
     };
 
-    try { await api.post('/student-portal/requests', newTicket).catch(() => null); } catch {}
+    try {
+      const res = await api.post('/maintenance', {
+        pg_id: pgInfo?.id || pgInfo?.pg_id,
+        category: newTicket.category,
+        location: newTicket.location,
+        title: newTicket.title,
+        description: newTicket.description,
+        priority: newTicket.priority,
+      });
+      if (res?.data?.requestId) {
+        newTicket.id = res.data.requestId;
+      }
+    } catch (err) {
+      console.warn("Could not sync ticket to server, saved locally:", err);
+    }
     saveRequests([newTicket, ...requests]);
 
     setSelectedAmenity(null);
@@ -173,10 +271,13 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
   const previous = useMemo(() => requests.filter(r => r.status === 'closed'), [requests]);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 py-2">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center text-xs sm:text-sm font-bold text-gray-500 hover:text-[#0D3A1D] dark:text-gray-400 dark:hover:text-white transition-colors cursor-pointer">
-          <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Dashboard
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center justify-between mb-2 pb-3 border-b border-gray-200/80 dark:border-white/10">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-[#0D3A1D] dark:hover:text-[#93B733] transition shadow-xs cursor-pointer active:scale-95"
+        >
+          <ArrowLeft size={16} /> <span>Back to My PG</span>
         </button>
         <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">Resident Helpdesk</span>
       </div>
@@ -241,12 +342,13 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Location / Area</label>
-                <div className="relative">
-                  <select value={location} onChange={e => setLocation(e.target.value)} className="w-full appearance-none rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] pl-4 pr-10 py-2.5 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#93B733]/50 focus:border-[#93B733] outline-none cursor-pointer">
-                    {LOCATIONS.map(l => <option key={l} value={l} className="dark:bg-[#181818]">{l}</option>)}
-                  </select>
-                  <ChevronRight className="w-4 h-4 text-gray-400 absolute right-3.5 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" />
-                </div>
+                <CustomSelect
+                  value={location}
+                  onChange={setLocation}
+                  options={LOCATIONS}
+                  icon={MapPin}
+                  label="Select Location / Area"
+                />
               </div>
 
               <div className="space-y-1">

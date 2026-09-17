@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, lazy, Suspense } from "react";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import AppRoutes from "./routes/AppRoutes";
-import IntroAnimation from "./components/IntroAnimation";
+
+const IntroAnimation = lazy(() => import("./components/IntroAnimation"));
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -55,16 +56,29 @@ class ErrorBoundary extends React.Component {
 }
 
 function App() {
-  const [showIntro, setShowIntro] = useState(() => !sessionStorage.getItem("dormn_intro"));
+  const [showIntro, setShowIntro] = useState(() => {
+    if (typeof window === "undefined") return false;
+    // Only show intro on homepage (/) if not previously shown in this session
+    return window.location.pathname === "/" && !sessionStorage.getItem("dormn_intro");
+  });
 
   const handleIntroComplete = useCallback(() => {
-    sessionStorage.setItem("dormn_intro", "1");
+    try {
+      sessionStorage.setItem("dormn_intro", "1");
+    } catch {}
     setShowIntro(false);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("dormn_intro_finished"));
+    }
   }, []);
 
   return (
     <ErrorBoundary>
-      {showIntro && <IntroAnimation onComplete={handleIntroComplete} />}
+      {showIntro && (
+        <Suspense fallback={null}>
+          <IntroAnimation onComplete={handleIntroComplete} />
+        </Suspense>
+      )}
       <AppRoutes />
     </ErrorBoundary>
   );

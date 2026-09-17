@@ -1,5 +1,9 @@
-import { useState, useCallback, useMemo, memo } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, Circle, User, Users, HeartPulse, GraduationCap, FileText, Star, X, Save, Camera } from 'lucide-react';
+import { useState, useCallback, useMemo, useEffect, useContext, memo } from 'react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Circle, User, Users, HeartPulse, GraduationCap, FileText, Star, X, Save, Camera, Lock, Globe } from 'lucide-react';
+import { AuthContext } from '../../context/AuthContext';
+import api from '../../services/api';
+import CustomSelect from '../../components/ui/CustomSelect';
+import CollegeCombobox from '../../components/ui/CollegeCombobox';
 
 const SECTIONS = [
   { id: 'tenant', label: 'Tenant Details', icon: User },
@@ -10,30 +14,57 @@ const SECTIONS = [
   { id: 'interests', label: 'Interests', icon: Star },
 ];
 
-const LS_KEY = 'dormn_registration_form';
-const load = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; } };
-const persist = (d) => localStorage.setItem(LS_KEY, JSON.stringify(d));
+const cleanPhone = (val) => {
+  if (!val) return "";
+  const cleaned = String(val).replace(/\D/g, "");
+  if (cleaned.length > 10 && (cleaned.startsWith("91") || cleaned.startsWith("0"))) {
+    return cleaned.slice(-10);
+  }
+  return cleaned.slice(0, 10);
+};
 
 const INPUT_CLS = 'w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-4 py-3 text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#93B733]/50 focus:border-[#93B733] transition-all';
 
 /* ─── Reusable Field ─── */
-const Field = memo(({ label, type = 'text', value, onChange, placeholder, required, options, rows }) => (
-  <div className="space-y-1.5">
-    <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-      {label} {required && <span className="text-red-400">*</span>}
-    </label>
-    {type === 'select' ? (
-      <select value={value || ''} onChange={e => onChange(e.target.value)} className={INPUT_CLS}>
-        <option value="">Select...</option>
-        {options?.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    ) : type === 'textarea' ? (
-      <textarea value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows || 3} className={`${INPUT_CLS} resize-none`} />
-    ) : (
-      <input type={type} value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={INPUT_CLS} />
-    )}
-  </div>
-));
+const Field = memo(({ label, type = 'text', value, onChange, placeholder, required, options, rows }) => {
+  const isPhone = type === 'phone' || type === 'tel';
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          {label} {required && <span className="text-red-400">*</span>}
+        </label>
+        {isPhone && value && (
+          <span className={`text-[10px] font-bold ${value.length === 10 ? 'text-emerald-500' : 'text-amber-500'}`}>
+            {value.length}/10 digits
+          </span>
+        )}
+      </div>
+      {type === 'select' ? (
+        <CustomSelect options={options || []} value={value || ''} onChange={onChange} placeholder={placeholder || 'Select...'} />
+      ) : type === 'college' ? (
+        <CollegeCombobox value={value || ''} onChange={onChange} placeholder={placeholder || 'Search or type college...'} />
+      ) : type === 'textarea' ? (
+        <textarea value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows || 3} className={`${INPUT_CLS} resize-none`} />
+      ) : isPhone ? (
+        <div className="relative flex items-center">
+          <span className="absolute left-3.5 text-xs font-bold text-gray-400 dark:text-gray-500 select-none pointer-events-none">+91</span>
+          <input
+            type="tel"
+            inputMode="numeric"
+            maxLength={10}
+            value={value || ''}
+            onChange={e => onChange(cleanPhone(e.target.value))}
+            placeholder={placeholder || "XXXXXXXXXX"}
+            className={`${INPUT_CLS} pl-12`}
+          />
+        </div>
+      ) : (
+        <input type={type} value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={INPUT_CLS} />
+      )}
+    </div>
+  );
+});
 Field.displayName = 'Field';
 
 /* ─── Image Upload ─── */
@@ -105,7 +136,7 @@ const Guardian = ({ d, u }) => (
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Name" value={d[`parent${n}Name`]} onChange={v => u(`parent${n}Name`, v)} placeholder="Parent / Guardian name" required />
-          <Field label="Contact Number" value={d[`parent${n}Contact`]} onChange={v => u(`parent${n}Contact`, v)} placeholder="+91 XXXXX XXXXX" required />
+          <Field label="Contact Number" type="phone" value={d[`parent${n}Contact`]} onChange={v => u(`parent${n}Contact`, v)} placeholder="XXXXXXXXXX" required />
         </div>
       </div>
     ))}
@@ -122,7 +153,7 @@ const Advanced = ({ d, u }) => (
 
 const Academics = ({ d, u }) => (
   <div className="space-y-5">
-    <Field label="College / University Name" value={d.college} onChange={v => u('college', v)} placeholder="e.g. Amity University Noida" required />
+    <Field label="College / University Name" type="college" value={d.college} onChange={v => u('college', v)} placeholder="Search or type college name" required />
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <Field label="Admission Year" value={d.admissionYear} onChange={v => u('admissionYear', v)} placeholder="e.g. 2024" required />
       <Field label="College ID Number" value={d.collegeIdNumber} onChange={v => u('collegeIdNumber', v)} placeholder="e.g. A12345678" required />
@@ -158,17 +189,143 @@ const SECTION_VIEWS = { tenant: Tenant, guardian: Guardian, advanced: Advanced, 
    MAIN COMPONENT
    ═══════════════════════════════════════════ */
 export default function RegistrationForm({ onBack }) {
+  const { user } = useContext(AuthContext);
+  const userKey = user?.id ? `u_${user.id}` : user?.email ? `e_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}` : null;
+  const regKey = userKey ? `dormn_registration_form_${userKey}` : null;
+  const profKey = userKey ? `dormn_student_profile_${userKey}` : null;
+
   const [active, setActive] = useState('tenant');
-  const [data, setData] = useState(load);
+  const [data, setData] = useState(() => {
+    try {
+      const saved = regKey ? JSON.parse(localStorage.getItem(regKey) || '{}') : {};
+      const profSaved = profKey ? JSON.parse(localStorage.getItem(profKey) || '{}') : {};
+      return {
+        fullName: user?.full_name || user?.name || '',
+        ...profSaved,
+        ...saved,
+      };
+    } catch {
+      return { fullName: user?.full_name || user?.name || '' };
+    }
+  });
   const [saved, setSaved] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
+
+  // Auto-fetch profile from database on mount to auto-populate registration form
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      try {
+        const { data: res } = await api.get('/student/profile');
+        if (res.success && res.profile) {
+          const prof = res.profile;
+          setIsPublic(prof.isPublic ?? true);
+          setData(prev => {
+            const merged = {
+              ...prev,
+              fullName: prof.name || prof.fullName || user?.full_name || prev.fullName || '',
+              dob: prof.dob !== undefined ? prof.dob : (prev.dob || ''),
+              homeAddress: prof.homeAddress !== undefined ? prof.homeAddress : (prev.homeAddress || ''),
+              homeTown: prof.homeTown !== undefined ? prof.homeTown : (prev.homeTown || ''),
+              pincode: prof.pincode !== undefined ? prof.pincode : (prev.pincode || ''),
+              parent1Name: prof.parent1Name !== undefined ? prof.parent1Name : (prev.parent1Name || ''),
+              parent1Contact: prof.parent1Phone !== undefined ? prof.parent1Phone : (prev.parent1Contact || ''),
+              parent2Name: prof.parent2Name !== undefined ? prof.parent2Name : (prev.parent2Name || ''),
+              parent2Contact: prof.parent2Phone !== undefined ? prof.parent2Phone : (prev.parent2Contact || ''),
+              guardianName: prof.guardianName !== undefined ? prof.guardianName : (prev.guardianName || ''),
+              guardianPhone: prof.guardianPhone !== undefined ? prof.guardianPhone : (prev.guardianPhone || ''),
+              bloodGroup: prof.bloodGroup !== undefined ? prof.bloodGroup : (prev.bloodGroup || ''),
+              allergies: prof.allergies !== undefined ? prof.allergies : (prev.allergies || ''),
+              medicalDetails: prof.medicalDetails !== undefined ? prof.medicalDetails : (prev.medicalDetails || ''),
+              college: prof.college !== undefined ? prof.college : (prev.college || ''),
+              admissionYear: prof.admissionYear !== undefined ? prof.admissionYear : (prev.admissionYear || ''),
+              collegeIdNumber: prof.collegeIdNumber !== undefined ? prof.collegeIdNumber : (prev.collegeIdNumber || ''),
+              courseName: prof.courseName !== undefined ? prof.courseName : (prev.courseName || ''),
+              courseYear: prof.courseYear !== undefined ? prof.courseYear : (prev.courseYear || ''),
+              passportPhoto: prof.passportPhoto || prev.passportPhoto || null,
+              aadharFront: prof.aadharFront || prev.aadharFront || null,
+              aadharBack: prof.aadharBack || prev.aadharBack || null,
+              collegeIdImage: prof.collegeIdImage || prev.collegeIdImage || null,
+              interests: prof.interests !== undefined ? (Array.isArray(prof.interests) ? prof.interests.join(', ') : prof.interests) : (prev.interests || ''),
+              suggestions: prof.suggestions !== undefined ? prof.suggestions : (prev.suggestions || ''),
+            };
+            if (regKey) {
+              try { localStorage.setItem(regKey, JSON.stringify(merged)); } catch {}
+            }
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.error("Auto-fetch registration profile error:", err);
+      }
+    };
+
+    fetchProfileData();
+  }, [user, regKey]);
 
   const update = useCallback((k, v) => {
-    setData(p => { const n = { ...p, [k]: v }; persist(n); return n; });
-  }, []);
+    setData(p => {
+      const n = { ...p, [k]: v };
+      if (regKey) {
+        try { localStorage.setItem(regKey, JSON.stringify(n)); } catch {}
+      }
+      if (profKey) {
+        try { localStorage.setItem(profKey, JSON.stringify(n)); } catch {}
+      }
+      return n;
+    });
+  }, [regKey, profKey]);
 
-  const save = useCallback(() => {
-    persist(data); setSaved(true); setTimeout(() => setSaved(false), 2500);
-  }, [data]);
+  const save = useCallback(async () => {
+    try {
+      if (regKey) {
+        try { localStorage.setItem(regKey, JSON.stringify(data)); } catch {}
+      }
+      if (profKey) {
+        try { localStorage.setItem(profKey, JSON.stringify({ ...data, isPublic })); } catch {}
+      }
+      localStorage.removeItem('dormn_registration_form');
+      localStorage.removeItem('dormn_student_profile');
+      window.dispatchEvent(new Event('dormn_profile_updated'));
+      setSaved(true);
+
+      // Two-way sync to backend student profile
+      await api.post('/student/profile', {
+        name: data.fullName,
+        fullName: data.fullName,
+        dob: data.dob,
+        homeAddress: data.homeAddress,
+        homeTown: data.homeTown,
+        pincode: data.pincode,
+        parent1Name: data.parent1Name,
+        parent1Phone: data.parent1Contact,
+        parent2Name: data.parent2Name,
+        parent2Phone: data.parent2Contact,
+        guardianName: data.guardianName,
+        guardianPhone: data.guardianPhone,
+        bloodGroup: data.bloodGroup,
+        allergies: data.allergies,
+        medicalDetails: data.medicalDetails,
+        college: data.college,
+        collegeName: data.college,
+        admissionYear: data.admissionYear,
+        collegeIdNumber: data.collegeIdNumber,
+        courseName: data.courseName,
+        courseYear: data.courseYear,
+        passportPhoto: data.passportPhoto,
+        aadharFront: data.aadharFront,
+        aadharBack: data.aadharBack,
+        collegeIdImage: data.collegeIdImage,
+        interests: data.interests,
+        suggestions: data.suggestions,
+        isPublic: isPublic,
+      }).catch(err => console.error("Profile sync error:", err));
+
+      window.dispatchEvent(new Event('dormn_profile_updated'));
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [data, isPublic]);
 
   const idx = SECTIONS.findIndex(s => s.id === active);
   const sec = SECTIONS[idx];
@@ -177,15 +334,53 @@ export default function RegistrationForm({ onBack }) {
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Back */}
-      <button onClick={onBack} className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-[#0D3A1D] dark:text-gray-400 dark:hover:text-white transition-colors mb-6">
-        <ArrowLeft className="w-4 h-4" /> Back to Dashboard
-      </button>
+      <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200/80 dark:border-white/10">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-[#0D3A1D] dark:hover:text-[#93B733] transition shadow-xs cursor-pointer active:scale-95"
+        >
+          <ArrowLeft size={16} /> <span>Back to My PG</span>
+        </button>
+        <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">KYC & Registration</span>
+      </div>
 
-      {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-2xl sm:text-3xl font-black text-[#0D3A1D] dark:text-white tracking-tight">Registration Form</h2>
-        <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mt-1">Complete all sections to verify your profile • {done}/{SECTIONS.length} completed</p>
+      {/* Header & Privacy Status */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-black text-[#0D3A1D] dark:text-white tracking-tight">Registration Form</h2>
+          <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 mt-1">
+            Auto-synced with your profile • {done}/{SECTIONS.length} completed
+          </p>
+        </div>
+
+        {/* Privacy Pill */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              const next = !isPublic;
+              setIsPublic(next);
+              api.post('/student/profile', { isPublic: next }).catch(() => {});
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all border ${
+              isPublic
+                ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+            }`}
+          >
+            {isPublic ? (
+              <>
+                <Globe className="w-4 h-4 text-blue-500" />
+                <span>Profile: Public</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-4 h-4 text-amber-500" />
+                <span>Profile: Private</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8">

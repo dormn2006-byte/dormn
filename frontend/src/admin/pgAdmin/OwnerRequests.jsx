@@ -5,25 +5,6 @@ import api from '../../services/api';
 const LS_KEY = 'dormn_resident_requests', NOTICES_KEY = 'dormn_resident_notices';
 const formatDT = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A';
 
-const DEFAULT_USER_REQUESTS = [
-  {
-    id: 'req-1787822400001',
-    pg_id: 1,
-    pg_title: 'Dormn Stay',
-    student_id: 101,
-    student_name: 'Sudhanshu Gummadidala',
-    student_phone: '+91 98765 43210',
-    category: 'Electrical & Lighting',
-    location: 'My Room / Bed Area',
-    title: 'Tube light flickering in Room 204',
-    description: 'The tube light keeps flickering constantly. Needs replacement.',
-    priority: 'Normal',
-    status: 'open',
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-    filed_at: new Date(Date.now() - 3600000 * 2).toISOString()
-  }
-];
-
 export default function OwnerRequests() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,29 +17,42 @@ export default function OwnerRequests() {
   const fetchRequests = useCallback(async () => {
     setLoading(true);
     try {
-      let dbReqs = [];
-      try { dbReqs = (await api.get('/student-portal/owner-requests')).data?.requests || []; } catch {}
+      // 1. Concurrently fetch owner's PGs and database maintenance requests
+      const [pgsRes, mRes] = await Promise.all([
+        api.get('/pg/owner/my-pgs').catch(() => ({ data: { pgs: [] } })),
+        api.get('/maintenance/owner').catch(() => ({ data: { requests: [] } }))
+      ]);
+
+      const myPgs = pgsRes.data?.pgs || [];
+      const myPgIds = new Set(myPgs.map(p => String(p.id)));
+      const myPgTitles = new Set(myPgs.map(p => (p.title || '').toLowerCase().trim()));
+      let dbReqs = mRes.data?.requests || [];
+
+      // 3. Merge local requests ONLY IF they belong to one of THIS owner's PGs
       try {
         let local = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
-        if (Array.isArray(local)) {
-          const clean = local.filter(r => 
-            r.student_name !== 'Rahul Sharma' && 
-            !String(r.id).includes('demo') && 
-            !String(r.title || '').toLowerCase().includes('wi-fi router speed issue')
-          );
-          if (clean.length !== local.length) {
-            localStorage.setItem(LS_KEY, JSON.stringify(clean));
-          }
-          local = clean;
+        if (Array.isArray(local) && local.length > 0) {
+          const clean = local.filter(r => {
+            const isClean = r.student_name !== 'Rahul Sharma' && 
+              !String(r.id).includes('demo') && 
+              !String(r.id).includes('1787822400001') &&
+              !String(r.title || '').toLowerCase().includes('wi-fi router speed issue');
+            
+            const matchesMyPg = myPgIds.has(String(r.pg_id)) || myPgTitles.has((r.pg_title || '').toLowerCase().trim());
+            return isClean && matchesMyPg;
+          });
+
+          const ids = new Set(dbReqs.map(r => String(r.id)));
+          clean.forEach(lr => { if (!ids.has(String(lr.id))) dbReqs.push(lr); });
         }
-        if (!Array.isArray(local) || local.length === 0) {
-          local = DEFAULT_USER_REQUESTS;
-          localStorage.setItem(LS_KEY, JSON.stringify(local));
-        }
-        const ids = new Set(dbReqs.map(r => String(r.id)));
-        local.forEach(lr => { if (!ids.has(String(lr.id))) dbReqs.push(lr); });
       } catch {}
-      setRequests(dbReqs);
+
+      // 4. Strict owner PG match: if owner has no PGs, show empty list []
+      const filteredReqs = myPgs.length > 0 
+        ? dbReqs.filter(r => myPgIds.has(String(r.pg_id)) || myPgTitles.has((r.pg_title || '').toLowerCase().trim()))
+        : [];
+
+      setRequests(filteredReqs);
     } catch (e) {
       console.error('Fetch requests error:', e);
     } finally { setLoading(false); }
@@ -106,7 +100,7 @@ export default function OwnerRequests() {
       } catch {}
     }
 
-    try { await api.put(`/student-portal/requests/${reqId}/status`, { status: newStatus, resolution_note: ownerNote }); } catch {}
+    try { await api.put(`/maintenance/${reqId}/status`, { status: newStatus, resolution_note: ownerNote }); } catch {}
 
     setSelectedReq(null); setNote(''); setProcessingId(null); fetchRequests();
   };
@@ -148,15 +142,15 @@ export default function OwnerRequests() {
       </div>
 
       {loading ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-16 text-center shadow-sm">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center shadow-sm">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 dark:border-gray-800 border-t-[#93B733] mx-auto mb-3" />
           <p className="text-sm font-bold text-gray-500">Loading maintenance requests...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-16 text-center shadow-sm">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center shadow-sm">
           <Wrench size={40} className="text-gray-300 dark:text-gray-600 mx-auto mb-3" />
           <h3 className="text-lg font-black text-gray-900 dark:text-white">No requests found</h3>
-          <p className="text-xs text-gray-500 mt-1">Resident maintenance requests will appear here.</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No requests match your current filters.</p>
         </div>
       ) : (
         <div className="space-y-4">

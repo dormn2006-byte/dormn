@@ -9,8 +9,10 @@ import {
   IndianRupee,
   SlidersHorizontal,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Sparkles
 } from "lucide-react";
+import { AMENITY_OPTIONS } from "../../utils/amenities";
 
 // Custom Select Component for Professional UI
 const CustomSelect = ({ value, onChange, options, placeholder, icon: Icon }) => {
@@ -91,11 +93,11 @@ const SearchSection = ({
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Default slider values
-  const minSliderLimit = 3000;
+  const minSliderLimit = 0;
   const maxSliderLimit = 50000;
   
   // Safely parse current min/max limits
-  const currentMin = Number(filters.minPrice) || minSliderLimit;
+  const currentMin = filters.minPrice !== "" && filters.minPrice !== undefined ? Number(filters.minPrice) : minSliderLimit;
   const currentMax = Number(filters.maxPrice) || 30000; 
 
   // Manual Search Handler
@@ -106,6 +108,7 @@ const SearchSection = ({
         city: filters.city || filters.location || "",
         area: filters.area || "",
         landmark: filters.landmark || "",
+        amenity: filters.amenity || "",
         minPrice: filters.minPrice || "",
         maxPrice: filters.maxPrice || "30000",
       });
@@ -184,6 +187,14 @@ const SearchSection = ({
                 options={availableAreas.map(a => ({ value: a, label: a }))}
               />
 
+              <CustomSelect 
+                icon={Sparkles}
+                value={filters.amenity || ""}
+                onChange={(val) => setFilters((prev) => ({ ...prev, amenity: val }))}
+                placeholder="All Amenities"
+                options={AMENITY_OPTIONS}
+              />
+
               {/* === SECONDARY FILTERS === */}
               
               <div className={`${isExpanded ? 'block' : 'hidden'} md:block col-span-1 lg:col-span-1`}>
@@ -197,7 +208,7 @@ const SearchSection = ({
               </div>
 
               {/* === DUAL-RANGE BUDGET SLIDER === */}
-              <div className={`${isExpanded ? 'flex' : 'hidden'} md:flex flex-col justify-center px-5 h-[54px] w-full rounded-2xl border border-gray-200 bg-gray-50 shadow-sm col-span-1 md:col-span-2 lg:col-span-2 lg:col-start-2`}>
+              <div className={`${isExpanded ? 'flex' : 'hidden'} md:flex flex-col justify-center px-5 h-[54px] w-full rounded-2xl border border-gray-200 bg-gray-50 shadow-sm col-span-1 md:col-span-2 lg:col-span-3`}>
                 <div className="flex justify-between items-center w-full mb-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 flex items-center gap-1">
                     <IndianRupee size={12} /> Budget Range

@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 
 const SEOHead = ({
-  title = "Dormn | Verified PGs in Noida | Near Amity, Sector 62 & Tech Parks",
-  description = "Book zero brokerage Boys PGs, Girls PGs, and COED rooms in Noida near Amity University, Sector 62, and Knowledge Park with food, Wi-Fi, and security.",
-  keywords = "PG in Noida, PG near Amity University Noida, Girls PG Sector 62 Noida, Boys PG Knowledge Park, COED PG Noida, zero brokerage PG Noida",
+  title = "Dormn | Verified Zero Brokerage PGs in Noida | Amity, Sector 62 & Tech Parks",
+  description = "Book zero brokerage Boys PGs, Girls PGs, and COED rooms in Noida near Amity University, Sector 62, and Knowledge Park with food, Wi-Fi, and 24/7 security. List your PG property online.",
+  keywords = "PG in Noida, PG near Amity University Noida, Girls PG Sector 62 Noida, Boys PG Knowledge Park, COED PG Noida, zero brokerage PG Noida, Budget PG in Noida under 6000, Cheap Girls PG Noida with Food, Affordable PG near Amity, Low Cost Student Hostel Noida, PG near Sector 62 Metro Station, PG in Sector 18 Noida, PG in Sector 52 Noida, PG in Sector 63 Noida, PG near Knowledge Park 2 Greater Noida, PG for Working Professionals Noida, PG near Advant Navis IT Park, Executive Boys PG Sector 62, Single Occupancy Room PG Noida, Luxury Coliving Space Noida, PG with Mess Food Noida, AC PG in Noida, PG with Attached Washroom Sector 62, PG listing platform for owners Noida, List PG online zero brokerage, PG management software for owners, PG rent collection app, Digital tenant KYC registration PG, PG near Jaypee Institute JIIT Noida, PG near Galgotias University, PG near Sharda University Greater Noida, PG near Bennett University, PG near Stellar IT Park Sector 62, PG near Candor TechSpace Noida, PG near Logix Cyber Park",
   canonicalUrl = "https://dormn.com",
   ogImage = "https://dormn.com/logo.jpg",
   schema = null,

@@ -9,7 +9,6 @@ body,
   max-width: 100%;
   background: #FAF9F5;
   color: #1a1a1a;
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Pure Black Dark Theme for Whole Application */
@@ -21,6 +20,7 @@ html.dark section,
 html.dark article,
 html.dark footer,
 html.dark [class*="bg-[#FAF9F5]"],
+html.dark [class*="bg-[#F0F2F5]"],
 html.dark [class*="bg-[#f8f9f3]"],
 html.dark [class*="bg-[#f0f1eb]"],
 html.dark [class*="from-[#f8f9f3]"],
@@ -28,6 +28,30 @@ html.dark [class*="to-[#f0f1eb]"] {
   background-color: #000000 !important;
   background-image: none !important;
   color: #ffffff !important;
+}
+
+/* Base hardware compositing & anti-flicker for MacOS Dock */
+.mac-os-dock-container {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Dock Label Pill Styling */
+.dock-label-pill {
+  z-index: 10;
+}
+
+html.dark .dock-label-pill {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
 }
 
 /* Dark mode header & dock background - Unified #0D0D0D */
@@ -39,13 +63,37 @@ html.dark .mac-os-dock-container {
   -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
 }
 
-html.dark header nav,
-html.dark nav {
+html.dark header nav:not(.mobile-subnav),
+html.dark nav:not(.mobile-subnav) {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+
+/* Mobile sub-header navigation & capsules: pure black (#000000) */
+.mobile-subnav,
+html.dark .mobile-subnav,
+nav.mobile-subnav,
+html.dark nav.mobile-subnav {
+  background: #000000 !important;
+  background-color: #000000 !important;
+  border: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 639px) {
+  header,
+  html.dark header,
+  header.sticky {
+    border: none !important;
+    border-bottom: none !important;
+    border-bottom-width: 0px !important;
+    box-shadow: none !important;
+    background: #000000 !important;
+  }
 }
 
 html.dark [class*="bg-white"],
@@ -94,6 +142,28 @@ html.dark textarea {
   background-color: #171717 !important;
   color: #ffffff !important;
   border-color: #262626 !important;
+  color-scheme: dark !important;
+}
+
+/* Date / Time / Calendar picker icons in dark mode */
+html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark input[type="time"]::-webkit-calendar-picker-indicator,
+html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+html.dark input[type="month"]::-webkit-calendar-picker-indicator,
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator,
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.dark input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.3) !important;
+  cursor: pointer;
+  opacity: 0.9;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+html.dark input[type="date"]::-webkit-calendar-picker-indicator:hover,
+.dark input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.15);
 }
 
 html.dark input[type="range"],
@@ -111,13 +181,150 @@ html.dark .shadow-xl {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.8) !important;
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+/* ══════════════════════════════════════════════════════════════
+   GLOBAL MODERN SCROLLBAR STYLING (ALL PAGES, DASHBOARDS, SLIDERS)
+   ══════════════════════════════════════════════════════════════ */
+
+/* Firefox support */
+html, * {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+html.dark, html.dark * {
+  scrollbar-color: #334155 transparent;
+}
+
+/* Chrome, Edge, Safari, Webkit browsers */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+/* Completely remove arrow buttons */
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #93B733;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #7ca026;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Dark Mode Webkit Scrollbars */
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #93B733;
+}
+
+html.dark ::-webkit-scrollbar-thumb:active {
+  background: #a3ca3a;
+}
+
+/* Utility classes for specific components */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #93B733;
+}
+
+html.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #27272a;
+}
+
+html.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #93B733;
+}
+
+.scrollbar-hide::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
 }
   
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+.scrollbar-hide,
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+/* General Range Slider Customization */
+input[type="range"]:not(.dual-range) {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #e2e8f0;
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+  transition: background 0.2s;
+}
+
+html.dark input[type="range"]:not(.dual-range) {
+  background: #27272a !important;
+}
+
+input[type="range"]:not(.dual-range)::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #93B733;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(147, 183, 51, 0.4);
+  border: 2px solid #ffffff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]:not(.dual-range)::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(147, 183, 51, 0.6);
+}
+
+input[type="range"]:not(.dual-range)::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #93B733;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(147, 183, 51, 0.4);
+  border: 2px solid #ffffff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 body {
@@ -207,3 +414,151 @@ html.dark .dual-range::-moz-range-thumb {
   border-color: #ffffff !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8) !important;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   EVENTS PAGE THEME (White / Light Mode vs Night / Dark Mode)
+   ══════════════════════════════════════════════════════════════ */
+header.events-header {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(233, 213, 255, 0.8) !important;
+}
+
+html.dark header.events-header {
+  background: rgba(6, 8, 15, 0.92) !important;
+  border-color: rgba(168, 85, 247, 0.22) !important;
+}
+
+nav.events-mobile-nav {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(233, 213, 255, 0.8) !important;
+}
+
+html.dark nav.events-mobile-nav {
+  background: rgba(6, 8, 15, 0.95) !important;
+  border-color: rgba(168, 85, 247, 0.2) !important;
+}
+
+/* Events Page Container */
+html:not(.dark) .events-page-wrapper {
+  background-color: #FAF9FD !important;
+  color: #111827 !important;
+}
+
+html.dark .events-page-wrapper {
+  background-color: #06080F !important;
+  color: #ffffff !important;
+}
+
+/* Cards */
+html:not(.dark) .events-card-bg {
+  background-color: #FFFFFF !important;
+  border-color: rgba(233, 213, 255, 0.8) !important;
+  color: #111827 !important;
+}
+
+html.dark .events-card-bg {
+  background-color: rgba(13, 11, 28, 0.92) !important;
+  border-color: rgba(168, 85, 247, 0.25) !important;
+  color: #ffffff !important;
+}
+
+/* Hero Banners */
+html:not(.dark) .events-hero-bg {
+  background: linear-gradient(135deg, #FAF5FF 0%, #FDF2F8 50%, #F5F3FF 100%) !important;
+  border-bottom: 1px solid rgba(233, 213, 255, 0.8) !important;
+  color: #111827 !important;
+}
+
+html.dark .events-hero-bg {
+  background: linear-gradient(to right, rgba(59, 7, 100, 0.9), #120D26, #0A0718) !important;
+  border-bottom: 1px solid rgba(168, 85, 247, 0.2) !important;
+  color: #ffffff !important;
+}
+
+/* Inputs on Events Page */
+html:not(.dark) .events-input-bg {
+  background-color: #FFFFFF !important;
+  color: #111827 !important;
+  border-color: rgba(216, 180, 254, 0.6) !important;
+}
+
+html.dark .events-input-bg {
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  color: #ffffff !important;
+  border-color: rgba(168, 85, 247, 0.3) !important;
+}
+
+/* Upcoming Box */
+html:not(.dark) .events-upcoming-box {
+  background-color: rgba(250, 245, 255, 0.9) !important;
+  border-color: rgba(233, 213, 255, 0.9) !important;
+  color: #111827 !important;
+}
+
+html.dark .events-upcoming-box {
+  background-color: rgba(59, 7, 100, 0.4) !important;
+  border-color: rgba(168, 85, 247, 0.3) !important;
+  color: #ffffff !important;
+}
+
+/* Party macOS Dock Container */
+html:not(.dark) .events-dock-container {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid rgba(216, 180, 254, 0.8) !important;
+  box-shadow: 0 14px 40px rgba(147, 51, 234, 0.18), 0 2px 10px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+}
+
+html.dark .events-dock-container {
+  background: rgba(13, 11, 28, 0.92) !important;
+  border: 1px solid rgba(168, 85, 247, 0.4) !important;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.75), 0 0 25px rgba(236, 72, 153, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PG DETAILS THUMBNAIL MARQUEE LOOP (> 4 IMAGES)
+   ══════════════════════════════════════════════════════════════ */
+@keyframes thumbnailLoop {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.thumbnail-marquee-container {
+  container-type: inline-size;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.thumbnail-marquee-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: thumbnailLoop linear infinite;
+}
+
+.thumbnail-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+.thumbnail-marquee-item {
+  width: calc((100cqw - 18px) / 4);
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .thumbnail-marquee-item {
+    width: calc((100cqw - 24px) / 4);
+  }
+}
+
+@media (min-width: 768px) {
+  .thumbnail-marquee-item {
+    width: calc((100cqw - 36px) / 4);
+  }
+}
+
+

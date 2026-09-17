@@ -29,22 +29,10 @@ const HeroSection = ({ pgs = [] }) => {
           
           {/* Left Content */}
           <div className="z-10 mt-4 md:mt-0">
-            
-            {/* Top Badge - Structured Bento Style */}
-            <div className="inline-flex max-w-full items-center gap-2.5 rounded-full border-2 border-gray-200 bg-white px-4 py-2 shadow-sm transition-transform hover:-translate-y-0.5">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full opacity-40 rounded-full bg-[#93B733]"></span>
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#93B733]"></span>
-              </span>
-              <p className="text-xs font-bold tracking-wide text-[#0D3A1D] sm:text-sm">
-                Trusted Student Housing
-              </p>
-            </div>
-
             {/* Bold Premium Heading with Z-Gen Highlight */}
             <h1
               style={{ fontFamily: "'Outfit', sans-serif" }}
-              className="mt-6 text-[3rem] font-black leading-[1.05] tracking-tight text-[#0D3A1D] sm:text-[4rem] md:mt-8 md:text-[4.8rem] md:leading-[1.05]"
+              className="text-[3rem] font-black leading-[1.05] tracking-tight text-[#0D3A1D] sm:text-[4rem] md:text-[4.8rem] md:leading-[1.05]"
             >
               Find Your <br />
               <span className="relative mt-2 inline-block">

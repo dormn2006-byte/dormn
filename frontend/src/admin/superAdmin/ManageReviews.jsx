@@ -1,27 +1,21 @@
 import { useState, useEffect, useContext } from "react";
-import axios from "axios";
+import api from "../../services/api";
 import { Star, Eye, EyeOff, Trash2, Filter } from "lucide-react";
-import { AuthContext } from "../../context/AuthContext"; // <-- Added to grab your real token!
+import { AuthContext } from "../../context/AuthContext";
 
 const ManageReviews = () => {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterRating, setFilterRating] = useState("ALL");
   
-  // 🚀 Grab the exact token from your context, just like Dashboard.jsx does
   const { token } = useContext(AuthContext); 
-  
-  // 🚀 Match your global API URL structure perfectly
-  const API_BASE_URL = import.meta.env.VITE_API_URL || "https://api.dormn.com/api";
 
   useEffect(() => {
     const fetchReviews = async () => {
-      if (!token) return; // Don't fetch if token hasn't loaded yet
+      if (!token) return;
 
       try {
-        const response = await axios.get(`${API_BASE_URL}/reviews/admin/all`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await api.get("/reviews/admin/all");
         if (response.data.success) {
           setReviews(response.data.reviews);
         }
@@ -38,12 +32,7 @@ const ManageReviews = () => {
   const handleToggleStatus = async (id, currentStatus) => {
     const newStatus = currentStatus === "approved" ? "pending" : "approved";
     try {
-      await axios.put(
-        `${API_BASE_URL}/reviews/admin/status`,
-        { id, status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      // Update UI instantly
+      await api.put("/reviews/admin/status", { id, status: newStatus });
       setReviews(reviews.map(r => r.id === id ? { ...r, status: newStatus } : r));
     } catch (error) {
       alert("Failed to update status");
@@ -54,10 +43,7 @@ const ManageReviews = () => {
     if (!window.confirm("Are you sure you want to permanently delete this review?")) return;
     
     try {
-      await axios.delete(`${API_BASE_URL}/reviews/admin/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      // Remove from UI
+      await api.delete(`/reviews/admin/${id}`);
       setReviews(reviews.filter(r => r.id !== id));
     } catch (error) {
       alert("Failed to delete review");

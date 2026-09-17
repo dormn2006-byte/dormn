@@ -29,28 +29,57 @@ const Notifications = () => {
   const fetchLiveNotifications = useCallback(async () => {
     try {
       setLoading(true);
-      const [bookingsRes, requestsRes] = await Promise.allSettled([
+      const [pgsRes, bookingsRes, requestsRes] = await Promise.allSettled([
+        api.get("/pg/owner/my-pgs"),
         api.get("/bookings/owner-bookings"),
-        api.get("/student-portal/owner-requests")
+        api.get("/maintenance/owner")
       ]);
 
-      const dbBookings = bookingsRes.status === "fulfilled" ? bookingsRes.value.data?.bookings || [] : [];
-      let dbRequests = requestsRes.status === "fulfilled" ? requestsRes.value.data?.requests || [] : [];
+      const myPgs = pgsRes.status === "fulfilled" ? pgsRes.value.data?.pgs || [] : [];
+      const myPgIds = new Set(myPgs.map(p => String(p.id)));
+      const myPgTitles = new Set(myPgs.map(p => (p.title || '').toLowerCase().trim()));
 
-      // Also merge any local resident maintenance requests
+      const rawBookings = bookingsRes.status === "fulfilled" ? bookingsRes.value.data?.bookings || [] : [];
+      let rawRequests = requestsRes.status === "fulfilled" ? requestsRes.value.data?.requests || [] : [];
+
+      if (rawRequests.length === 0) {
+        try {
+          const fallbackReqs = (await api.get("/student-portal/owner-requests")).data?.requests || [];
+          rawRequests = fallbackReqs;
+        } catch {}
+      }
+
+      // Also merge any local resident maintenance requests ONLY if they belong to this owner's PGs
       try {
         const localReqs = JSON.parse(localStorage.getItem('dormn_resident_requests') || '[]');
         if (Array.isArray(localReqs) && localReqs.length > 0) {
-          const ids = new Set(dbRequests.map(r => String(r.id || r.rawId)));
-          localReqs.forEach(lr => {
+          const cleanLocal = localReqs.filter(r => {
+            const isClean = r.student_name !== 'Rahul Sharma' && 
+              !String(r.id).includes('demo') && 
+              !String(r.id).includes('1787822400001') &&
+              !String(r.title || '').toLowerCase().includes('wi-fi router speed issue');
+            const matchesMyPg = myPgIds.has(String(r.pg_id)) || myPgTitles.has((r.pg_title || '').toLowerCase().trim());
+            return isClean && matchesMyPg;
+          });
+          const ids = new Set(rawRequests.map(r => String(r.id || r.rawId)));
+          cleanLocal.forEach(lr => {
             if (!ids.has(String(lr.id))) {
-              dbRequests.push(lr);
+              rawRequests.push(lr);
             }
           });
         }
       } catch (e) {
         console.error('Error merging local requests in owner notifications:', e);
       }
+
+      // Filter to only this owner's PGs
+      const dbBookings = myPgs.length > 0 
+        ? rawBookings.filter(b => myPgIds.has(String(b.pg_id)) || myPgTitles.has((b.pg_title || b.title || '').toLowerCase().trim()))
+        : [];
+
+      const dbRequests = myPgs.length > 0
+        ? rawRequests.filter(r => myPgIds.has(String(r.pg_id)) || myPgTitles.has((r.pg_title || '').toLowerCase().trim()))
+        : [];
 
       // Transform real MySQL database bookings into notifications
       const mappedBookings = dbBookings.map((b) => ({

@@ -1,6 +1,6 @@
 import PublicLayout from "../layouts/PublicLayout";
 import Container from "../layouts/Container";
-import { Scale, ShieldCheck, Users, AlertTriangle, Copyright, Lock, Gavel } from "lucide-react";
+import { Scale, ShieldCheck, Users, AlertTriangle, Copyright, Lock, Gavel, HelpCircle, RefreshCw, FileText } from "lucide-react";
 
 const TermsConditions = () => {
   return (
@@ -16,10 +16,10 @@ const TermsConditions = () => {
                 <Scale size={14} /> Legal Framework &amp; User Agreement
               </div>
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
-                Terms &amp; Conditions of Use
+                Terms &amp; Conditions of Service
               </h1>
               <p className="mt-4 text-sm sm:text-base text-gray-300 leading-relaxed font-medium">
-                These Terms and Conditions govern your access to and use of the Dormn website, mobile applications, and services. Please read this agreement carefully before using the platform.
+                These Terms of Service govern your access to and use of Dormn (operated by Annapurna Hostels, Uttar Pradesh, India). Please read this agreement carefully.
               </p>
             </div>
           </div>
@@ -33,15 +33,26 @@ const TermsConditions = () => {
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#93B733]">
                   <Scale size={20} />
                 </div>
-                <h2 className="text-2xl font-black text-[#0D3A1D]">1. Acceptance of Terms</h2>
+                <h2 className="text-2xl font-black text-[#0D3A1D]">1. Acceptance of Terms &amp; Definitions</h2>
               </div>
               <div className="space-y-4 text-sm sm:text-base leading-relaxed text-gray-600 font-medium">
                 <p>
-                  Welcome to Dormn (&quot;the Platform&quot;). These Terms and Conditions (&quot;Terms&quot;) govern your access to and use of the Dormn website, services, and mobile applications. By accessing, browsing, or registering on the Platform, you acknowledge that you have read, understood, and agree to be bound by these Terms as well as our Privacy Policy.
+                  Welcome to Dormn (&quot;the Application&quot; or &quot;the Service&quot;), operated by Annapurna Hostels (&quot;the Company&quot;, &quot;We&quot;, &quot;Us&quot;, or &quot;Our&quot;), headquartered in Uttar Pradesh, India.
                 </p>
-                <p>
-                  If you do not agree with any part of these Terms, you must immediately cease using the Platform. Dormn reserves the right to modify these Terms at any time. Material changes will be communicated through a prominent notice on the Platform or via email notification. Continued use of the Platform constitutes your acceptance of updated Terms.
-                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 text-xs sm:text-sm">
+                  <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-100">
+                    <strong>Account:</strong> A unique account created for You to access our Service.
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-100">
+                    <strong>Company:</strong> Refers to Annapurna Hostels / Dormn Platform, Uttar Pradesh, India.
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-100">
+                    <strong>Service Provider:</strong> Third-party companies employed to facilitate or analyze the Service.
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-gray-50 border border-gray-100">
+                    <strong>You / Tenant / Owner:</strong> The individual or entity accessing or using the Service.
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -51,26 +62,26 @@ const TermsConditions = () => {
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#93B733]">
                   <ShieldCheck size={20} />
                 </div>
-                <h2 className="text-2xl font-black text-[#0D3A1D]">2. Description of Services</h2>
+                <h2 className="text-2xl font-black text-[#0D3A1D]">2. Description of Services &amp; Platform Role</h2>
               </div>
               <div className="space-y-4 text-sm sm:text-base leading-relaxed text-gray-600 font-medium">
                 <p>
-                  Dormn operates as a digital intermediary platform designed to connect property owners with prospective tenants (students and working professionals) seeking Paying Guest (PG) accommodations.
+                  Dormn operates as a digital intermediary platform connecting property owners with students and working professionals seeking Paying Guest (PG) accommodations.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                   <div className="rounded-2xl bg-gray-50 p-4 border border-gray-100">
                     <h4 className="font-extrabold text-[#0D3A1D] text-xs uppercase tracking-wider mb-2">For Students &amp; Tenants</h4>
-                    <p className="text-xs text-gray-600">Browse verified listings using search filters (location, price, amenities, gender rules) and submit direct visit or booking requests.</p>
+                    <p className="text-xs text-gray-600">Browse verified listings (AC/Non-AC room pricing), submit booking requests, pay rent online via Razorpay, and manage maintenance tickets.</p>
                   </div>
 
                   <div className="rounded-2xl bg-gray-50 p-4 border border-gray-100">
                     <h4 className="font-extrabold text-[#0D3A1D] text-xs uppercase tracking-wider mb-2">For Property Owners</h4>
-                    <p className="text-xs text-gray-600">Access a property management dashboard to list accommodations, upload photo galleries, review visit requests, and track tenant rosters.</p>
+                    <p className="text-xs text-gray-600">Review booking applications, update ticket statuses (In Progress / Resolved), verify resident payments, and post announcements.</p>
                   </div>
 
                   <div className="rounded-2xl bg-gray-50 p-4 border border-gray-100">
                     <h4 className="font-extrabold text-[#0D3A1D] text-xs uppercase tracking-wider mb-2">For Administrators</h4>
-                    <p className="text-xs text-gray-600">System oversight to verify property listings, moderate platform content, and maintain quality assurance standards.</p>
+                    <p className="text-xs text-gray-600">Platform moderation, content quality assurance, and legal compliance oversight.</p>
                   </div>
                 </div>
               </div>
@@ -82,70 +93,70 @@ const TermsConditions = () => {
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#93B733]">
                   <Users size={20} />
                 </div>
-                <h2 className="text-2xl font-black text-[#0D3A1D]">3. User Roles and Responsibilities</h2>
+                <h2 className="text-2xl font-black text-[#0D3A1D]">3. User Responsibilities &amp; Media Permissions</h2>
               </div>
-              <div className="space-y-6 text-sm sm:text-base leading-relaxed text-gray-600 font-medium">
-                
-                <div>
-                  <h3 className="font-extrabold text-[#0D3A1D] text-base mb-2">3.1 Students and Tenants</h3>
-                  <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-gray-600">
-                    <li>Provide accurate and truthful information during registration and booking requests.</li>
-                    <li>Use the &quot;Request a Visit&quot; and inquiry features solely for genuine accommodation seeking.</li>
-                    <li>Understand that Dormn acts as a discovery facilitator and does not own or guarantee the physical safety, cleanliness, or condition of listed properties.</li>
-                    <li><strong>Sole Responsibility:</strong> Tenants are solely responsible for conducting in-person physical property inspections and verifying lease details before transferring rental funds or security deposits.</li>
-                    <li>Adhere to house rules and policies set by Property Owners upon booking a stay.</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="font-extrabold text-[#0D3A1D] text-base mb-2">3.2 Property Owners</h3>
-                  <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-gray-600">
-                    <li>Provide complete, accurate, and updated property details, including room specs (AC/Non-AC), pricing, available capacity, and house rules.</li>
-                    <li>Ensure that listed accommodations comply with local municipal regulations, safety codes, and housing laws.</li>
-                    <li>Promptly update property availability and process booking applications through the owner portal.</li>
-                    <li><strong>Financial Responsibility:</strong> Owners take full responsibility for rental agreements, security deposits, and monetary transactions. Dormn does not process or manage financial transactions between Owners and Tenants.</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="font-extrabold text-[#0D3A1D] text-base mb-2">3.3 Account Integrity and Access Control</h3>
-                  <p className="text-xs sm:text-sm text-gray-600">
-                    Users must access only the dashboard features assigned to their registered user role (Student, Property Owner, or Admin). Attempting to bypass security controls or impersonate another role is strictly prohibited and will result in immediate account termination.
-                  </p>
-                </div>
-
+              <div className="space-y-4 text-sm sm:text-base leading-relaxed text-gray-600 font-medium">
+                <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm text-gray-600">
+                  <li><strong>Accurate Information:</strong> Users must provide truthful contact, identification, and listing details.</li>
+                  <li><strong>Camera &amp; Photo Library Permissions:</strong> While using our Application, to enable property gallery uploads, KYC verification, or profile photos, we may collect pictures with your prior permission. You can enable or disable access at any time through device settings.</li>
+                  <li><strong>Inspection Duty:</strong> Tenants are encouraged to conduct physical property inspections before transferring rental deposits.</li>
+                </ul>
               </div>
             </section>
 
-            {/* Section 4 */}
-            <section className="rounded-[2.5rem] border-2 border-gray-100 bg-white p-6 sm:p-10 shadow-sm">
+            {/* Section 4 - CANCELLATION AND REFUND POLICY */}
+            <section id="cancellation" className="rounded-[2.5rem] border-2 border-[#93B733]/40 bg-gradient-to-br from-emerald-50/40 via-white to-gray-50 p-6 sm:p-10 shadow-sm scroll-mt-24">
               <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#93B733]">
-                  <ShieldCheck size={20} />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#93B733] text-white shadow-md">
+                  <RefreshCw size={20} />
                 </div>
-                <h2 className="text-2xl font-black text-[#0D3A1D]">4. Platform Liability &amp; Intermediary Status</h2>
+                <div>
+                  <h2 className="text-2xl font-black text-[#0D3A1D]">4. Booking Approval, Cancellation &amp; Refund Policy</h2>
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-[#93B733]">Core Resident &amp; Owner Rules</span>
+                </div>
               </div>
-              <div className="space-y-4 text-sm sm:text-base leading-relaxed text-gray-600 font-medium">
-                <p>
-                  Dormn operates strictly as an intermediary digital facilitator under the Information Technology Act, 2000 and the Information Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021.
-                </p>
 
-                <div className="space-y-3">
-                  <div className="rounded-2xl bg-gray-50 p-4 border border-gray-100">
-                    <h4 className="font-bold text-[#0D3A1D] text-sm mb-1">No Direct Liability</h4>
-                    <p className="text-xs text-gray-600">Dormn acts solely as a discovery platform to connect property owners and prospective tenants. We do not own, operate, manage, or physically inspect properties listed on the Platform.</p>
+              <div className="space-y-5 text-sm sm:text-base leading-relaxed text-gray-700 font-medium">
+                
+                <div className="rounded-2xl bg-white p-5 border border-gray-200/80 space-y-2">
+                  <h4 className="font-extrabold text-[#0D3A1D] text-base">4.1 Booking Request &amp; Owner Approval Workflow</h4>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    Submitting a booking request on Dormn sends an application to the PG Owner. A booking is in <strong>Pending</strong> status until the PG Owner reviews and approves it.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-white p-5 border border-gray-200/80 space-y-2">
+                  <h4 className="font-extrabold text-[#0D3A1D] text-base">4.2 Rent Payment Gate &amp; Portal Activation</h4>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    Once approved by the PG Owner, the booking status transitions to <strong>Approved (Unpaid)</strong>. The resident must complete the rent/activation payment via Razorpay. Full resident portal access (maintenance requests, notices, account tools) is unlocked <strong>only after successful rent payment verification</strong>.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-2xl bg-white p-5 border border-emerald-200 space-y-2">
+                    <h4 className="font-extrabold text-[#0D3A1D] text-sm uppercase tracking-tight">4.3 Cancellation Before Payment</h4>
+                    <ul className="list-disc pl-4 space-y-1.5 text-xs text-gray-600">
+                      <li><strong>Pending Applications:</strong> Tenants can cancel pending booking applications at any time prior to owner approval with zero fee.</li>
+                      <li><strong>Unpaid Approved Applications:</strong> If a booking is approved but rent has not been paid, the tenant may cancel without penalty before completing transaction.</li>
+                    </ul>
                   </div>
 
-                  <div className="rounded-2xl bg-gray-50 p-4 border border-gray-100">
-                    <h4 className="font-bold text-[#0D3A1D] text-sm mb-1">Disclaimer of Warranties</h4>
-                    <p className="text-xs text-gray-600">The Platform is provided on an &quot;as is&quot; and &quot;as available&quot; basis without warranties of any kind, express or implied, regarding completeness, accuracy, or physical safety of listed properties.</p>
-                  </div>
-
-                  <div className="rounded-2xl bg-gray-50 p-4 border border-gray-100">
-                    <h4 className="font-bold text-[#0D3A1D] text-sm mb-1">Limitation of Liability</h4>
-                    <p className="text-xs text-gray-600">In no event shall Dormn, its officers, or representatives be liable for indirect, incidental, consequential, or punitive damages arising from platform usage or disputes between Tenants and Property Owners.</p>
+                  <div className="rounded-2xl bg-white p-5 border border-amber-200 space-y-2">
+                    <h4 className="font-extrabold text-[#0D3A1D] text-sm uppercase tracking-tight">4.4 Cancellation After Rent Payment &amp; Stay</h4>
+                    <ul className="list-disc pl-4 space-y-1.5 text-xs text-gray-600">
+                      <li><strong>Notice Period:</strong> Cancellations after payment confirmation are governed by the PG Owner&apos;s notice period policy (standard 30-day notice).</li>
+                      <li><strong>Security Deposits:</strong> Refund of security deposits is managed directly by the PG Owner upon vacating and clearing property dues.</li>
+                    </ul>
                   </div>
                 </div>
+
+                <div className="rounded-2xl bg-[#0D3A1D] text-white p-5 border border-gray-800 space-y-2">
+                  <h4 className="font-extrabold text-[#93B733] text-sm uppercase tracking-wider">4.5 Failed Transactions &amp; Refund Processing Timeline</h4>
+                  <p className="text-xs text-gray-300">
+                    In the event of a failed online transaction where funds were debited, or duplicate charges occurred during payment gateway processing, refunds are automatically credited back to the original payment source within <strong>5 to 7 business days</strong>.
+                  </p>
+                </div>
+
               </div>
             </section>
 
@@ -158,12 +169,10 @@ const TermsConditions = () => {
                 <h2 className="text-2xl font-black text-[#0D3A1D]">5. Prohibited Activities</h2>
               </div>
               <div className="space-y-4 text-sm sm:text-base leading-relaxed text-gray-600 font-medium">
-                <p>Users are strictly prohibited from engaging in the following actions on the Platform:</p>
                 <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm text-gray-600">
-                  <li><strong>Fraudulent Listings:</strong> Publishing false property information, unauthorized pricing, non-existent amenities, or misleading photographs.</li>
-                  <li><strong>Harassment &amp; Abuse:</strong> Utilizing direct communication channels (WhatsApp redirection, phone calls) to harass, threaten, or send abusive content to other users.</li>
-                  <li><strong>Platform Abuse:</strong> Attempting to disrupt platform security, scrape user data using automated bots, or launch Denial of Service (DoS) attacks.</li>
-                  <li><strong>Unlawful Content:</strong> Uploading or transmitting material that violates Indian local, state, or national laws.</li>
+                  <li><strong>Fraudulent Listings:</strong> Publishing false property specs, unauthorized pricing, or deceptive photos.</li>
+                  <li><strong>Harassment:</strong> Using direct contact channels (WhatsApp/phone) to harass or threaten users.</li>
+                  <li><strong>Platform Exploits:</strong> Scrape user data, bypass security controls, or launch DDoS attacks.</li>
                 </ul>
               </div>
             </section>
@@ -172,16 +181,13 @@ const TermsConditions = () => {
             <section className="rounded-[2.5rem] border-2 border-gray-100 bg-white p-6 sm:p-10 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#93B733]">
-                  <Copyright size={20} />
+                  <Lock size={20} />
                 </div>
-                <h2 className="text-2xl font-black text-[#0D3A1D]">6. Intellectual Property Rights</h2>
+                <h2 className="text-2xl font-black text-[#0D3A1D]">6. Data Rights &amp; Delete Personal Data</h2>
               </div>
               <div className="space-y-4 text-sm sm:text-base leading-relaxed text-gray-600 font-medium">
                 <p>
-                  <strong>Platform Content:</strong> All branding, designs, logos, software architecture, algorithms, and interface elements associated with the Dormn Platform are the exclusive property of Dormn and are protected by applicable intellectual property laws.
-                </p>
-                <p>
-                  <strong>User Content License:</strong> By uploading property images and descriptions, Property Owners grant Dormn a non-exclusive, royalty-free, worldwide license to host, display, and format this content for platform operation and promotion.
+                  You have the right to delete or request assistance in deleting the Personal Data collected about You. You may update, amend, or delete your information at any time by signing into your Account and visiting Account Settings, or by contacting us at <strong>info@annapurnahostels.com</strong> / <strong>support@dormn.in</strong>.
                 </p>
               </div>
             </section>
@@ -190,31 +196,18 @@ const TermsConditions = () => {
             <section className="rounded-[2.5rem] border-2 border-gray-100 bg-white p-6 sm:p-10 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#93B733]">
-                  <Lock size={20} />
-                </div>
-                <h2 className="text-2xl font-black text-[#0D3A1D]">7. Account Termination</h2>
-              </div>
-              <div className="space-y-4 text-sm sm:text-base leading-relaxed text-gray-600 font-medium">
-                <p>
-                  Dormn reserves the right to suspend or permanently terminate user accounts at its discretion, without prior notice, if a user is found to violate these Terms, engage in fraudulent listing activities, or compromise the safety and integrity of the Platform.
-                </p>
-              </div>
-            </section>
-
-            {/* Section 8 */}
-            <section className="rounded-[2.5rem] border-2 border-gray-100 bg-white p-6 sm:p-10 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#93B733]">
                   <Gavel size={20} />
                 </div>
-                <h2 className="text-2xl font-black text-[#0D3A1D]">8. Governing Law and Jurisdiction</h2>
+                <h2 className="text-2xl font-black text-[#0D3A1D]">7. Governing Law &amp; Contact</h2>
               </div>
               <div className="space-y-4 text-sm sm:text-base leading-relaxed text-gray-600 font-medium">
                 <p>
-                  These Terms shall be governed by and construed in accordance with the laws of the Republic of India. Any legal disputes arising out of or in connection with these Terms shall be subject to the exclusive jurisdiction of the competent courts located in India.
+                  These Terms shall be governed by and construed in accordance with the laws of Uttar Pradesh, India.
                 </p>
-                <div className="rounded-2xl bg-[#93B733]/10 p-5 border border-[#93B733]/20 text-xs sm:text-sm text-[#0D3A1D] font-bold">
-                  This document outlines the legal framework for using the Dormn platform. If you have questions regarding these terms, please contact us at support@dormn.in.
+                <div className="rounded-2xl bg-gray-50 p-5 border border-gray-200 text-xs sm:text-sm space-y-1 text-gray-700 font-semibold">
+                  <p><strong>Company:</strong> Annapurna Hostels (Dormn)</p>
+                  <p><strong>Country / State:</strong> Uttar Pradesh, India</p>
+                  <p><strong>Contact Email:</strong> info@annapurnahostels.com / support@dormn.in</p>
                 </div>
               </div>
             </section>

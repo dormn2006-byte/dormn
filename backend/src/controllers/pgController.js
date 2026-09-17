@@ -16,6 +16,9 @@ import {
 import { processImage } from "../utils/imageProcessor.js"; 
 import { getOwnerAnalyticsData } from "../models/pgModel.js";
 
+import pool from '../config/db.js';
+import { decryptUserObject } from '../utils/encryptionService.js';
+
 // Create PG
 export const createPGController = async (req, res) => {
   try {
@@ -35,11 +38,63 @@ export const createPGController = async (req, res) => {
       sharing_options, // NEW: Added to capture dynamic pricing matrix
     } = req.body;
 
-    // Validation
-    if (!title || !pg_type || !price || !address || !city) {
+    // ── 1. Check Owner Payout Details & Subscription ──
+    const [ownerRows] = await pool.execute(
+      `SELECT subscription_tier, subscription_status, subscription_expires_at, max_pg_listings,
+              account_holder, bank_name, account_number, ifsc_code
+       FROM users WHERE id = ?`,
+      [req.user.id]
+    );
+    const owner = ownerRows[0] ? decryptUserObject(ownerRows[0]) : null;
+    if (!owner) {
+      return res.status(404).json({ success: false, message: "Owner account not found." });
+    }
+
+    // Require Bank & Payout Details before listing
+    if (!owner.account_holder || !owner.account_number || !owner.ifsc_code) {
       return res.status(400).json({
         success: false,
-        message: "Please fill all required fields",
+        code: "PAYOUT_DETAILS_REQUIRED",
+        message: "Please configure your Bank & Payout details in your profile before adding a PG so student payments can be credited to your account.",
+      });
+    }
+
+    // Check if subscription is expired
+    if (owner.subscription_status === 'expired') {
+      return res.status(403).json({
+        success: false,
+        code: "SUBSCRIPTION_EXPIRED",
+        message: "Your subscription has expired. Please renew your plan to add PG listings.",
+      });
+    }
+
+    // Check listing limit
+    const [[{ pgCount }]] = await pool.execute(
+      'SELECT COUNT(*) AS pgCount FROM pgs WHERE owner_id = ?',
+      [req.user.id]
+    );
+    const maxAllowed = owner.max_pg_listings || 1;
+    if (pgCount >= maxAllowed) {
+      return res.status(403).json({
+        success: false,
+        code: "LISTING_LIMIT_REACHED",
+        message: `You've reached the maximum of ${maxAllowed} PG listing(s) for your ${owner.subscription_tier || 'free'} plan. Please upgrade to add more.`,
+      });
+    }
+
+    // Validation
+    if (
+      !title?.trim() ||
+      !pg_type?.trim() ||
+      !price ||
+      !address?.trim() ||
+      !city?.trim() ||
+      !description?.trim() ||
+      !rules?.trim()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Please fill all required fields, including property description and rules.",
       });
     }
 
@@ -69,6 +124,15 @@ export const createPGController = async (req, res) => {
     // Owner ID from Logged In User
     const owner_id = req.user.id;
 
+    // Safely ensure sharing_options and amenities are JSON strings if passed as object/array
+    const finalSharingOptions = typeof sharing_options === "object" && sharing_options !== null
+      ? JSON.stringify(sharing_options)
+      : sharing_options;
+
+    const finalAmenities = typeof amenities === "object" && amenities !== null
+      ? JSON.stringify(amenities)
+      : (amenities || null);
+
     const result = await createPG({
       owner_id,
       title,
@@ -80,11 +144,11 @@ export const createPGController = async (req, res) => {
       area,
       nearby_college,
       available_rooms,
-      amenities,
+      amenities: finalAmenities,
       rules,
       google_map_link,
       profile_image,
-      sharing_options, // NEW: Passed to database model
+      sharing_options: finalSharingOptions, // NEW: Passed to database model
     });
 
     // Save gallery images after the PG has been created.
@@ -193,6 +257,14 @@ export const updatePGController = async (req, res) => {
         message: "PG not found",
       });
     }
+
+    // Row-Level Security: Verify that the logged-in user owns this PG (or is superadmin)
+    if (Number(existingPG.owner_id) !== Number(req.user.id) && req.user.role !== "admin" && req.user.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. You do not have permission to modify this property.",
+      });
+    }
     
     // NOTE: If you plan to allow users to update images later, 
     // you can reuse the processImage() utility right here!
@@ -207,12 +279,20 @@ export const updatePGController = async (req, res) => {
       area: req.body.area ?? existingPG.area,
       nearby_college: req.body.nearby_college ?? existingPG.nearby_college,
       available_rooms: req.body.available_rooms ?? existingPG.available_rooms,
-      amenities: req.body.amenities ?? existingPG.amenities,
+      amenities: (() => {
+        const raw = req.body.amenities !== undefined ? req.body.amenities : existingPG.amenities;
+        if (raw && typeof raw === "object") return JSON.stringify(raw);
+        return raw;
+      })(),
       rules: req.body.rules ?? existingPG.rules,
       google_map_link:
         req.body.google_map_link ?? existingPG.google_map_link,
       profile_image: req.body.profile_image ?? existingPG.profile_image,
-      sharing_options: req.body.sharing_options ?? existingPG.sharing_options, // NEW: Handled in updates
+      sharing_options: (() => {
+        const raw = req.body.sharing_options !== undefined ? req.body.sharing_options : existingPG.sharing_options;
+        if (raw && typeof raw === "object") return JSON.stringify(raw);
+        return raw;
+      })(),
     };
 
     console.log("Update Data:", updatedData);
@@ -244,6 +324,14 @@ export const deletePGController = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "PG not found",
+      });
+    }
+
+    // Row-Level Security: Verify ownership before deletion
+    if (Number(existingPG.owner_id) !== Number(req.user.id) && req.user.role !== "admin" && req.user.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. You do not have permission to delete this property.",
       });
     }
 
@@ -340,6 +428,8 @@ export const searchPGsController = async (req, res) => {
       nearby_college,
       min_price,
       max_price,
+      amenity,
+      keyword,
     } = req.query;
 
     const pgs = await searchPGs({
@@ -349,6 +439,8 @@ export const searchPGsController = async (req, res) => {
       nearby_college,
       min_price,
       max_price,
+      amenity,
+      keyword,
     });
 
     return res.status(200).json({

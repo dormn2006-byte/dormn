@@ -41,8 +41,54 @@ const PayRent = memo(({ onBack }) => {
 
   useEffect(() => { fetchLive(); }, [fetchLive]);
 
-  const currentDues = useMemo(() => bookings.filter(b => b.status === 'approved' && b.payment_status !== 'paid'), [bookings]);
-  const history = useMemo(() => bookings.filter(b => b.payment_status === 'paid'), [bookings]);
+  // Extract all PGs where the user has already paid
+  const paidPgKeys = useMemo(() => {
+    const keys = new Set();
+    bookings.forEach(b => {
+      if (b.payment_status === 'paid') {
+        const key = (b.title || b.pg_title || b.pg_name || String(b.pg_id || '')).toLowerCase().trim();
+        if (key) keys.add(key);
+      }
+    });
+    return keys;
+  }, [bookings]);
+
+  // Current dues: Approved unpaid bookings for PGs that haven't been paid yet (deduplicated by PG)
+  const currentDues = useMemo(() => {
+    const rawUnpaidApproved = bookings.filter(b => {
+      const isApproved = b.status === 'approved';
+      const isNotPaid = b.payment_status !== 'paid';
+      const pgKey = (b.title || b.pg_title || b.pg_name || String(b.pg_id || '')).toLowerCase().trim();
+      return isApproved && isNotPaid && !paidPgKeys.has(pgKey);
+    });
+
+    const grouped = {};
+    rawUnpaidApproved.forEach(b => {
+      const pgKey = (b.title || b.pg_title || b.pg_name || String(b.pg_id || '')).toLowerCase().trim();
+      const bTime = new Date(b.booking_date || b.created_at || 0).getTime() || Number(b.id) || 0;
+      const gTime = grouped[pgKey] ? (new Date(grouped[pgKey].booking_date || grouped[pgKey].created_at || 0).getTime() || Number(grouped[pgKey].id) || 0) : -1;
+      if (!grouped[pgKey] || bTime > gTime) {
+        grouped[pgKey] = b;
+      }
+    });
+
+    return Object.values(grouped);
+  }, [bookings, paidPgKeys]);
+
+  // Payment history: All paid stays (deduplicated by PG)
+  const history = useMemo(() => {
+    const rawPaid = bookings.filter(b => b.payment_status === 'paid');
+    const grouped = {};
+    rawPaid.forEach(b => {
+      const pgKey = (b.title || b.pg_title || b.pg_name || String(b.pg_id || '')).toLowerCase().trim();
+      const bTime = new Date(b.booking_date || b.created_at || 0).getTime() || Number(b.id) || 0;
+      const gTime = grouped[pgKey] ? (new Date(grouped[pgKey].booking_date || grouped[pgKey].created_at || 0).getTime() || Number(grouped[pgKey].id) || 0) : -1;
+      if (!grouped[pgKey] || bTime > gTime) {
+        grouped[pgKey] = b;
+      }
+    });
+    return Object.values(grouped);
+  }, [bookings]);
 
   const handlePay = async (booking) => {
     const amount = Number(booking.booked_price || booking.price || 0);
@@ -54,6 +100,7 @@ const PayRent = memo(({ onBack }) => {
     setIsPaying(true);
     try {
       const orderRes = await api.post('/payments/create-order', {
+        booking_id: Number(booking.id || booking.booking_id),
         pg_id: Number(booking.pg_id),
         owner_id: Number(booking.owner_id),
         amount_in_rupees: amount
@@ -104,10 +151,13 @@ const PayRent = memo(({ onBack }) => {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto py-2">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center text-xs sm:text-sm font-bold text-gray-500 hover:text-[#0D3A1D] dark:text-gray-400 dark:hover:text-white transition-colors cursor-pointer">
-          <ArrowLeft className="w-4 h-4 mr-1.5" /> <span>Back to Home</span>
+    <div className="space-y-5 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-2 pb-3 border-b border-gray-200/80 dark:border-white/10">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-[#0D3A1D] dark:hover:text-[#93B733] transition shadow-xs cursor-pointer active:scale-95"
+        >
+          <ArrowLeft size={16} /> <span>Back to My PG</span>
         </button>
         <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">Payment Portal</span>
       </div>

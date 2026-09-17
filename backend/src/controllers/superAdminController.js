@@ -1,32 +1,51 @@
-import User from "../schemas/userSchema.js";
-import PG from "../schemas/pgSchema.js";
-import Booking from "../schemas/bookingSchema.js";
+import db from "../config/db.js";
 
 // Get Dashboard Stats
 export const getDashboardStats = async (req, res) => {
   try {
-    const [totalUsers, totalOwners, totalStudents, totalPGs, pendingPGs, approvedPGs, rejectedPGs, totalBookings] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ role: "owner" }),
-      User.countDocuments({ role: "student" }),
-      PG.countDocuments(),
-      PG.countDocuments({ status: "pending" }),
-      PG.countDocuments({ status: "approved" }),
-      PG.countDocuments({ status: "rejected" }),
-      Booking.countDocuments(),
-    ]);
+    const [[totalUsers]] = await db.execute(
+      `SELECT COUNT(*) AS totalUsers FROM users`
+    );
+
+    const [[totalOwners]] = await db.execute(
+      `SELECT COUNT(*) AS totalOwners FROM users WHERE role = 'owner'`
+    );
+
+    const [[totalStudents]] = await db.execute(
+      `SELECT COUNT(*) AS totalStudents FROM users WHERE role = 'student'`
+    );
+
+    const [[totalPGs]] = await db.execute(
+      `SELECT COUNT(*) AS totalPGs FROM pgs`
+    );
+
+    const [[pendingPGs]] = await db.execute(
+      `SELECT COUNT(*) AS pendingPGs FROM pgs WHERE status = 'pending'`
+    );
+
+    const [[approvedPGs]] = await db.execute(
+      `SELECT COUNT(*) AS approvedPGs FROM pgs WHERE status = 'approved'`
+    );
+
+    const [[rejectedPGs]] = await db.execute(
+      `SELECT COUNT(*) AS rejectedPGs FROM pgs WHERE status = 'rejected'`
+    );
+
+    const [[totalBookings]] = await db.execute(
+      `SELECT COUNT(*) AS totalBookings FROM bookings`
+    );
 
     return res.status(200).json({
       success: true,
       stats: {
-        totalUsers,
-        totalOwners,
-        totalStudents,
-        totalPGs,
-        pendingPGs,
-        approvedPGs,
-        rejectedPGs,
-        totalBookings,
+        totalUsers: totalUsers.totalUsers,
+        totalOwners: totalOwners.totalOwners,
+        totalStudents: totalStudents.totalStudents,
+        totalPGs: totalPGs.totalPGs,
+        pendingPGs: pendingPGs.pendingPGs,
+        approvedPGs: approvedPGs.approvedPGs,
+        rejectedPGs: rejectedPGs.rejectedPGs,
+        totalBookings: totalBookings.totalBookings,
       },
     });
   } catch (error) {
@@ -39,159 +58,275 @@ export const getDashboardStats = async (req, res) => {
   }
 };
 
-// Helper: flatten PG with owner info
-const flattenPG = (pg) => ({
-  ...pg,
-  id: pg._id,
-  owner_name: pg.owner_id?.full_name || "",
-  owner_email: pg.owner_id?.email || "",
-  owner_id: pg.owner_id?._id || pg.owner_id,
-});
-
 // Get All PGs
 export const getAllPGs = async (req, res) => {
   try {
-    const pgs = await PG.find()
-      .sort({ created_at: -1 })
-      .populate("owner_id", "full_name email")
-      .lean();
+    const [pgs] = await db.execute(`
+      SELECT
+        pgs.*,
+        users.full_name AS owner_name,
+        users.email AS owner_email
+      FROM pgs
+      JOIN users ON pgs.owner_id = users.id
+      ORDER BY pgs.created_at DESC
+    `);
 
     return res.status(200).json({
       success: true,
       total: pgs.length,
-      pgs: pgs.map(flattenPG),
+      pgs,
     });
   } catch (error) {
     console.log("Get All PGs Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
 // Get Pending PGs
 export const getPendingPGs = async (req, res) => {
   try {
-    const pgs = await PG.find({ status: "pending" })
-      .sort({ created_at: -1 })
-      .populate("owner_id", "full_name email")
-      .lean();
+    const [pgs] = await db.execute(`
+      SELECT
+        pgs.*,
+        users.full_name AS owner_name,
+        users.email AS owner_email
+      FROM pgs
+      JOIN users ON pgs.owner_id = users.id
+      WHERE pgs.status = 'pending'
+      ORDER BY pgs.created_at DESC
+    `);
 
     return res.status(200).json({
       success: true,
       total: pgs.length,
-      pgs: pgs.map(flattenPG),
+      pgs,
     });
   } catch (error) {
     console.log("Pending PGs Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
 // Approve PG
 export const approvePG = async (req, res) => {
   try {
-    await PG.findByIdAndUpdate(req.params.id, { status: "approved" });
-    return res.status(200).json({ success: true, message: "PG approved successfully" });
+    const { id } = req.params;
+
+    await db.execute(
+      `
+      UPDATE pgs
+      SET status = 'approved'
+      WHERE id = ?
+      `,
+      [id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "PG approved successfully",
+    });
   } catch (error) {
     console.log("Approve PG Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
 // Reject PG
 export const rejectPG = async (req, res) => {
   try {
-    await PG.findByIdAndUpdate(req.params.id, { status: "rejected" });
-    return res.status(200).json({ success: true, message: "PG rejected successfully" });
+    const { id } = req.params;
+
+    await db.execute(
+      `
+      UPDATE pgs
+      SET status = 'rejected'
+      WHERE id = ?
+      `,
+      [id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "PG rejected successfully",
+    });
   } catch (error) {
     console.log("Reject PG Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
 export const blockPG = async (req, res) => {
   try {
-    await PG.findByIdAndUpdate(req.params.id, { status: "blocked" });
-    return res.status(200).json({ success: true, message: "PG blocked successfully" });
+    const { id } = req.params;
+
+    await db.execute(
+      `
+      UPDATE pgs
+      SET status = 'blocked'
+      WHERE id = ?
+      `,
+      [id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'PG blocked successfully',
+    });
   } catch (error) {
-    console.log("Block PG Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+    console.log('Block PG Error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Server Error',
+    });
   }
 };
 
 // Delete PG
 export const deletePG = async (req, res) => {
   try {
-    await PG.findByIdAndDelete(req.params.id);
-    return res.status(200).json({ success: true, message: "PG deleted successfully" });
+    const { id } = req.params;
+
+    await db.execute(
+      `DELETE FROM pgs WHERE id = ?`,
+      [id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "PG deleted successfully",
+    });
   } catch (error) {
     console.log("Delete PG Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
 // Get All Users
 export const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find()
-      .select("full_name email role created_at")
-      .sort({ created_at: -1 })
-      .lean();
+    const [users] = await db.execute(`
+      SELECT id, full_name, email, role, created_at
+      FROM users
+      ORDER BY created_at DESC
+    `);
 
-    return res.status(200).json({ success: true, total: users.length, users });
+    return res.status(200).json({
+      success: true,
+      total: users.length,
+      users,
+    });
   } catch (error) {
     console.log("Get Users Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
 // Delete User
 export const deleteUser = async (req, res) => {
   try {
-    await User.findByIdAndDelete(req.params.id);
-    return res.status(200).json({ success: true, message: "User deleted successfully" });
+    const { id } = req.params;
+
+    await db.execute(
+      `DELETE FROM users WHERE id = ?`,
+      [id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "User deleted successfully",
+    });
   } catch (error) {
     console.log("Delete User Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
 export const getAllBookings = async (req, res) => {
   try {
-    const bookings = await Booking.find()
-      .sort({ booking_date: -1 })
-      .populate("student_id", "full_name email")
-      .populate("pg_id", "title")
-      .lean();
+    const [bookings] = await db.execute(`
+      SELECT
+        b.*,
+        u.full_name AS student_name,
+        u.email AS student_email,
+        p.title AS pg_title
+      FROM bookings b
+      LEFT JOIN users u ON b.student_id = u.id
+      LEFT JOIN pgs p ON b.pg_id = p.id
+      ORDER BY b.booking_date DESC
+    `);
 
-    const formatted = bookings.map((b) => ({
-      ...b,
-      id: b._id,
-      student_name: b.student_id?.full_name,
-      student_email: b.student_id?.email,
-      pg_title: b.pg_id?.title,
-      student_id: b.student_id?._id || b.student_id,
-      pg_id: b.pg_id?._id || b.pg_id,
-    }));
-
-    return res.status(200).json({ success: true, total: formatted.length, bookings: formatted });
+    return res.status(200).json({
+      success: true,
+      total: bookings.length,
+      bookings,
+    });
   } catch (error) {
-    console.log("Get Bookings Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+    console.log('Get Bookings Error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Server Error',
+    });
   }
 };
 
 // Get All Owners
 export const getAllOwners = async (req, res) => {
   try {
-    const owners = await User.find({ role: "owner" })
-      .select("full_name email phone role created_at")
-      .sort({ created_at: -1 })
-      .lean();
+    const [owners] = await db.execute(`
+      SELECT
+        id,
+        full_name,
+        email,
+        phone,
+        role,
+        created_at
+      FROM users
+      WHERE role = 'owner'
+      ORDER BY created_at DESC
+    `);
 
-    return res.status(200).json({ success: true, total: owners.length, owners });
+    return res.status(200).json({
+      success: true,
+      total: owners.length,
+      owners,
+    });
   } catch (error) {
-    console.log("Get Owners Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+    console.log('Get Owners Error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Server Error',
+    });
   }
 };
 
@@ -200,20 +335,37 @@ export const getOwnerPGs = async (req, res) => {
   try {
     const { ownerId } = req.params;
 
-    const pgs = await PG.find({ owner_id: ownerId })
-      .select("title city area price available_rooms status created_at")
-      .sort({ created_at: -1 })
-      .lean();
+    const [pgs] = await db.execute(
+      `
+      SELECT
+        id,
+        title,
+        city,
+        area,
+        price,
+        available_rooms,
+        status,
+        created_at
+      FROM pgs
+      WHERE owner_id = ?
+      ORDER BY created_at DESC
+      `,
+      [ownerId]
+    );
 
     return res.status(200).json({
       success: true,
       ownerId,
       total: pgs.length,
-      pgs: pgs.map((p) => ({ ...p, id: p._id })),
+      pgs,
     });
   } catch (error) {
     console.log("Get Owner PGs Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
@@ -222,109 +374,190 @@ export const getStudentBookings = async (req, res) => {
   try {
     const { studentId } = req.params;
 
-    const bookings = await Booking.find({ student_id: studentId })
-      .sort({ booking_date: -1 })
-      .populate("pg_id", "title city area price")
-      .populate("student_id", "full_name email")
-      .lean();
-
-    const formatted = bookings.map((b) => ({
-      id: b._id,
-      booking_date: b.booking_date,
-      status: b.status,
-      payment_status: b.payment_status,
-      message: b.message,
-      pg_id: b.pg_id?._id || b.pg_id,
-      pg_title: b.pg_id?.title,
-      city: b.pg_id?.city,
-      area: b.pg_id?.area,
-      price: b.pg_id?.price,
-      student_name: b.student_id?.full_name,
-      student_email: b.student_id?.email,
-    }));
+    const [bookings] = await db.execute(
+      `
+      SELECT
+        b.id,
+        b.booking_date,
+        b.status,
+        b.payment_status,
+        b.message,
+        p.id AS pg_id,
+        p.title AS pg_title,
+        p.city,
+        p.area,
+        p.price,
+        u.full_name AS student_name,
+        u.email AS student_email
+      FROM bookings b
+      LEFT JOIN pgs p ON b.pg_id = p.id
+      LEFT JOIN users u ON b.student_id = u.id
+      WHERE b.student_id = ?
+      ORDER BY b.booking_date DESC
+      `,
+      [studentId]
+    );
 
     return res.status(200).json({
       success: true,
       studentId,
-      total: formatted.length,
-      bookings: formatted,
+      total: bookings.length,
+      bookings,
     });
   } catch (error) {
     console.log("Get Student Bookings Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 // Get All Students
 export const getAllStudents = async (req, res) => {
   try {
-    const students = await User.find({ role: "student" })
-      .select("full_name email phone role created_at")
-      .sort({ created_at: -1 })
-      .lean();
+    const [students] = await db.execute(`
+      SELECT
+        id,
+        full_name,
+        email,
+        phone,
+        role,
+        created_at
+      FROM users
+      WHERE role = 'student'
+      ORDER BY created_at DESC
+    `);
 
-    return res.status(200).json({ success: true, total: students.length, students });
+    return res.status(200).json({
+      success: true,
+      total: students.length,
+      students,
+    });
   } catch (error) {
-    console.log("Get Students Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+    console.log('Get Students Error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Server Error',
+    });
   }
 };
 
 export const getOwnerDetails = async (req, res) => {
   try {
-    const owner = await User.findOne({ _id: req.params.id, role: "owner" })
-      .select("full_name email phone role created_at")
-      .lean();
+    const { id } = req.params;
 
-    if (!owner) {
-      return res.status(404).json({ success: false, message: "Owner not found" });
+    const [owners] = await db.execute(
+      `
+      SELECT
+        id,
+        full_name,
+        email,
+        phone,
+        role,
+        created_at
+      FROM users
+      WHERE id = ? AND role = 'owner'
+      `,
+      [id]
+    );
+
+    if (owners.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Owner not found',
+      });
     }
 
-    return res.status(200).json({ success: true, owner });
+    return res.status(200).json({
+      success: true,
+      owner: owners[0],
+    });
   } catch (error) {
-    console.log("Get Owner Details Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+    console.log('Get Owner Details Error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Server Error',
+    });
   }
 };
 
 export const getPGDetails = async (req, res) => {
   try {
-    const pg = await PG.findById(req.params.id)
-      .populate("owner_id", "full_name email")
-      .lean();
+    const { id } = req.params;
 
-    if (!pg) {
-      return res.status(404).json({ success: false, message: "PG not found" });
+    const [pgs] = await db.execute(
+      `
+      SELECT
+        pgs.*,
+        users.full_name AS owner_name,
+        users.email AS owner_email
+      FROM pgs
+      LEFT JOIN users ON pgs.owner_id = users.id
+      WHERE pgs.id = ?
+      `,
+      [id]
+    );
+
+    if (pgs.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'PG not found',
+      });
     }
 
     return res.status(200).json({
       success: true,
-      pg: {
-        ...pg,
-        id: pg._id,
-        owner_name: pg.owner_id?.full_name || "",
-        owner_email: pg.owner_id?.email || "",
-        owner_id: pg.owner_id?._id || pg.owner_id,
-      },
+      pg: pgs[0],
     });
   } catch (error) {
-    console.log("Get PG Details Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+    console.log('Get PG Details Error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Server Error',
+    });
   }
 };
 
 export const getStudentDetails = async (req, res) => {
   try {
-    const student = await User.findOne({ _id: req.params.id, role: "student" })
-      .select("full_name email phone role created_at")
-      .lean();
+    const { id } = req.params;
 
-    if (!student) {
-      return res.status(404).json({ success: false, message: "Student not found" });
+    const [students] = await db.execute(
+      `
+      SELECT
+        id,
+        full_name,
+        email,
+        phone,
+        role,
+        created_at
+      FROM users
+      WHERE id = ? AND role = 'student'
+      `,
+      [id]
+    );
+
+    if (students.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
     }
 
-    return res.status(200).json({ success: true, student });
+    return res.status(200).json({
+      success: true,
+      student: students[0],
+    });
   } catch (error) {
-    console.log("Get Student Details Error:", error);
-    return res.status(500).json({ success: false, message: "Server Error" });
+    console.log('Get Student Details Error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Server Error',
+    });
   }
 };

@@ -13,10 +13,12 @@ import {
   IndianRupee,
   SlidersHorizontal,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Sparkles
 } from "lucide-react";
+import { AMENITY_OPTIONS, hasAmenityMatch } from "../utils/amenities";
 
-const quickFilters = ["All", "Boys", "Girls", "COED", "AC Room", "Non AC"];
+const quickFilters = ["All", "Boys", "Girls", "COED", "AC Room", "Non AC", "WiFi", "Food Included", "Power Backup", "Attached Bath"];
 
 const SectionSlider = ({ title, subtitle, pgs }) => {
   if (!pgs || pgs.length === 0) return null;
@@ -138,7 +140,8 @@ const ExplorePGs = () => {
     city: searchParams.get("city") || searchParams.get("location") || "",
     area: "",
     landmark: "",
-    minPrice: "3000",
+    amenity: searchParams.get("amenity") || "",
+    minPrice: "0",
     maxPrice: "50000",
   });
 
@@ -146,10 +149,10 @@ const ExplorePGs = () => {
   const [pgListings, setPgListings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const minSliderLimit = 3000;
+  const minSliderLimit = 0;
   const maxSliderLimit = 50000;
-  const currentMin = Number(filters.minPrice) || minSliderLimit;
-  const currentMax = Number(filters.maxPrice) || maxSliderLimit;
+  const currentMin = filters.minPrice !== "" ? Number(filters.minPrice) : minSliderLimit;
+  const currentMax = filters.maxPrice !== "" ? Number(filters.maxPrice) : maxSliderLimit;
 
   useEffect(() => {
     const fetchPGs = async () => {
@@ -199,13 +202,30 @@ const ExplorePGs = () => {
   const minPercent = ((currentMin - minSliderLimit) / (maxSliderLimit - minSliderLimit)) * 100;
   const maxPercent = ((currentMax - minSliderLimit) / (maxSliderLimit - minSliderLimit)) * 100;
 
+  // Availability Sorter: PGs with available spots (spots_left > 0) come first; filled PGs (0 spots) appear at the bottom/end
+  const sortPGsByAvailability = (list) => {
+    return [...list].sort((a, b) => {
+      const aSpots = a.spots_left !== undefined ? Number(a.spots_left) : Number(a.available_rooms || 0);
+      const bSpots = b.spots_left !== undefined ? Number(b.spots_left) : Number(b.available_rooms || 0);
+      const aAvailable = aSpots > 0 ? 1 : 0;
+      const bAvailable = bSpots > 0 ? 1 : 0;
+      if (aAvailable !== bAvailable) {
+        return bAvailable - aAvailable; // Available first (1), Sold out / Filled (0) at the bottom
+      }
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
+  };
+
   // Filter Logic
   const filteredPGs = useMemo(() => {
-    return pgListings.filter((pg) => {
-      // Text Search match
+    const matches = pgListings.filter((pg) => {
+      // Text Search match (matches title, address, area, city, and any amenities)
       const title = (pg.title || "").toLowerCase();
       const location = (`${pg.city || ""} ${pg.area || ""} ${pg.address || ""}`).toLowerCase();
-      const matchesSearch = !search.trim() || title.includes(search.toLowerCase()) || location.includes(search.toLowerCase());
+      const matchesSearch = !search.trim() || 
+        title.includes(search.toLowerCase()) || 
+        location.includes(search.toLowerCase()) || 
+        hasAmenityMatch(pg, search);
 
       // PG Type match
       const pgType = String(pg.pg_type || "").toLowerCase();
@@ -220,28 +240,38 @@ const ExplorePGs = () => {
       // Landmark match
       const matchesLandmark = !filters.landmark || String(pg.nearby_college || "").toLowerCase().includes(filters.landmark.toLowerCase());
 
+      // Amenity Filter match
+      const matchesAmenity = !filters.amenity || hasAmenityMatch(pg, filters.amenity);
+
       // Price Range match
       const price = Number(pg.price || 0);
-      const matchesPrice = price >= currentMin && price <= currentMax;
+      const matchesMin = currentMin <= minSliderLimit || price >= currentMin;
+      const matchesMax = currentMax >= maxSliderLimit || price <= currentMax;
+      const matchesPrice = matchesMin && matchesMax;
 
       // Quick Pill Filters match
       let matchesPill = true;
-      const amenitiesStr = String(pg.amenities || "").toLowerCase();
       if (activeFilter === "Boys") matchesPill = pgType.includes("boys");
       else if (activeFilter === "Girls") matchesPill = pgType.includes("girls");
       else if (activeFilter === "COED") matchesPill = pgType.includes("coed") || pgType.includes("both");
-      else if (activeFilter === "AC Room") matchesPill = amenitiesStr.includes("ac");
-      else if (activeFilter === "Non AC") matchesPill = !amenitiesStr.includes("ac");
+      else if (activeFilter === "AC Room") matchesPill = hasAmenityMatch(pg, "ac");
+      else if (activeFilter === "Non AC") matchesPill = !hasAmenityMatch(pg, "ac");
+      else if (activeFilter === "WiFi") matchesPill = hasAmenityMatch(pg, "wifi");
+      else if (activeFilter === "Food Included") matchesPill = hasAmenityMatch(pg, "food");
+      else if (activeFilter === "Power Backup") matchesPill = hasAmenityMatch(pg, "power");
+      else if (activeFilter === "Attached Bath") matchesPill = hasAmenityMatch(pg, "bath");
 
-      return matchesSearch && matchesType && matchesCity && matchesArea && matchesLandmark && matchesPrice && matchesPill;
+      return matchesSearch && matchesType && matchesCity && matchesArea && matchesLandmark && matchesAmenity && matchesPrice && matchesPill;
     });
+
+    return sortPGsByAvailability(matches);
   }, [pgListings, search, filters, activeFilter, currentMin, currentMax]);
 
-  const jodhpurPGs = useMemo(() => pgListings.filter(pg => String(pg.city).toLowerCase().includes("jodhpur")), [pgListings]);
-  const jaipurPGs = useMemo(() => pgListings.filter(pg => String(pg.city).toLowerCase().includes("jaipur")), [pgListings]);
-  const premiumPGs = useMemo(() => pgListings.filter(pg => String(pg.amenities).toLowerCase().includes("ac")), [pgListings]);
+  const jodhpurPGs = useMemo(() => sortPGsByAvailability(pgListings.filter(pg => String(pg.city).toLowerCase().includes("jodhpur"))), [pgListings]);
+  const jaipurPGs = useMemo(() => sortPGsByAvailability(pgListings.filter(pg => String(pg.city).toLowerCase().includes("jaipur"))), [pgListings]);
+  const premiumPGs = useMemo(() => sortPGsByAvailability(pgListings.filter(pg => String(pg.amenities).toLowerCase().includes("ac"))), [pgListings]);
 
-  const isDiscoverMode = !search.trim() && !filters.pgType && !filters.city && !filters.area && !filters.landmark && activeFilter === "All" && currentMin === minSliderLimit && currentMax === maxSliderLimit;
+  const isDiscoverMode = !search.trim() && !filters.pgType && !filters.city && !filters.area && !filters.landmark && !filters.amenity && activeFilter === "All" && currentMin <= minSliderLimit && currentMax >= maxSliderLimit;
 
   return (
     <PublicLayout>
@@ -261,7 +291,7 @@ const ExplorePGs = () => {
               <div className="flex items-center bg-white border border-gray-300 rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.04)] py-1.5 px-1.5 pl-4 sm:pl-6 transition-all focus-within:border-gray-400 focus-within:shadow-md">
                 <input
                   type="text"
-                  placeholder="Search by city, area, or PG name..."
+                  placeholder="Search by city, area, PG name, or amenities (WiFi, AC, Food...)..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="flex-grow min-h-[40px] text-[14px] sm:text-base font-medium text-gray-800 outline-none placeholder:text-gray-500 bg-transparent"
@@ -307,6 +337,15 @@ const ExplorePGs = () => {
                   options={availableAreas.map(a => ({ value: a, label: a }))}
                 />
 
+                {/* Amenities Filter */}
+                <CustomSelect 
+                  icon={Sparkles}
+                  value={filters.amenity}
+                  onChange={(val) => setFilters(prev => ({ ...prev, amenity: val }))}
+                  placeholder="All Amenities"
+                  options={AMENITY_OPTIONS}
+                />
+
                 {/* Landmark */}
                 <div className={`${isExpanded ? 'block' : 'hidden'} md:block col-span-1 lg:col-span-1`}>
                   <CustomSelect 
@@ -319,7 +358,7 @@ const ExplorePGs = () => {
                 </div>
 
                 {/* Dual-Range Budget Slider */}
-                <div className={`${isExpanded ? 'flex' : 'hidden'} md:flex flex-col justify-center px-5 h-[52px] w-full rounded-2xl border border-gray-200 bg-gray-50 shadow-sm col-span-1 md:col-span-2 lg:col-span-2 lg:col-start-2`}>
+                <div className={`${isExpanded ? 'flex' : 'hidden'} md:flex flex-col justify-center px-5 h-[52px] w-full rounded-2xl border border-gray-200 bg-gray-50 shadow-sm col-span-1 md:col-span-2 lg:col-span-3`}>
                   <div className="flex justify-between items-center w-full mb-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1">
                       <IndianRupee size={12} /> Budget Range
@@ -371,12 +410,12 @@ const ExplorePGs = () => {
                   {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 <span className="text-xs text-gray-400 hidden md:block font-medium">
-                  Refine your search with precise location and budget limits.
+                  Refine your search with precise location, amenities, and budget limits.
                 </span>
                 <button
                   type="button"
                   onClick={() => {
-                    setFilters({ pgType: "", city: "", area: "", landmark: "", minPrice: "3000", maxPrice: "50000" });
+                    setFilters({ pgType: "", city: "", area: "", landmark: "", amenity: "", minPrice: "0", maxPrice: "50000" });
                     setActiveFilter("All");
                     setSearch("");
                   }}

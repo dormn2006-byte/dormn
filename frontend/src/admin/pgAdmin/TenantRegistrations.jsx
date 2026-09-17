@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../../services/api";
 import { FileText, Download, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
-import { jsPDF } from "jspdf";
-// FIX 1: Explicitly import autoTable instead of relying on prototype injection
-import autoTable from "jspdf-autotable"; 
 
 const TenantRegistrations = () => {
   const [enrollments, setEnrollments] = useState([]);
@@ -38,8 +35,12 @@ const TenantRegistrations = () => {
     }
   };
 
-  const generatePDF = (student) => {
+  const generatePDF = async (student) => {
     try {
+      const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable")
+      ]);
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
