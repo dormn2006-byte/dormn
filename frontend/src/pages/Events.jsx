@@ -498,10 +498,14 @@ export default function Events() {
         {/* Listings Grid */}
         {filteredEvents.length === 0 ? (
           <div className="events-card-bg bg-white dark:bg-[#0D0B1C]/90 border border-purple-200 dark:border-purple-500/25 rounded-3xl p-12 text-center shadow-xl backdrop-blur-xl">
-            <Search className="mx-auto text-pink-600 dark:text-pink-400/70 mb-3" size={40} />
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">No experiences found</h3>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Try searching for a different name, city, or reset category filters.
+            <Sparkles className="mx-auto text-pink-600 dark:text-pink-400/70 mb-3" size={40} />
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+              {searchQuery ? "No matching experiences found" : "No upcoming events posted yet"}
+            </h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-md mx-auto">
+              {searchQuery
+                ? "Try searching with a different term, city, or reset category filters."
+                : "Check back soon for upcoming concerts, nightclub events, and campus meetups! Event managers will post new listings shortly."}
             </p>
           </div>
         ) : (
