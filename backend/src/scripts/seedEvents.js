@@ -1,5 +1,5 @@
-import pool from '../config/db.js';
-import { setupEventsTable } from './setupEventsTable.js';
+import { connectDB, disconnectDB } from '../config/db.js';
+import Event from '../schemas/eventSchema.js';
 
 export const INITIAL_EVENTS = [
   // ─── 7 CLUBS & NIGHTLIFE ───
@@ -503,64 +503,51 @@ export const INITIAL_EVENTS = [
 ];
 
 export async function seedEvents() {
-  await setupEventsTable();
+  await connectDB();
+
+  // The seed literals below express nested values as JSON strings; store them natively.
+  const toNative = (value) => {
+    if (typeof value !== 'string') return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  };
 
   for (const ev of INITIAL_EVENTS) {
-    const sql = `
-      INSERT INTO events (
-        id, title, tagline, category, category_label, location, city, phone,
-        single_price, couple_price, couple_condition, cover_image, banner_image,
-        gallery, about, upcoming_night, badge, rules, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        title = VALUES(title),
-        tagline = VALUES(tagline),
-        category = VALUES(category),
-        category_label = VALUES(category_label),
-        location = VALUES(location),
-        city = VALUES(city),
-        phone = VALUES(phone),
-        single_price = VALUES(single_price),
-        couple_price = VALUES(couple_price),
-        couple_condition = VALUES(couple_condition),
-        cover_image = VALUES(cover_image),
-        banner_image = VALUES(banner_image),
-        gallery = VALUES(gallery),
-        about = VALUES(about),
-        upcoming_night = VALUES(upcoming_night),
-        badge = VALUES(badge),
-        rules = VALUES(rules),
-        status = VALUES(status)
-    `;
-
-    await pool.execute(sql, [
-      ev.id,
-      ev.title,
-      ev.tagline,
-      ev.category,
-      ev.category_label,
-      ev.location,
-      ev.city,
-      ev.phone,
-      ev.single_price,
-      ev.couple_price,
-      ev.couple_condition,
-      ev.cover_image,
-      ev.banner_image,
-      ev.gallery,
-      ev.about,
-      ev.upcoming_night,
-      ev.badge,
-      typeof ev.rules === 'string' ? ev.rules : JSON.stringify(ev.rules),
-      ev.status
-    ]);
+    await Event.findOneAndUpdate(
+      { _id: ev.id },
+      {
+        title: ev.title,
+        tagline: ev.tagline,
+        category: ev.category,
+        category_label: ev.category_label,
+        location: ev.location,
+        city: ev.city,
+        phone: ev.phone,
+        single_price: ev.single_price,
+        couple_price: ev.couple_price,
+        couple_condition: ev.couple_condition,
+        cover_image: ev.cover_image,
+        banner_image: ev.banner_image,
+        gallery: toNative(ev.gallery),
+        about: ev.about,
+        upcoming_night: toNative(ev.upcoming_night),
+        badge: ev.badge,
+        rules: toNative(ev.rules),
+        status: ev.status,
+      },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
   }
 
-  console.log(`Successfully seeded ${INITIAL_EVENTS.length} events into MySQL!`);
+  console.log(`Successfully seeded ${INITIAL_EVENTS.length} events into MongoDB!`);
 }
 
 if (process.argv[1] && process.argv[1].includes('seedEvents.js')) {
   seedEvents()
+    .then(() => disconnectDB())
     .then(() => process.exit(0))
     .catch((err) => {
       console.error(err);

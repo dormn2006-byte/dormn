@@ -12,7 +12,7 @@ import {
   saveEmailVerificationOTP,
   verifyUserEmail,
 } from "../models/userModel.js";
-import pool from "../config/db.js";
+import User from "../schemas/userSchema.js";
 import {
   sendOTPEmail,
   sendEmailVerificationOTP,
@@ -422,7 +422,7 @@ export const googleAuth = async (req, res) => {
     } else {
       // If user exists, mark email as verified since authenticated via Google
       if (!user.is_email_verified) {
-        await pool.execute("UPDATE users SET is_email_verified = 1 WHERE id = ?", [user.id]);
+        await User.updateOne({ _id: user.id }, { is_email_verified: 1 });
         user.is_email_verified = 1;
       }
     }
@@ -539,18 +539,24 @@ export const updateProfile = async (req, res) => {
     const updatedGstin = gstin !== undefined ? encrypt(gstin) : (user.gstin ? encrypt(user.gstin) : null);
     const updatedAadhaar = aadhaar_masked !== undefined ? encrypt(aadhaar_masked) : (user.aadhaar_masked ? encrypt(user.aadhaar_masked) : null);
 
-    await pool.execute(
-      `UPDATE users SET 
-        full_name = ?, phone = ?, secondary_phone = ?, gender = ?, profile_image = ?,
-        business_name = ?, office_address = ?, city = ?, state = ?, pincode = ?, operating_since = ?,
-        pan_number = ?, gstin = ?, aadhaar_masked = ?
-       WHERE id = ?`,
-      [
-        updatedName, updatedPhone, updatedSecPhone, updatedGender, updatedImage,
-        updatedBusiness, updatedAddress, updatedCity, updatedState, updatedPincode, updatedOperatingSince,
-        updatedPan, updatedGstin, updatedAadhaar,
-        userId
-      ]
+    await User.updateOne(
+      { _id: userId },
+      {
+        full_name: updatedName,
+        phone: updatedPhone,
+        secondary_phone: updatedSecPhone,
+        gender: updatedGender,
+        profile_image: updatedImage,
+        business_name: updatedBusiness,
+        office_address: updatedAddress,
+        city: updatedCity,
+        state: updatedState,
+        pincode: updatedPincode,
+        operating_since: updatedOperatingSince,
+        pan_number: updatedPan,
+        gstin: updatedGstin,
+        aadhaar_masked: updatedAadhaar,
+      }
     );
 
     const updatedUser = await findUserById(userId);
@@ -591,11 +597,15 @@ export const updatePayoutDetails = async (req, res) => {
     const cleanIfsc = encrypt(String(ifsc_code).trim().toUpperCase());
     const cleanUpi = upi_id ? encrypt(String(upi_id).trim()) : null;
 
-    await pool.execute(
-      `UPDATE users SET 
-        account_holder = ?, bank_name = ?, account_number = ?, ifsc_code = ?, upi_id = ?
-       WHERE id = ?`,
-      [cleanHolder, cleanBank, cleanAccount, cleanIfsc, cleanUpi, userId]
+    await User.updateOne(
+      { _id: userId },
+      {
+        account_holder: cleanHolder,
+        bank_name: cleanBank,
+        account_number: cleanAccount,
+        ifsc_code: cleanIfsc,
+        upi_id: cleanUpi,
+      }
     );
 
     const updatedUser = await findUserById(userId);

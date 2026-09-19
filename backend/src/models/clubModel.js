@@ -1,6 +1,7 @@
 import { Club, ClubEvent, ClubBooking, ClubTicket } from "../schemas/clubSchema.js";
 import User from "../schemas/userSchema.js";
 import crypto from "crypto";
+import { serialize } from "../utils/serialize.js";
 
 // ==========================================
 // CLUB CRUD
@@ -36,9 +37,8 @@ export const getAllActiveClubs = async () => {
       }
 
       return {
-        ...club,
-        id: club._id,
-        next_event: nextEvent || null,
+        ...serialize(club),
+        next_event: nextEvent ? serialize(nextEvent) : null,
         remaining_capacity,
       };
     })
@@ -49,14 +49,15 @@ export const getAllActiveClubs = async () => {
 
 // Get Club By ID (with images, events, live capacity)
 export const getClubById = async (id) => {
-  if (!id || !/^[a-fA-F0-9]{24}$/.test(id)) return null;
+  const clubId = Number(id);
+  if (!id || !Number.isFinite(clubId)) return null;
 
-  const club = await Club.findById(id).lean();
+  const club = await Club.findById(clubId).lean();
   if (!club) return null;
 
   // Get upcoming events
   const events = await ClubEvent.find({
-    club_id: id,
+    club_id: clubId,
     date: { $gte: new Date() },
   })
     .sort({ date: 1 })
@@ -67,16 +68,14 @@ export const getClubById = async (id) => {
     events.map(async (event) => {
       const peopleCount = await countEventPeople(event._id);
       return {
-        ...event,
-        id: event._id,
+        ...serialize(event),
         remaining_capacity: event.capacity - peopleCount,
       };
     })
   );
 
   return {
-    ...club,
-    id: club._id,
+    ...serialize(club),
     events: eventsWithCapacity,
   };
 };
@@ -99,8 +98,7 @@ export const getAllClubsAdmin = async () => {
       ]);
 
       return {
-        ...club,
-        id: club._id,
+        ...serialize(club),
         total_bookings: totalBookings,
         total_revenue: totalRevenue[0]?.total || 0,
       };
@@ -112,15 +110,16 @@ export const getAllClubsAdmin = async () => {
 
 // Update Club
 export const updateClub = async (id, clubData) => {
-  return await Club.findByIdAndUpdate(id, clubData, { new: true });
+  return await Club.findByIdAndUpdate(Number(id), clubData, { new: true });
 };
 
 // Delete Club (cascade: images, events, bookings, tickets)
 export const deleteClub = async (id) => {
-  await ClubTicket.deleteMany({ club_id: id });
-  await ClubBooking.deleteMany({ club_id: id });
-  await ClubEvent.deleteMany({ club_id: id });
-  await Club.findByIdAndDelete(id);
+  const clubId = Number(id);
+  await ClubTicket.deleteMany({ club_id: clubId });
+  await ClubBooking.deleteMany({ club_id: clubId });
+  await ClubEvent.deleteMany({ club_id: clubId });
+  await Club.findByIdAndDelete(clubId);
 };
 
 // ==========================================
@@ -133,7 +132,7 @@ export const saveClubImages = async (clubId, images) => {
     image_url: img,
     display_order: i + 1,
   }));
-  await Club.findByIdAndUpdate(clubId, {
+  await Club.findByIdAndUpdate(Number(clubId), {
     $push: { images: { $each: imageDocs } },
   });
 };
@@ -148,18 +147,20 @@ export const createClubEvent = async (eventData) => {
 };
 
 export const getClubEvents = async (clubId) => {
-  return await ClubEvent.find({ club_id: clubId })
+  const events = await ClubEvent.find({ club_id: Number(clubId) })
     .sort({ date: 1 })
     .lean();
+  return serialize(events);
 };
 
 export const deleteClubEvent = async (eventId) => {
   // Cascade: delete bookings and tickets for this event
-  const event = await ClubEvent.findById(eventId);
+  const id = Number(eventId);
+  const event = await ClubEvent.findById(id);
   if (event) {
-    await ClubTicket.deleteMany({ event_id: eventId });
-    await ClubBooking.deleteMany({ event_id: eventId });
-    await ClubEvent.findByIdAndDelete(eventId);
+    await ClubTicket.deleteMany({ event_id: id });
+    await ClubBooking.deleteMany({ event_id: id });
+    await ClubEvent.findByIdAndDelete(id);
   }
 };
 
@@ -170,7 +171,7 @@ export const deleteClubEvent = async (eventId) => {
 // Count confirmed PEOPLE for an event (single=1, couple=2)
 const countEventPeople = async (eventId) => {
   const bookings = await ClubBooking.find({
-    event_id: eventId,
+    event_id: Number(eventId),
     status: "confirmed",
   }).lean();
 
@@ -193,46 +194,51 @@ export const createClubBooking = async (bookingData) => {
 
 // Get Booking By ID
 export const getClubBookingById = async (id) => {
-  if (!id || !/^[a-fA-F0-9]{24}$/.test(id)) return null;
-  return await ClubBooking.findById(id)
+  const bookingId = Number(id);
+  if (!id || !Number.isFinite(bookingId)) return null;
+  const booking = await ClubBooking.findById(bookingId)
     .populate("club_id", "name single_entry_fee cover_image")
     .populate("event_id", "title date start_time end_time")
     .populate("booker_id", "full_name email gender")
     .populate("partner_id", "full_name email gender")
     .lean();
+  return booking ? serialize(booking) : null;
 };
 
 // Get Booking By Invite Token
 export const getBookingByToken = async (token) => {
-  return await ClubBooking.findOne({ invite_token: token })
+  const booking = await ClubBooking.findOne({ invite_token: token })
     .populate("club_id", "name single_entry_fee cover_image tagline")
     .populate("event_id", "title date start_time end_time capacity")
     .populate("booker_id", "full_name email gender")
     .lean();
+  return booking ? serialize(booking) : null;
 };
 
 // Get User's Bookings
 export const getUserBookings = async (userId) => {
-  return await ClubBooking.find({ booker_id: userId })
+  const bookings = await ClubBooking.find({ booker_id: Number(userId) })
     .sort({ booking_date: -1 })
     .populate("club_id", "name cover_image city area")
     .populate("event_id", "title date start_time end_time")
     .lean();
+  return serialize(bookings);
 };
 
 // Get Bookings For Admin (by club)
 export const getBookingsByClub = async (clubId) => {
-  return await ClubBooking.find({ club_id: clubId })
+  const bookings = await ClubBooking.find({ club_id: Number(clubId) })
     .sort({ booking_date: -1 })
     .populate("booker_id", "full_name email")
     .populate("partner_id", "full_name email")
     .populate("event_id", "title date start_time end_time")
     .lean();
+  return serialize(bookings);
 };
 
 // Update Booking
 export const updateClubBooking = async (id, updateData) => {
-  return await ClubBooking.findByIdAndUpdate(id, updateData, { new: true });
+  return await ClubBooking.findByIdAndUpdate(Number(id), updateData, { new: true });
 };
 
 // ==========================================
@@ -272,7 +278,7 @@ export const createMultipleTickets = async (ticketsData) => {
 
 // Get User's Tickets (with live expiry)
 export const getUserTickets = async (userId) => {
-  const tickets = await ClubTicket.find({ user_id: userId })
+  const tickets = await ClubTicket.find({ user_id: Number(userId) })
     .sort({ created_at: -1 })
     .populate("club_id", "name cover_image city area")
     .populate("event_id", "title date start_time end_time")
@@ -284,8 +290,7 @@ export const getUserTickets = async (userId) => {
     const eventDate = ticket.event_id?.date;
     const isExpired = eventDate && new Date(eventDate) < now;
     return {
-      ...ticket,
-      id: ticket._id,
+      ...serialize(ticket),
       status: isExpired ? "expired" : ticket.status,
     };
   });
@@ -293,13 +298,14 @@ export const getUserTickets = async (userId) => {
 
 // Get Tickets By Booking
 export const getTicketsByBooking = async (bookingId) => {
-  return await ClubTicket.find({ booking_id: bookingId }).lean();
+  const tickets = await ClubTicket.find({ booking_id: Number(bookingId) }).lean();
+  return serialize(tickets);
 };
 
 // Cancel Tickets By Booking
 export const cancelTicketsByBooking = async (bookingId) => {
   await ClubTicket.updateMany(
-    { booking_id: bookingId },
+    { booking_id: Number(bookingId) },
     { status: "cancelled" }
   );
 };

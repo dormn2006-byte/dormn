@@ -32,6 +32,13 @@ const razorpayInstance = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+// Ids are plain numbers in the migrated scheme; a populated ref exposes `id`.
+const extractId = (value) => {
+  if (value == null) return null;
+  if (typeof value === "object") return value.id ?? value._id ?? null;
+  return value;
+};
+
 // ==========================================
 // PUBLIC CONTROLLERS
 // ==========================================
@@ -77,7 +84,7 @@ export const getInviteData = async (req, res) => {
     return res.status(200).json({
       success: true,
       booking: {
-        id: booking._id,
+        id: booking.id,
         club_name: booking.club_id?.name,
         club_tagline: booking.club_id?.tagline,
         club_cover: booking.club_id?.cover_image,
@@ -138,7 +145,7 @@ export const createBooking = async (req, res) => {
     }
 
     // Check event exists
-    const event = club.events?.find((e) => e._id.toString() === event_id);
+    const event = club.events?.find((e) => Number(e.id) === Number(event_id));
     if (!event) {
       return res.status(404).json({ success: false, message: "Event not found" });
     }
@@ -154,7 +161,7 @@ export const createBooking = async (req, res) => {
 
     // Update user gender if provided
     if (gender) {
-      await User.findByIdAndUpdate(req.user.id, { gender });
+      await User.findByIdAndUpdate(Number(req.user.id), { gender });
     }
 
     const amount = booking_type === "single" ? club.single_entry_fee : 0;
@@ -167,9 +174,9 @@ export const createBooking = async (req, res) => {
     }
 
     const booking = await createClubBooking({
-      club_id,
-      event_id,
-      booker_id: req.user.id,
+      club_id: Number(club_id),
+      event_id: Number(event_id),
+      booker_id: Number(req.user.id),
       booking_type,
       status,
       payment_status: booking_type === "single" ? "unpaid" : "unpaid",
@@ -206,9 +213,9 @@ export const getBookingStatus = async (req, res) => {
 
     // Only the booker or partner can view
     const userId = req.user.id;
-    const bookerId = booking.booker_id?._id?.toString() || booking.booker_id?.toString();
-    const partnerId = booking.partner_id?._id?.toString() || booking.partner_id?.toString();
-    if (userId !== bookerId && userId !== partnerId) {
+    const bookerId = extractId(booking.booker_id);
+    const partnerId = extractId(booking.partner_id);
+    if (Number(userId) !== Number(bookerId) && Number(userId) !== Number(partnerId)) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
@@ -227,8 +234,8 @@ export const createClubOrder = async (req, res) => {
       return res.status(404).json({ success: false, message: "Booking not found" });
     }
 
-    const bookerId = booking.booker_id?._id?.toString() || booking.booker_id?.toString();
-    if (req.user.id !== bookerId) {
+    const bookerId = extractId(booking.booker_id);
+    if (Number(req.user.id) !== Number(bookerId)) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
@@ -248,11 +255,11 @@ export const createClubOrder = async (req, res) => {
     const order = await razorpayInstance.orders.create({
       amount: amount_in_paise,
       currency: "INR",
-      receipt: `club_booking_${booking._id || booking.id}`,
+      receipt: `club_booking_${booking.id}`,
     });
 
     // Store the order_id on the booking
-    await updateClubBooking(booking._id || booking.id, {
+    await updateClubBooking(booking.id, {
       razorpay_order_id: order.id,
     });
 
@@ -296,25 +303,25 @@ export const verifyClubPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: "Booking not found for this order" });
     }
 
-    const bookerId = booking.booker_id?._id?.toString() || booking.booker_id?.toString();
-    if (req.user.id !== bookerId) {
+    const bookerId = extractId(booking.booker_id);
+    if (Number(req.user.id) !== Number(bookerId)) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
     // 3. Update booking with payment details
-    await updateClubBooking(booking._id || booking.id, {
+    await updateClubBooking(booking._id, {
       payment_status: "paid",
       razorpay_payment_id,
       razorpay_signature,
     });
 
     // 4. Generate ticket for single booking
-    const clubId = booking.club_id?._id || booking.club_id;
-    const eventId = booking.event_id?._id || booking.event_id;
+    const clubId = extractId(booking.club_id);
+    const eventId = extractId(booking.event_id);
 
     const ticket = await createClubTicket({
-      booking_id: booking._id || booking.id,
-      user_id: bookerId,
+      booking_id: booking._id,
+      user_id: Number(bookerId),
       club_id: clubId,
       event_id: eventId,
       holder_name: booking.booker_id?.full_name || "Guest",
@@ -346,8 +353,8 @@ export const cancelBooking = async (req, res) => {
     }
 
     const userId = req.user.id;
-    const bookerId = booking.booker_id?._id?.toString() || booking.booker_id?.toString();
-    if (userId !== bookerId) {
+    const bookerId = extractId(booking.booker_id);
+    if (Number(userId) !== Number(bookerId)) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
@@ -355,8 +362,8 @@ export const cancelBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: "Already cancelled" });
     }
 
-    await updateClubBooking(booking._id || booking.id, { status: "cancelled" });
-    await cancelTicketsByBooking(booking._id || booking.id);
+    await updateClubBooking(booking.id, { status: "cancelled" });
+    await cancelTicketsByBooking(booking.id);
 
     return res.status(200).json({
       success: true,
@@ -454,21 +461,21 @@ export const acceptInvite = async (req, res) => {
     );
 
     // Update booking: confirm and set partner
-    await updateClubBooking(booking._id || booking.id, {
+    await updateClubBooking(booking.id, {
       status: "confirmed",
       partner_id: partner._id,
       payment_status: "paid", // couples are always free
     });
 
     // Generate 2 tickets (one per person)
-    const clubId = booking.club_id?._id || booking.club_id;
-    const eventId = booking.event_id?._id || booking.event_id;
-    const bookerId = booking.booker_id?._id || booking.booker_id;
+    const clubId = extractId(booking.club_id);
+    const eventId = extractId(booking.event_id);
+    const bookerId = extractId(booking.booker_id);
 
     const tickets = await createMultipleTickets([
       {
-        booking_id: booking._id || booking.id,
-        user_id: bookerId,
+        booking_id: booking.id,
+        user_id: Number(bookerId),
         club_id: clubId,
         event_id: eventId,
         holder_name: booking.booker_id?.full_name || "Booker",
@@ -477,7 +484,7 @@ export const acceptInvite = async (req, res) => {
         status: "active",
       },
       {
-        booking_id: booking._id || booking.id,
+        booking_id: booking.id,
         user_id: partner._id,
         club_id: clubId,
         event_id: eventId,
@@ -715,7 +722,7 @@ export const adminCreateEvent = async (req, res) => {
     }
 
     const event = await createClubEvent({
-      club_id: id,
+      club_id: Number(id),
       title,
       date: new Date(date),
       start_time,

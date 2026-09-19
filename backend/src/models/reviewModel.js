@@ -1,68 +1,86 @@
-import pool from "../config/db.js";
-
-// ==========================================
-// PUBLIC & USER FUNCTIONS
-// ==========================================
+import Review from "../schemas/reviewSchema.js";
+import User from "../schemas/userSchema.js";
+import { serialize } from "../utils/serialize.js";
 
 // Fetch approved reviews for the frontend
 export const getApprovedReviews = async () => {
-  const query = `
-    SELECT 
-      r.id, 
-      r.rating, 
-      r.description, 
-      u.full_name AS title, 
-      IF(u.role = 'student', 'Verified Student', 'Working Professional') AS tag
-    FROM reviews r
-    JOIN users u ON r.user_id = u.id
-    WHERE r.status = 'approved'
-    ORDER BY r.created_at DESC
-  `;
-  const [rows] = await pool.execute(query);
-  return rows;
+  const reviews = await Review.aggregate([
+    { $match: { status: "approved" } },
+    { $sort: { created_at: -1 } },
+    {
+      $lookup: {
+        from: "users",
+        localField: "user_id",
+        foreignField: "_id",
+        as: "user",
+      },
+    },
+    { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        rating: 1,
+        description: 1,
+        title: "$user.full_name",
+        tag: {
+          $cond: [
+            { $eq: ["$user.role", "student"] },
+            "Verified Student",
+            "Working Professional",
+          ],
+        },
+      },
+    },
+  ]);
+
+  return serialize(reviews);
 };
 
 // Create a new review
 export const createReview = async (userId, rating, description) => {
-  const query = `INSERT INTO reviews (user_id, rating, description) VALUES (?, ?, ?)`;
-  const [result] = await pool.execute(query, [userId, rating, description]);
-  return result;
+  const review = await Review.create({
+    user_id: userId,
+    rating,
+    description,
+  });
+
+  return { insertId: review._id, affectedRows: 1 };
 };
-
-
-// ==========================================
-// SUPER ADMIN FUNCTIONS
-// ==========================================
 
 // Fetch ALL reviews with bulletproof fallbacks and LEFT JOIN
 export const getAllReviewsForAdmin = async () => {
-    const query = `
-      SELECT 
-        r.id, 
-        r.user_id, 
-        r.rating, 
-        r.description, 
-        r.status, 
-        r.created_at,
-        COALESCE(u.full_name, u.name, 'Unknown User') AS full_name,
-        COALESCE(u.email, u.mail, 'No Email provided') AS email
-      FROM reviews r
-      LEFT JOIN users u ON r.user_id = u.id
-      ORDER BY r.created_at DESC
-    `;
-    const [rows] = await pool.execute(query);
-    return rows;
-  };
+  const reviews = await Review.aggregate([
+    { $sort: { created_at: -1 } },
+    {
+      $lookup: {
+        from: "users",
+        localField: "user_id",
+        foreignField: "_id",
+        as: "user",
+      },
+    },
+    { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        user_id: 1,
+        rating: 1,
+        description: 1,
+        status: 1,
+        created_at: 1,
+        full_name: { $ifNull: ["$user.full_name", "Unknown User"] },
+        email: { $ifNull: ["$user.email", "No Email provided"] },
+      },
+    },
+  ]);
+
+  return serialize(reviews);
+};
 
 // Update Review Status (Hide or Approve)
 export const updateReviewStatus = async (id, status) => {
-  const query = `UPDATE reviews SET status = ? WHERE id = ?`;
-  const [result] = await pool.execute(query, [status, id]);
-  return result;
+  return Review.updateOne({ _id: id }, { status });
 };
 
 // Admin: Delete a Review permanently
 export const deleteReview = async (id) => {
-  const [result] = await pool.execute(`DELETE FROM reviews WHERE id = ?`, [id]);
-  return result;
+  return Review.deleteOne({ _id: id });
 };

@@ -90,7 +90,9 @@ const Pricing = () => {
       const orderRes = await API.post("/subscriptions/create-order", orderPayload);
       if (!orderRes.data?.success) { alert(orderRes.data?.message || "Failed to create order."); setIsProcessing(false); return; }
       const { order_id, amount, currency } = orderRes.data;
-      const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
+      // Backend is the single source of truth for which Razorpay mode is active
+      // (test vs live); the env var is only a fallback.
+      const razorpayKey = orderRes.data.key_id || import.meta.env.VITE_RAZORPAY_KEY_ID;
       if (!razorpayKey) { alert("Payment gateway key not configured."); setIsProcessing(false); return; }
       const options = {
         key: razorpayKey, amount, currency: currency || "INR", name: "Dormn Platform",

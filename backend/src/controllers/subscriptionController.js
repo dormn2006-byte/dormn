@@ -1,11 +1,14 @@
 import Razorpay from 'razorpay';
-import pool from '../config/db.js';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import User from '../schemas/userSchema.js';
+import PG from '../schemas/pgSchema.js';
+import OwnerSubscription from '../schemas/ownerSubscriptionSchema.js';
+import { serialize } from '../utils/serialize.js';
 import { logSecurityAudit } from '../utils/securityAuditService.js';
 import { sendSubscriptionReceiptToOwnerEmail } from '../utils/emailService.js';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const razorpayInstance = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -17,26 +20,48 @@ const PLAN_PRICES = {
   pro: { monthly: 1999, yearly: 1599 },
 };
 
+// Tolerant read: native values pass through, legacy JSON strings are parsed.
+const parseMaybeJson = (v) =>
+  typeof v === "string"
+    ? (() => { try { return JSON.parse(v); } catch { return v; } })()
+    : v;
+
+// Mirrors MySQL DATEDIFF(a, b): whole calendar days between the two dates.
+const datediff = (a, b) => {
+  if (a == null || b == null) return null;
+  const da = new Date(a);
+  const db = new Date(b);
+  if (isNaN(da.getTime()) || isNaN(db.getTime())) return null;
+  const ua = Date.UTC(da.getFullYear(), da.getMonth(), da.getDate());
+  const ub = Date.UTC(db.getFullYear(), db.getMonth(), db.getDate());
+  return Math.round((ua - ub) / 86400000);
+};
+
 export const getMySubscription = async (req, res) => {
   try {
     const ownerId = req.user.id;
-    const [users] = await pool.query(
-      `SELECT subscription_tier as tier, subscription_status as status, subscription_cycle as cycle, 
-       subscription_started_at as started_at, subscription_expires_at as expires_at, 
-       DATEDIFF(subscription_expires_at, NOW()) as days_remaining, max_pg_listings, custom_plan_config 
-       FROM users WHERE id = ?`,
-      [ownerId]
-    );
+    const user = await User.findById(ownerId)
+      .select(
+        "subscription_tier subscription_status subscription_cycle subscription_started_at subscription_expires_at max_pg_listings custom_plan_config"
+      )
+      .lean();
 
-    if (users.length === 0) {
+    if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const [pgs] = await pool.query(`SELECT COUNT(*) as count FROM pgs WHERE owner_id = ?`, [ownerId]);
+    const current_pg_count = await PG.countDocuments({ owner_id: ownerId });
 
     const subscriptionData = {
-      ...users[0],
-      current_pg_count: pgs[0].count,
+      tier: user.subscription_tier,
+      status: user.subscription_status,
+      cycle: user.subscription_cycle,
+      started_at: user.subscription_started_at,
+      expires_at: user.subscription_expires_at,
+      days_remaining: datediff(user.subscription_expires_at, new Date()),
+      max_pg_listings: user.max_pg_listings,
+      custom_plan_config: parseMaybeJson(user.custom_plan_config),
+      current_pg_count,
     };
 
     res.json({ success: true, data: subscriptionData });
@@ -87,14 +112,20 @@ export const createSubscriptionOrder = async (req, res) => {
       validUntil.setMonth(validUntil.getMonth() + 1);
     }
 
-    await pool.query(
-      `INSERT INTO owner_subscriptions 
-      (owner_id, plan_name, billing_cycle, amount, razorpay_order_id, valid_from, valid_until, status, custom_plan_config) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'created', ?)`,
-      [ownerId, plan, cycle, amount, order.id, validFrom, validUntil, customConfig ? JSON.stringify(customConfig) : null]
-    );
+    await OwnerSubscription.create({
+      owner_id: ownerId,
+      plan_name: plan,
+      billing_cycle: cycle,
+      amount,
+      razorpay_order_id: order.id,
+      valid_from: validFrom,
+      valid_until: validUntil,
+      status: 'created',
+      // custom_plan_config is now stored as a NATIVE value (was string-serialised).
+      custom_plan_config: customConfig ? customConfig : null,
+    });
 
-    res.json({ success: true, order_id: order.id, amount: order.amount, currency: order.currency });
+    res.json({ success: true, order_id: order.id, amount: order.amount, currency: order.currency, key_id: process.env.RAZORPAY_KEY_ID });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error creating order', error: error.message });
   }
@@ -105,16 +136,16 @@ export const verifySubscriptionPayment = async (req, res) => {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
     const ownerId = req.user.id;
 
-    const [subscriptions] = await pool.query(
-      `SELECT * FROM owner_subscriptions WHERE razorpay_order_id = ? AND owner_id = ?`,
-      [razorpay_order_id, ownerId]
-    );
+    const row = await OwnerSubscription.findOne({
+      razorpay_order_id,
+      owner_id: ownerId,
+    }).lean();
 
-    if (subscriptions.length === 0) {
+    if (!row) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    const subscription = subscriptions[0];
+    const subscription = serialize(row);
 
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
@@ -128,9 +159,9 @@ export const verifySubscriptionPayment = async (req, res) => {
     );
 
     if (isAuthentic) {
-      await pool.query(
-        `UPDATE owner_subscriptions SET status = 'successful', razorpay_payment_id = ?, razorpay_signature = ? WHERE id = ?`,
-        [razorpay_payment_id, razorpay_signature, subscription.id]
+      await OwnerSubscription.updateOne(
+        { _id: subscription.id },
+        { status: 'successful', razorpay_payment_id, razorpay_signature }
       );
 
       let verifiedCustomConfig = null;
@@ -155,31 +186,41 @@ export const verifySubscriptionPayment = async (req, res) => {
       const cycle = subscription.billing_cycle;
       const days = cycle === 'yearly' ? 365 : 30;
 
-      await pool.query(
-        `UPDATE users SET 
-         subscription_tier = ?, subscription_status = 'active', subscription_cycle = ?, 
-         subscription_started_at = NOW(), subscription_expires_at = DATE_ADD(NOW(), INTERVAL ? DAY), 
-         max_pg_listings = ?, custom_plan_config = ? 
-         WHERE id = ?`,
-        [planName, cycle, days, maxListings, verifiedCustomConfig ? JSON.stringify(verifiedCustomConfig) : null, ownerId]
+      const startedAt = new Date();
+      const expiresAt = new Date(startedAt.getTime() + days * 24 * 60 * 60 * 1000);
+
+      await User.updateOne(
+        { _id: ownerId },
+        {
+          subscription_tier: planName,
+          subscription_status: 'active',
+          subscription_cycle: cycle,
+          subscription_started_at: startedAt,
+          subscription_expires_at: expiresAt,
+          max_pg_listings: maxListings,
+          // native value (was string-serialised)
+          custom_plan_config: verifiedCustomConfig ? verifiedCustomConfig : null,
+        }
       );
 
       // Re-activate owner's PGs
-      await pool.query(
-        `UPDATE pgs SET status = 'approved' WHERE owner_id = ? AND status = 'blocked'`,
-        [ownerId]
+      await PG.updateMany(
+        { owner_id: ownerId, status: 'blocked' },
+        { status: 'approved' }
       );
 
       // Email: Send subscription payment receipt to owner
       try {
-        const [ownerRows] = await pool.query(`SELECT full_name, email, subscription_expires_at FROM users WHERE id = ?`, [ownerId]);
-        if (ownerRows[0]?.email) {
-          sendSubscriptionReceiptToOwnerEmail(ownerRows[0].email, ownerRows[0].full_name, {
+        const ownerRow = await User.findById(ownerId)
+          .select('full_name email subscription_expires_at')
+          .lean();
+        if (ownerRow?.email) {
+          sendSubscriptionReceiptToOwnerEmail(ownerRow.email, ownerRow.full_name, {
             planName,
             billingCycle: cycle,
             amount: subscription.amount,
             paymentId: razorpay_payment_id,
-            expiresAt: ownerRows[0].subscription_expires_at,
+            expiresAt: ownerRow.subscription_expires_at,
             maxListings,
           }).catch(err => console.error('[EmailService] Subscription receipt error:', err.message));
         }
@@ -194,9 +235,9 @@ export const verifySubscriptionPayment = async (req, res) => {
 
       res.json({ success: true, message: 'Payment verified successfully' });
     } else {
-      await pool.query(
-        `UPDATE owner_subscriptions SET status = 'failed' WHERE id = ?`,
-        [subscription.id]
+      await OwnerSubscription.updateOne(
+        { _id: subscription.id },
+        { status: 'failed' }
       );
       res.status(400).json({ success: false, message: 'Invalid signature' });
     }
@@ -209,18 +250,24 @@ export const cancelSubscription = async (req, res) => {
   try {
     const ownerId = req.user.id;
 
-    await pool.query(`UPDATE users SET subscription_status = 'cancelled' WHERE id = ?`, [ownerId]);
-    await pool.query(
-      `UPDATE owner_subscriptions SET cancelled_at = NOW() WHERE owner_id = ? AND status = 'successful' ORDER BY id DESC LIMIT 1`,
-      [ownerId]
-    );
+    await User.updateOne({ _id: ownerId }, { subscription_status: 'cancelled' });
 
-    const [users] = await pool.query(
-      `SELECT DATEDIFF(subscription_expires_at, NOW()) as days_remaining FROM users WHERE id = ?`,
-      [ownerId]
-    );
+    // UPDATE ... ORDER BY id DESC LIMIT 1 → only the most recent successful row.
+    const latest = await OwnerSubscription.findOne({
+      owner_id: ownerId,
+      status: 'successful',
+    })
+      .sort({ _id: -1 })
+      .select('_id')
+      .lean();
 
-    res.json({ success: true, message: 'Subscription cancelled', days_remaining: users[0]?.days_remaining || 0 });
+    if (latest) {
+      await OwnerSubscription.updateOne({ _id: latest._id }, { cancelled_at: new Date() });
+    }
+
+    const user = await User.findById(ownerId).select('subscription_expires_at').lean();
+
+    res.json({ success: true, message: 'Subscription cancelled', days_remaining: datediff(user?.subscription_expires_at, new Date()) || 0 });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error cancelling subscription', error: error.message });
   }
@@ -230,23 +277,25 @@ export const activateFreePlan = async (req, res) => {
   try {
     const ownerId = req.user.id;
 
-    const [paidSubscriptions] = await pool.query(
-      `SELECT id FROM owner_subscriptions WHERE owner_id = ? AND status = 'successful'`,
-      [ownerId]
-    );
+    const paidSubscriptions = await OwnerSubscription.find({
+      owner_id: ownerId,
+      status: 'successful',
+    })
+      .select('_id')
+      .lean();
 
     if (paidSubscriptions.length > 0) {
       return res.status(400).json({ message: 'Free trial is only available for new owners' });
     }
 
-    await pool.query(
-      `UPDATE users SET 
-       subscription_tier = 'free', 
-       subscription_status = 'trial', 
-       max_pg_listings = 1, 
-       subscription_expires_at = DATE_ADD(NOW(), INTERVAL 30 DAY) 
-       WHERE id = ?`,
-      [ownerId]
+    await User.updateOne(
+      { _id: ownerId },
+      {
+        subscription_tier: 'free',
+        subscription_status: 'trial',
+        max_pg_listings: 1,
+        subscription_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      }
     );
 
     res.json({ success: true, message: 'Free trial activated' });

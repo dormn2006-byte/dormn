@@ -1,51 +1,55 @@
-import db from "../config/db.js";
+import User from "../schemas/userSchema.js";
+import PG from "../schemas/pgSchema.js";
+import Booking from "../schemas/bookingSchema.js";
+import { serialize } from "../utils/serialize.js";
+
+// Reusable join stages: pgs + users, LEFT JOIN style (preserve nulls) where the
+// original query used a LEFT JOIN, inner-join style (plain $unwind) otherwise.
+const pgOwnerLookup = [
+  {
+    $lookup: {
+      from: "users",
+      localField: "owner_id",
+      foreignField: "_id",
+      as: "owner",
+    },
+  },
+];
 
 // Get Dashboard Stats
 export const getDashboardStats = async (req, res) => {
   try {
-    const [[totalUsers]] = await db.execute(
-      `SELECT COUNT(*) AS totalUsers FROM users`
-    );
-
-    const [[totalOwners]] = await db.execute(
-      `SELECT COUNT(*) AS totalOwners FROM users WHERE role = 'owner'`
-    );
-
-    const [[totalStudents]] = await db.execute(
-      `SELECT COUNT(*) AS totalStudents FROM users WHERE role = 'student'`
-    );
-
-    const [[totalPGs]] = await db.execute(
-      `SELECT COUNT(*) AS totalPGs FROM pgs`
-    );
-
-    const [[pendingPGs]] = await db.execute(
-      `SELECT COUNT(*) AS pendingPGs FROM pgs WHERE status = 'pending'`
-    );
-
-    const [[approvedPGs]] = await db.execute(
-      `SELECT COUNT(*) AS approvedPGs FROM pgs WHERE status = 'approved'`
-    );
-
-    const [[rejectedPGs]] = await db.execute(
-      `SELECT COUNT(*) AS rejectedPGs FROM pgs WHERE status = 'rejected'`
-    );
-
-    const [[totalBookings]] = await db.execute(
-      `SELECT COUNT(*) AS totalBookings FROM bookings`
-    );
+    const [
+      totalUsers,
+      totalOwners,
+      totalStudents,
+      totalPGs,
+      pendingPGs,
+      approvedPGs,
+      rejectedPGs,
+      totalBookings,
+    ] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ role: "owner" }),
+      User.countDocuments({ role: "student" }),
+      PG.countDocuments(),
+      PG.countDocuments({ status: "pending" }),
+      PG.countDocuments({ status: "approved" }),
+      PG.countDocuments({ status: "rejected" }),
+      Booking.countDocuments(),
+    ]);
 
     return res.status(200).json({
       success: true,
       stats: {
-        totalUsers: totalUsers.totalUsers,
-        totalOwners: totalOwners.totalOwners,
-        totalStudents: totalStudents.totalStudents,
-        totalPGs: totalPGs.totalPGs,
-        pendingPGs: pendingPGs.pendingPGs,
-        approvedPGs: approvedPGs.approvedPGs,
-        rejectedPGs: rejectedPGs.rejectedPGs,
-        totalBookings: totalBookings.totalBookings,
+        totalUsers,
+        totalOwners,
+        totalStudents,
+        totalPGs,
+        pendingPGs,
+        approvedPGs,
+        rejectedPGs,
+        totalBookings,
       },
     });
   } catch (error) {
@@ -61,20 +65,23 @@ export const getDashboardStats = async (req, res) => {
 // Get All PGs
 export const getAllPGs = async (req, res) => {
   try {
-    const [pgs] = await db.execute(`
-      SELECT
-        pgs.*,
-        users.full_name AS owner_name,
-        users.email AS owner_email
-      FROM pgs
-      JOIN users ON pgs.owner_id = users.id
-      ORDER BY pgs.created_at DESC
-    `);
+    const pgs = await PG.aggregate([
+      ...pgOwnerLookup,
+      { $unwind: "$owner" },
+      {
+        $addFields: {
+          owner_name: "$owner.full_name",
+          owner_email: "$owner.email",
+        },
+      },
+      { $project: { owner: 0 } },
+      { $sort: { created_at: -1 } },
+    ]);
 
     return res.status(200).json({
       success: true,
       total: pgs.length,
-      pgs,
+      pgs: serialize(pgs),
     });
   } catch (error) {
     console.log("Get All PGs Error:", error);
@@ -89,21 +96,24 @@ export const getAllPGs = async (req, res) => {
 // Get Pending PGs
 export const getPendingPGs = async (req, res) => {
   try {
-    const [pgs] = await db.execute(`
-      SELECT
-        pgs.*,
-        users.full_name AS owner_name,
-        users.email AS owner_email
-      FROM pgs
-      JOIN users ON pgs.owner_id = users.id
-      WHERE pgs.status = 'pending'
-      ORDER BY pgs.created_at DESC
-    `);
+    const pgs = await PG.aggregate([
+      { $match: { status: "pending" } },
+      ...pgOwnerLookup,
+      { $unwind: "$owner" },
+      {
+        $addFields: {
+          owner_name: "$owner.full_name",
+          owner_email: "$owner.email",
+        },
+      },
+      { $project: { owner: 0 } },
+      { $sort: { created_at: -1 } },
+    ]);
 
     return res.status(200).json({
       success: true,
       total: pgs.length,
-      pgs,
+      pgs: serialize(pgs),
     });
   } catch (error) {
     console.log("Pending PGs Error:", error);
@@ -120,14 +130,7 @@ export const approvePG = async (req, res) => {
   try {
     const { id } = req.params;
 
-    await db.execute(
-      `
-      UPDATE pgs
-      SET status = 'approved'
-      WHERE id = ?
-      `,
-      [id]
-    );
+    await PG.updateOne({ _id: Number(id) }, { status: "approved" });
 
     return res.status(200).json({
       success: true,
@@ -148,14 +151,7 @@ export const rejectPG = async (req, res) => {
   try {
     const { id } = req.params;
 
-    await db.execute(
-      `
-      UPDATE pgs
-      SET status = 'rejected'
-      WHERE id = ?
-      `,
-      [id]
-    );
+    await PG.updateOne({ _id: Number(id) }, { status: "rejected" });
 
     return res.status(200).json({
       success: true,
@@ -175,25 +171,18 @@ export const blockPG = async (req, res) => {
   try {
     const { id } = req.params;
 
-    await db.execute(
-      `
-      UPDATE pgs
-      SET status = 'blocked'
-      WHERE id = ?
-      `,
-      [id]
-    );
+    await PG.updateOne({ _id: Number(id) }, { status: "blocked" });
 
     return res.status(200).json({
       success: true,
-      message: 'PG blocked successfully',
+      message: "PG blocked successfully",
     });
   } catch (error) {
-    console.log('Block PG Error:', error);
+    console.log("Block PG Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: 'Server Error',
+      message: "Server Error",
     });
   }
 };
@@ -203,10 +192,7 @@ export const deletePG = async (req, res) => {
   try {
     const { id } = req.params;
 
-    await db.execute(
-      `DELETE FROM pgs WHERE id = ?`,
-      [id]
-    );
+    await PG.deleteOne({ _id: Number(id) });
 
     return res.status(200).json({
       success: true,
@@ -225,16 +211,15 @@ export const deletePG = async (req, res) => {
 // Get All Users
 export const getAllUsers = async (req, res) => {
   try {
-    const [users] = await db.execute(`
-      SELECT id, full_name, email, role, created_at
-      FROM users
-      ORDER BY created_at DESC
-    `);
+    const users = await User.find()
+      .select("full_name email role created_at")
+      .sort({ created_at: -1 })
+      .lean();
 
     return res.status(200).json({
       success: true,
       total: users.length,
-      users,
+      users: serialize(users),
     });
   } catch (error) {
     console.log("Get Users Error:", error);
@@ -251,10 +236,7 @@ export const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
 
-    await db.execute(
-      `DELETE FROM users WHERE id = ?`,
-      [id]
-    );
+    await User.deleteOne({ _id: Number(id) });
 
     return res.status(200).json({
       success: true,
@@ -272,29 +254,47 @@ export const deleteUser = async (req, res) => {
 
 export const getAllBookings = async (req, res) => {
   try {
-    const [bookings] = await db.execute(`
-      SELECT
-        b.*,
-        u.full_name AS student_name,
-        u.email AS student_email,
-        p.title AS pg_title
-      FROM bookings b
-      LEFT JOIN users u ON b.student_id = u.id
-      LEFT JOIN pgs p ON b.pg_id = p.id
-      ORDER BY b.booking_date DESC
-    `);
+    const bookings = await Booking.aggregate([
+      {
+        $lookup: {
+          from: "users",
+          localField: "student_id",
+          foreignField: "_id",
+          as: "u",
+        },
+      },
+      { $unwind: { path: "$u", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "pgs",
+          localField: "pg_id",
+          foreignField: "_id",
+          as: "p",
+        },
+      },
+      { $unwind: { path: "$p", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          student_name: { $ifNull: ["$u.full_name", null] },
+          student_email: { $ifNull: ["$u.email", null] },
+          pg_title: { $ifNull: ["$p.title", null] },
+        },
+      },
+      { $sort: { booking_date: -1 } },
+      { $project: { u: 0, p: 0 } },
+    ]);
 
     return res.status(200).json({
       success: true,
       total: bookings.length,
-      bookings,
+      bookings: serialize(bookings),
     });
   } catch (error) {
-    console.log('Get Bookings Error:', error);
+    console.log("Get Bookings Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: 'Server Error',
+      message: "Server Error",
     });
   }
 };
@@ -302,30 +302,22 @@ export const getAllBookings = async (req, res) => {
 // Get All Owners
 export const getAllOwners = async (req, res) => {
   try {
-    const [owners] = await db.execute(`
-      SELECT
-        id,
-        full_name,
-        email,
-        phone,
-        role,
-        created_at
-      FROM users
-      WHERE role = 'owner'
-      ORDER BY created_at DESC
-    `);
+    const owners = await User.find({ role: "owner" })
+      .select("full_name email phone role created_at")
+      .sort({ created_at: -1 })
+      .lean();
 
     return res.status(200).json({
       success: true,
       total: owners.length,
-      owners,
+      owners: serialize(owners),
     });
   } catch (error) {
-    console.log('Get Owners Error:', error);
+    console.log("Get Owners Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: 'Server Error',
+      message: "Server Error",
     });
   }
 };
@@ -335,29 +327,16 @@ export const getOwnerPGs = async (req, res) => {
   try {
     const { ownerId } = req.params;
 
-    const [pgs] = await db.execute(
-      `
-      SELECT
-        id,
-        title,
-        city,
-        area,
-        price,
-        available_rooms,
-        status,
-        created_at
-      FROM pgs
-      WHERE owner_id = ?
-      ORDER BY created_at DESC
-      `,
-      [ownerId]
-    );
+    const pgs = await PG.find({ owner_id: Number(ownerId) })
+      .select("title city area price available_rooms status created_at")
+      .sort({ created_at: -1 })
+      .lean();
 
     return res.status(200).json({
       success: true,
       ownerId,
       total: pgs.length,
-      pgs,
+      pgs: serialize(pgs),
     });
   } catch (error) {
     console.log("Get Owner PGs Error:", error);
@@ -374,35 +353,49 @@ export const getStudentBookings = async (req, res) => {
   try {
     const { studentId } = req.params;
 
-    const [bookings] = await db.execute(
-      `
-      SELECT
-        b.id,
-        b.booking_date,
-        b.status,
-        b.payment_status,
-        b.message,
-        p.id AS pg_id,
-        p.title AS pg_title,
-        p.city,
-        p.area,
-        p.price,
-        u.full_name AS student_name,
-        u.email AS student_email
-      FROM bookings b
-      LEFT JOIN pgs p ON b.pg_id = p.id
-      LEFT JOIN users u ON b.student_id = u.id
-      WHERE b.student_id = ?
-      ORDER BY b.booking_date DESC
-      `,
-      [studentId]
-    );
+    const bookings = await Booking.aggregate([
+      { $match: { student_id: Number(studentId) } },
+      {
+        $lookup: {
+          from: "pgs",
+          localField: "pg_id",
+          foreignField: "_id",
+          as: "p",
+        },
+      },
+      { $unwind: { path: "$p", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "student_id",
+          foreignField: "_id",
+          as: "u",
+        },
+      },
+      { $unwind: { path: "$u", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          booking_date: 1,
+          status: 1,
+          payment_status: 1,
+          message: 1,
+          pg_id: "$p._id",
+          pg_title: "$p.title",
+          city: "$p.city",
+          area: "$p.area",
+          price: "$p.price",
+          student_name: { $ifNull: ["$u.full_name", null] },
+          student_email: { $ifNull: ["$u.email", null] },
+        },
+      },
+      { $sort: { booking_date: -1 } },
+    ]);
 
     return res.status(200).json({
       success: true,
       studentId,
       total: bookings.length,
-      bookings,
+      bookings: serialize(bookings),
     });
   } catch (error) {
     console.log("Get Student Bookings Error:", error);
@@ -416,30 +409,22 @@ export const getStudentBookings = async (req, res) => {
 // Get All Students
 export const getAllStudents = async (req, res) => {
   try {
-    const [students] = await db.execute(`
-      SELECT
-        id,
-        full_name,
-        email,
-        phone,
-        role,
-        created_at
-      FROM users
-      WHERE role = 'student'
-      ORDER BY created_at DESC
-    `);
+    const students = await User.find({ role: "student" })
+      .select("full_name email phone role created_at")
+      .sort({ created_at: -1 })
+      .lean();
 
     return res.status(200).json({
       success: true,
       total: students.length,
-      students,
+      students: serialize(students),
     });
   } catch (error) {
-    console.log('Get Students Error:', error);
+    console.log("Get Students Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: 'Server Error',
+      message: "Server Error",
     });
   }
 };
@@ -448,38 +433,27 @@ export const getOwnerDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [owners] = await db.execute(
-      `
-      SELECT
-        id,
-        full_name,
-        email,
-        phone,
-        role,
-        created_at
-      FROM users
-      WHERE id = ? AND role = 'owner'
-      `,
-      [id]
-    );
+    const owner = await User.findOne({ _id: Number(id), role: "owner" })
+      .select("full_name email phone role created_at")
+      .lean();
 
-    if (owners.length === 0) {
+    if (!owner) {
       return res.status(404).json({
         success: false,
-        message: 'Owner not found',
+        message: "Owner not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      owner: owners[0],
+      owner: serialize(owner),
     });
   } catch (error) {
-    console.log('Get Owner Details Error:', error);
+    console.log("Get Owner Details Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: 'Server Error',
+      message: "Server Error",
     });
   }
 };
@@ -488,36 +462,37 @@ export const getPGDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [pgs] = await db.execute(
-      `
-      SELECT
-        pgs.*,
-        users.full_name AS owner_name,
-        users.email AS owner_email
-      FROM pgs
-      LEFT JOIN users ON pgs.owner_id = users.id
-      WHERE pgs.id = ?
-      `,
-      [id]
-    );
+    const [pg] = await PG.aggregate([
+      { $match: { _id: Number(id) } },
+      ...pgOwnerLookup,
+      { $unwind: { path: "$owner", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          owner_name: { $ifNull: ["$owner.full_name", null] },
+          owner_email: { $ifNull: ["$owner.email", null] },
+        },
+      },
+      { $project: { owner: 0 } },
+      { $limit: 1 },
+    ]);
 
-    if (pgs.length === 0) {
+    if (!pg) {
       return res.status(404).json({
         success: false,
-        message: 'PG not found',
+        message: "PG not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      pg: pgs[0],
+      pg: serialize(pg),
     });
   } catch (error) {
-    console.log('Get PG Details Error:', error);
+    console.log("Get PG Details Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: 'Server Error',
+      message: "Server Error",
     });
   }
 };
@@ -526,38 +501,27 @@ export const getStudentDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [students] = await db.execute(
-      `
-      SELECT
-        id,
-        full_name,
-        email,
-        phone,
-        role,
-        created_at
-      FROM users
-      WHERE id = ? AND role = 'student'
-      `,
-      [id]
-    );
+    const student = await User.findOne({ _id: Number(id), role: "student" })
+      .select("full_name email phone role created_at")
+      .lean();
 
-    if (students.length === 0) {
+    if (!student) {
       return res.status(404).json({
         success: false,
-        message: 'Student not found',
+        message: "Student not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      student: students[0],
+      student: serialize(student),
     });
   } catch (error) {
-    console.log('Get Student Details Error:', error);
+    console.log("Get Student Details Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: 'Server Error',
+      message: "Server Error",
     });
   }
 };

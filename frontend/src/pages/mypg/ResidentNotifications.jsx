@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useContext, memo } from 'react';
-import { ArrowLeft, Bell, CheckCircle2, Clock, Wrench, BookOpenCheck, Trash2, Check, IndianRupee, X } from 'lucide-react';
+import { ArrowLeft, Bell, CheckCircle2, Clock, Wrench, BookOpenCheck, Trash2, Check, IndianRupee, X, ShieldCheck } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
 
@@ -59,6 +59,37 @@ const ResidentNotifications = memo(({ onBack }) => {
       }
     } catch {}
 
+    // Tenant KYC decision from the owner
+    try {
+      const kycRes = await api.get('/enrollments/mine').catch(() => null);
+      const enrollment = kycRes?.data?.enrollment;
+
+      if (enrollment?.status === 'rejected') {
+        list.push({
+          id: `notif-kyc-rej-${enrollment.id}`,
+          type: 'kyc_update',
+          category: 'KYC Action Required',
+          title: 'Tenant details not accepted',
+          message: 'Your PG owner could not accept the tenant details you submitted. Please correct them and re-submit — you do not need to pay again.',
+          note: enrollment.rejection_note || 'No reason provided.',
+          status: 'rejected',
+          created_at: enrollment.rejected_at || enrollment.updated_at || new Date().toISOString(),
+          read: false,
+        });
+      } else if (enrollment?.status === 'verified') {
+        list.push({
+          id: `notif-kyc-ok-${enrollment.id}`,
+          type: 'kyc_update',
+          category: 'KYC Verified',
+          title: 'Your tenant details were accepted',
+          message: 'Your PG owner accepted your details — you are now enrolled as a verified resident.',
+          status: 'verified',
+          created_at: enrollment.updated_at || new Date().toISOString(),
+          read: false,
+        });
+      }
+    } catch {}
+
     try {
       const stored = userNotifKey ? JSON.parse(localStorage.getItem(userNotifKey) || '[]') : [];
       const notices = userNoticesKey ? JSON.parse(localStorage.getItem(userNoticesKey) || '[]') : [];
@@ -112,6 +143,8 @@ const ResidentNotifications = memo(({ onBack }) => {
   }), [notifications, activeTab]);
 
   const getStyle = (type, status) => {
+    if (type === 'kyc_update' && status === 'rejected') return { icon: X, bg: 'bg-rose-600', badge: 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400' };
+    if (type === 'kyc_update' && status === 'verified') return { icon: ShieldCheck, bg: 'bg-emerald-600', badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400' };
     if (type === 'payment_due' || status === 'payment_due') return { icon: IndianRupee, bg: 'bg-rose-500', badge: 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400' };
     if (type === 'booking_update' || status === 'approved') return { icon: BookOpenCheck, bg: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400' };
     if (type === 'maintenance_update' || status === 'in_progress') return { icon: Wrench, bg: 'bg-blue-500', badge: 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400' };

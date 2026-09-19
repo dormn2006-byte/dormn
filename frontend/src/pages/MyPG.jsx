@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   IndianRupee, Wrench, Bell, ClipboardList, User,
   Sparkles, ArrowLeft, Compass, CheckCircle2, Clock, Lock, ShieldCheck,
-  MapPin, Wifi, Moon, Utensils, Building2, ChevronDown, MessageSquare
+  MapPin, Wifi, Moon, Utensils, Building2, ChevronDown, MessageSquare,
+  AlertTriangle, FileText
 } from 'lucide-react';
 import api, { IMAGE_BASE_URL } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
@@ -20,6 +21,7 @@ const DEFAULT_PG_IMAGES = [
 
 // Lazy sub-views
 const PayRent = lazy(() => import('./mypg/PayRent'));
+const PaymentKycForm = lazy(() => import('./mypg/PaymentKycForm'));
 const RegistrationForm = lazy(() => import('./mypg/RegistrationForm'));
 const MyAccount = lazy(() => import('./mypg/MyAccount'));
 const MaintenanceRequests = lazy(() => import('./mypg/MaintenanceRequests'));
@@ -53,6 +55,10 @@ export default function MyPG() {
   const [pendingBookings, setPendingBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPaying, setIsPaying] = useState(false);
+  // Tenant details are confirmed before every payment; this resets on each visit.
+  const [paymentKycDone, setPaymentKycDone] = useState(false);
+  const [kycInfo, setKycInfo] = useState(null);
+  const [activeBookingId, setActiveBookingId] = useState(null);
 
   const [activeReqCount, setActiveReqCount] = useState(0);
   const [unreadNoticesCount, setUnreadNoticesCount] = useState(0);
@@ -128,6 +134,7 @@ export default function MyPG() {
         const myPgRes = await api.get('/bookings/my-pgs').catch(() => null);
         if (myPgRes?.data?.success && myPgRes.data?.booking) {
           setPgInfo(myPgRes.data.booking);
+          setActiveBookingId(myPgRes.data.booking.booking_id || myPgRes.data.booking.id || null);
           setHasEnrolledPG(true);
           setApprovedBookings([]);
           setPendingBookings([]);
@@ -216,7 +223,7 @@ export default function MyPG() {
       }
 
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        key: data.key_id || import.meta.env.VITE_RAZORPAY_KEY_ID,
         amount: data.amount,
         currency: data.currency || "INR",
         name: "Dormn Housing",
@@ -256,6 +263,28 @@ export default function MyPG() {
     setActiveAction(null);
     setSearchParams({});
   }, [setSearchParams]);
+
+  const handlePaymentKycDone = useCallback(() => setPaymentKycDone(true), []);
+
+  // The student's own KYC status — drives the "action required" banner.
+  const loadKycStatus = useCallback(async () => {
+    try {
+      const res = await api.get('/enrollments/mine');
+      setKycInfo(res?.data?.enrollment || null);
+    } catch {
+      setKycInfo(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) loadKycStatus();
+  }, [user, loadKycStatus]);
+
+  const handleReapplyDone = useCallback(() => {
+    setActiveAction(null);
+    setSearchParams({});
+    loadKycStatus();
+  }, [loadKycStatus, setSearchParams]);
 
   const handleDockClick = useCallback((appId) => {
     setActiveAction(appId);
@@ -341,11 +370,23 @@ export default function MyPG() {
         }`}>
           <Suspense fallback={<div className="p-12 text-center flex items-center justify-center"><div className="w-8 h-8 border-4 border-[#93B733] border-t-transparent rounded-full animate-spin" /></div>}>
             {activeAction === 'chat' && <PGChat pgInfo={pgInfo} onBack={handleBack} />}
-            {activeAction === 'rent' && <PayRent onBack={handleBack} />}
+            {activeAction === 'rent' && (
+              paymentKycDone
+                ? <PayRent onBack={handleBack} />
+                : <PaymentKycForm onBack={handleBack} onDone={handlePaymentKycDone} />
+            )}
             {activeAction === 'requests' && <MaintenanceRequests pgInfo={pgInfo} onBack={handleBack} />}
             {activeAction === 'notifications' && <ResidentNotifications onBack={handleBack} />}
             {activeAction === 'notices' && <ResidentNotices onBack={handleBack} />}
             {activeAction === 'registration' && <RegistrationForm onBack={handleBack} />}
+            {activeAction === 'reapply' && (
+              <PaymentKycForm
+                onBack={handleBack}
+                mode="reapply"
+                bookingId={kycInfo?.booking_id || activeBookingId}
+                onDone={handleReapplyDone}
+              />
+            )}
             {activeAction === 'account' && <MyAccount pgInfo={pgInfo} onBack={handleBack} />}
           </Suspense>
         </div>
@@ -365,6 +406,38 @@ export default function MyPG() {
   return (
     <div className="min-h-screen bg-[#FAF9F5] dark:bg-[#07090e] text-gray-900 dark:text-white flex flex-col selection:bg-[#93B733]/30">
       <Navbar />
+
+      {/* ── KYC REJECTED — ACTION REQUIRED ── */}
+      {kycInfo?.status === 'rejected' && (
+        <div className="w-full bg-rose-50 dark:bg-rose-950/40 border-b border-rose-200 dark:border-rose-500/30">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                <AlertTriangle size={18} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-black text-rose-800 dark:text-rose-300">
+                  Action required — your tenant details were not accepted
+                </h3>
+                {kycInfo.rejection_note && (
+                  <p className="text-xs font-medium text-rose-700/90 dark:text-rose-400/90 mt-1 leading-relaxed">
+                    <span className="font-black">Owner&apos;s reason:</span> {kycInfo.rejection_note}
+                  </p>
+                )}
+                <p className="text-[11px] font-medium text-rose-600/80 dark:text-rose-400/70 mt-1">
+                  Correct your details and re-submit for review — you do not need to pay again.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => handleDockClick('reapply')}
+              className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 px-5 py-2.5 text-xs font-black text-white shadow-md transition active:scale-[0.98]"
+            >
+              <FileText size={14} /> Reapply with correct details
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── TOP FULL-WIDTH RECTANGULAR HERO BANNER (Edge-to-Edge, Sleek Height) ── */}
       {hasEnrolledPG && pgInfo && (

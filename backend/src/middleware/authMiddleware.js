@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import pool from "../config/db.js";
+import User from "../schemas/userSchema.js";
 
 // Verify User Authentication
 export const protect = async (req, res, next) => {
@@ -108,19 +108,16 @@ export const requireVerifiedEmail = async (req, res, next) => {
       });
     }
 
-    const [rows] = await pool.execute(
-      "SELECT id, email, is_email_verified, auth_provider FROM users WHERE id = ?",
-      [req.user.id]
-    );
+    const user = await User.findById(req.user.id)
+      .select("email is_email_verified auth_provider")
+      .lean();
 
-    if (rows.length === 0) {
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: "User account not found",
       });
     }
-
-    const user = rows[0];
     const isVerified = Boolean(user.is_email_verified) || user.auth_provider === "google";
 
     if (!isVerified) {

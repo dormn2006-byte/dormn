@@ -2,10 +2,12 @@
   "name": "backend",
   "version": "1.0.0",
   "type": "module",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node server.js"
+    "start": "node src/server.js",
+    "seed": "node src/scripts/seedAdmins.js",
+    "init-db": "node src/scripts/initDb.js"
   },
   "keywords": [],
   "author": "",
@@ -21,8 +23,8 @@
     "google-auth-library": "^11.0.2",
     "jsonwebtoken": "^9.0.3",
     "memory-cache": "^0.2.0",
+    "mongoose": "^9.9.4",
     "multer": "^2.1.1",
-    "mysql2": "^3.22.4",
     "nodemailer": "^9.0.3",
     "razorpay": "^2.9.8",
     "sharp": "^0.35.3",

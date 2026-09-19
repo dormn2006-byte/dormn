@@ -1,5 +1,7 @@
-import pool from '../config/db.js';
 import crypto from 'crypto';
+import EventTicketInvite from '../schemas/eventTicketInviteSchema.js';
+import User from '../schemas/userSchema.js';
+import { serialize } from '../utils/serialize.js';
 
 // Helper to determine if an event is completed
 const checkEventCompleted = (eventDate, explicitStatus) => {
@@ -17,6 +19,23 @@ const checkEventCompleted = (eventDate, explicitStatus) => {
     return false;
 };
 
+// Invites expire once the event day is over; fall back to a 30-day window when
+// the (human-formatted) event date cannot be parsed.
+const computeExpiresAt = (eventDate) => {
+    if (eventDate) {
+        try {
+            const datePart = String(eventDate).split('·')[0].split('-')[0].replace(/^[a-zA-Z]+,?\s+/, '').trim();
+            const parsed = Date.parse(datePart);
+            if (!isNaN(parsed)) {
+                const endOfDay = new Date(parsed);
+                endOfDay.setHours(23, 59, 59, 999);
+                return endOfDay;
+            }
+        } catch {}
+    }
+    return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+};
+
 export const createInvites = async (req, res) => {
     try {
         const {
@@ -31,10 +50,10 @@ export const createInvites = async (req, res) => {
         // Fetch booker name & phone from DB if not provided
         let finalBookerName = bookerName;
         let finalBookerPhone = bookerPhone;
-        const [userRows] = await pool.execute('SELECT full_name, phone FROM users WHERE id = ?', [bookerUserId]);
-        if (userRows.length > 0) {
-            finalBookerName = finalBookerName || userRows[0].full_name || 'Host';
-            finalBookerPhone = finalBookerPhone || userRows[0].phone || '';
+        const userRow = await User.findById(Number(bookerUserId)).lean();
+        if (userRow) {
+            finalBookerName = finalBookerName || userRow.full_name || 'Host';
+            finalBookerPhone = finalBookerPhone || userRow.phone || '';
         }
 
         const parsedGroupSize = Math.max(2, Math.min(10, parseInt(groupSize) || 2));
@@ -47,19 +66,28 @@ export const createInvites = async (req, res) => {
             const randomCode = crypto.randomBytes(3).toString('hex').toUpperCase();
             const inviteCode = `${prefix}${randomCode}`;
 
-            await pool.execute(
-                `INSERT INTO event_ticket_invites (
-                    invite_code, ticket_code, event_id, event_title, category, ticket_type, 
-                    booker_user_id, booker_name, booker_email, booker_phone, 
-                    base_price, net_amount, event_date, event_location, event_image, group_size, slot_number,
-                    status, expires_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL)`,
-                [
-                    inviteCode, ticketCode, eventId, eventTitle, category, ticketType, 
-                    bookerUserId, finalBookerName, bookerEmail, finalBookerPhone, 
-                    basePrice, netAmount, eventDate, eventLocation, eventImage, finalSize, i
-                ]
-            );
+            await EventTicketInvite.create({
+                invite_code: inviteCode,
+                ticket_code: ticketCode,
+                event_id: eventId,
+                event_title: eventTitle,
+                category,
+                ticket_type: ticketType,
+                booker_user_id: bookerUserId,
+                booker_name: finalBookerName,
+                booker_email: bookerEmail,
+                booker_phone: finalBookerPhone,
+                base_price: basePrice,
+                net_amount: netAmount,
+                event_date: eventDate,
+                event_location: eventLocation,
+                event_image: eventImage,
+                group_size: finalSize,
+                slot_number: i,
+                status: 'pending',
+                accepted_at: null,
+                expires_at: computeExpiresAt(eventDate),
+            });
 
             invites.push({
                 inviteCode,
@@ -81,23 +109,18 @@ export const getInviteDetails = async (req, res) => {
     try {
         const { inviteCode } = req.params;
 
-        const [rows] = await pool.execute(
-            `SELECT * FROM event_ticket_invites WHERE invite_code = ?`,
-            [inviteCode]
-        );
+        const invite = await EventTicketInvite.findOne({ invite_code: inviteCode }).lean();
 
-        if (rows.length === 0) {
+        if (!invite) {
             return res.status(404).json({ success: false, message: 'Invite not found' });
         }
 
-        const invite = rows[0];
         const isCompleted = checkEventCompleted(invite.event_date, invite.status);
 
-        const [allInviteRows] = await pool.execute(
-            `SELECT id, invite_code, slot_number, invitee_name, invitee_email, invitee_phone, status, accepted_at 
-             FROM event_ticket_invites WHERE ticket_code = ? ORDER BY slot_number ASC`,
-            [invite.ticket_code]
-        );
+        const allInviteRows = await EventTicketInvite.find({ ticket_code: invite.ticket_code })
+            .select('_id invite_code slot_number invitee_name invitee_email invitee_phone status accepted_at')
+            .sort({ slot_number: 1 })
+            .lean();
 
         const allMembers = [
             {
@@ -122,7 +145,7 @@ export const getInviteDetails = async (req, res) => {
             }))
         ];
 
-        res.json({ success: true, invite, allMembers, isCompleted });
+        res.json({ success: true, invite: serialize(invite), allMembers, isCompleted });
     } catch (error) {
         console.error('Error fetching invite details:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch invite details' });
@@ -135,16 +158,11 @@ export const acceptInvite = async (req, res) => {
         const inviteeUserId = req.user.id;
         const inviteeEmail = req.user.email;
 
-        const [rows] = await pool.execute(
-            `SELECT * FROM event_ticket_invites WHERE invite_code = ?`,
-            [inviteCode]
-        );
+        const invite = await EventTicketInvite.findOne({ invite_code: inviteCode }).lean();
 
-        if (rows.length === 0) {
+        if (!invite) {
             return res.status(404).json({ success: false, message: 'Invite not found' });
         }
-
-        const invite = rows[0];
 
         // Check if event is completed
         if (checkEventCompleted(invite.event_date, invite.status)) {
@@ -154,7 +172,7 @@ export const acceptInvite = async (req, res) => {
             });
         }
 
-        if (invite.booker_user_id === inviteeUserId) {
+        if (Number(invite.booker_user_id) === Number(inviteeUserId)) {
             return res.status(400).json({
                 success: false,
                 message: 'You are the primary booker of this ticket! You already hold the organizer pass.'
@@ -162,42 +180,40 @@ export const acceptInvite = async (req, res) => {
         }
 
         if (invite.status === 'accepted') {
-            if (invite.invitee_user_id === inviteeUserId) {
-                const [allMembers] = await pool.execute(
-                    `SELECT invitee_name, status, slot_number FROM event_ticket_invites WHERE ticket_code = ?`,
-                    [invite.ticket_code]
-                );
-                return res.json({ success: true, message: 'You have already accepted this pass', invite, allMembers, isCompleted: false });
+            if (Number(invite.invitee_user_id) === Number(inviteeUserId)) {
+                const allMembers = await EventTicketInvite.find({ ticket_code: invite.ticket_code })
+                    .select('invitee_name status slot_number')
+                    .lean();
+                return res.json({ success: true, message: 'You have already accepted this pass', invite: serialize(invite), allMembers, isCompleted: false });
             }
             return res.status(400).json({ success: false, message: 'This pass has already been accepted by another guest' });
         }
 
         let inviteeName = req.body.name;
         let inviteePhone = phone;
-        const [userRows] = await pool.execute('SELECT full_name, phone FROM users WHERE id = ?', [inviteeUserId]);
-        if (userRows.length > 0) {
-            inviteeName = inviteeName || userRows[0].full_name || 'Guest';
-            inviteePhone = inviteePhone || userRows[0].phone || '';
+        const userRow = await User.findById(Number(inviteeUserId)).lean();
+        if (userRow) {
+            inviteeName = inviteeName || userRow.full_name || 'Guest';
+            inviteePhone = inviteePhone || userRow.phone || '';
         }
 
-        await pool.execute(
-            `UPDATE event_ticket_invites 
-             SET invitee_user_id = ?, invitee_name = ?, invitee_email = ?, invitee_phone = ?, status = 'accepted', accepted_at = NOW() 
-             WHERE invite_code = ?`,
-            [inviteeUserId, inviteeName, inviteeEmail, inviteePhone, inviteCode]
+        await EventTicketInvite.updateOne(
+            { invite_code: inviteCode },
+            {
+                invitee_user_id: Number(inviteeUserId),
+                invitee_name: inviteeName,
+                invitee_email: inviteeEmail,
+                invitee_phone: inviteePhone,
+                status: 'accepted',
+                accepted_at: new Date()
+            }
         );
 
-        const [updatedRows] = await pool.execute(
-            `SELECT * FROM event_ticket_invites WHERE invite_code = ?`,
-            [inviteCode]
-        );
+        const updatedInvite = await EventTicketInvite.findOne({ invite_code: inviteCode }).lean();
 
-        const updatedInvite = updatedRows[0];
-
-        const [allInviteRows] = await pool.execute(
-            `SELECT id, slot_number, invitee_name, status FROM event_ticket_invites WHERE ticket_code = ?`,
-            [updatedInvite.ticket_code]
-        );
+        const allInviteRows = await EventTicketInvite.find({ ticket_code: updatedInvite.ticket_code })
+            .select('_id slot_number invitee_name status')
+            .lean();
 
         const allMembers = [
             { name: updatedInvite.booker_name, status: 'confirmed', isOrganizer: true },
@@ -207,7 +223,7 @@ export const acceptInvite = async (req, res) => {
         res.json({
             success: true,
             message: 'Invite accepted successfully!',
-            invite: updatedInvite,
+            invite: serialize(updatedInvite),
             allMembers,
             isCompleted: false
         });
@@ -220,15 +236,18 @@ export const acceptInvite = async (req, res) => {
 export const getMyInvites = async (req, res) => {
     try {
         const userId = req.user.id;
-        const [rows] = await pool.execute(
-            `SELECT * FROM event_ticket_invites WHERE booker_user_id = ? OR invitee_user_id = ? ORDER BY created_at DESC`,
-            [userId, userId]
-        );
+        const rows = await EventTicketInvite.find({
+            $or: [{ booker_user_id: Number(userId) }, { invitee_user_id: Number(userId) }]
+        })
+            .sort({ created_at: -1 })
+            .lean();
+
+        const all = serialize(rows);
 
         res.json({
             success: true,
-            sent: rows.filter(row => row.booker_user_id === userId),
-            received: rows.filter(row => row.invitee_user_id === userId)
+            sent: all.filter(row => Number(row.booker_user_id) === Number(userId)),
+            received: all.filter(row => Number(row.invitee_user_id) === Number(userId))
         });
     } catch (error) {
         console.error('Error fetching my invites:', error);

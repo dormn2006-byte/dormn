@@ -1,19 +1,34 @@
-import mysql from "mysql2/promise";
+import mongoose from "mongoose";
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT,
+export const MONGO_DB_NAME = process.env.MONGO_DB_NAME || "dormn";
 
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  charset: 'utf8mb4',
-});
+export const connectDB = async () => {
+  if (mongoose.connection.readyState === 1) return mongoose.connection;
 
-export default pool;
+  if (!process.env.MONGO_URI) {
+    throw new Error("MONGO_URI is not set. Add it to your .env file.");
+  }
+
+  await mongoose.connect(process.env.MONGO_URI, {
+    dbName: MONGO_DB_NAME,
+    maxPoolSize: 10,
+    serverSelectionTimeoutMS: 10000,
+  });
+
+  console.log(
+    `MongoDB Connected Successfully: ${mongoose.connection.host}/${mongoose.connection.name}`
+  );
+
+  return mongoose.connection;
+};
+
+export const disconnectDB = async () => {
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
+  }
+};
+
+export default connectDB;

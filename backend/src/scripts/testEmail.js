@@ -1,5 +1,7 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import { verifyEmailService, sendEmail } from '../utils/emailService.js';
+
+dotenv.config({ quiet: true });
 
 async function main() {
   console.log('====================================================');

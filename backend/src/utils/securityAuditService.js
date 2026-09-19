@@ -1,4 +1,4 @@
-import pool from "../config/db.js";
+import SecurityAuditLog from "../schemas/securityAuditLogSchema.js";
 
 /**
  * Validates password strength according to Dormn security policy:
@@ -36,10 +36,15 @@ export const logSecurityAudit = async ({ req, eventType, userId = null, email = 
 
     console.log(`[SECURITY-AUDIT] 🛡️ [${eventType}] [${status}] Account: ${cleanEmail || userId || "anonymous"} | IP: ${ipAddress} | Details: ${details || "None"}`);
 
-    await pool.execute(
-      `INSERT INTO security_audit_logs (event_type, user_id, email, ip_address, user_agent, status, details) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [eventType, userId, cleanEmail, ipAddress, userAgent, status, details ? String(details).slice(0, 1000) : null]
-    );
+    await SecurityAuditLog.create({
+      event_type: eventType,
+      user_id: userId,
+      email: cleanEmail,
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      status,
+      details: details ? String(details).slice(0, 1000) : null,
+    });
   } catch (error) {
     console.error("[SECURITY-AUDIT] ⚠️ Failed to record security audit log:", error.message);
   }

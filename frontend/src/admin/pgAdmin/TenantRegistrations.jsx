@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import API from "../../services/api";
-import { FileText, Download, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { FileText, Download, CheckCircle2, AlertCircle, XCircle, Users, ShieldCheck, Loader2 } from "lucide-react";
+import RejectReasonModal from "../shared/RejectReasonModal";
 
 const TenantRegistrations = () => {
   const [enrollments, setEnrollments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchRegistrations();
@@ -21,17 +24,32 @@ const TenantRegistrations = () => {
     }
   };
 
-  const handleStatusUpdate = async (enrollment_id, newStatus) => {
-    if (!window.confirm(`Are you sure you want to mark this application as ${newStatus.toUpperCase()}?`)) return;
-    
+  const handleStatusUpdate = async (enrollment_id, newStatus, rejection_note) => {
+    if (newStatus === "verified" && !window.confirm("Are you sure you want to mark this application as VERIFIED?")) return;
+
+    setSubmitting(true);
     try {
-      await API.put("/enrollments/status", { enrollment_id, status: newStatus });
-      setEnrollments(prev => prev.map(student => 
-        student.id === enrollment_id ? { ...student, status: newStatus } : student
+      const res = await API.put("/enrollments/status", {
+        enrollment_id,
+        status: newStatus,
+        ...(rejection_note ? { rejection_note } : {}),
+      });
+      setEnrollments(prev => prev.map(student =>
+        student.id === enrollment_id
+          ? {
+              ...student,
+              status: newStatus,
+              rejection_note: newStatus === "rejected" ? rejection_note : null,
+            }
+          : student
       ));
+      setRejectTarget(null);
+      return res;
     } catch (err) {
-      alert("Failed to update status.");
+      alert(err?.response?.data?.message || "Failed to update status.");
       console.error(err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -83,11 +101,13 @@ const TenantRegistrations = () => {
         ['Date of Birth', student.dob ? new Date(student.dob).toLocaleDateString() : 'N/A'],
         ['Hometown & Pincode', `${safe(student.hometown)} - ${safe(student.pincode)}`],
         ['Permanent Address', safe(student.home_address)],
+        ['Aadhar Number', student.aadhar_number ? safe(student.aadhar_number) : 'N/A'],
         
         [{ content: '2. Parent & Emergency Contacts', colSpan: 2, styles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: 'bold' } }],
         ['Parent/Guardian 1', `${safe(student.parent_1_name)} (${safe(student.parent_1_relation)}) - ${safe(student.parent_1_phone)}`],
         ['Parent/Guardian 2', student.parent_2_name ? `${safe(student.parent_2_name)} (${safe(student.parent_2_relation)}) - ${safe(student.parent_2_phone)}` : 'N/A'],
         ['Local Guardian', student.guardian_name ? `${safe(student.guardian_name)} - ${safe(student.guardian_phone)}` : 'N/A'],
+        ['Guardian Email', student.guardian_email ? safe(student.guardian_email) : 'N/A'],
 
         [{ content: '3. Medical & Health Preferences', colSpan: 2, styles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: 'bold' } }],
         ['Food Preference', safe(student.food_preference)],
@@ -160,6 +180,23 @@ const TenantRegistrations = () => {
                   <h3 className="text-lg font-bold text-gray-900">{student.student_name || "New Tenant"}</h3>
                   <p className="text-sm text-gray-500">{student.pg_title || "Unknown Property"}</p>
                   <p className="text-xs font-medium text-gray-400 mt-1">Submitted: {new Date(student.created_at).toLocaleDateString()}</p>
+                  {(student.guardian_email || student.aadhar_number) && (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-gray-500">
+                      {student.guardian_email && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Users size={12} className="text-gray-400" />
+                          Guardian: <strong className="text-gray-700">{student.guardian_name || 'N/A'}</strong>
+                          <span className="text-gray-400">{student.guardian_email}</span>
+                        </span>
+                      )}
+                      {student.aadhar_number && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <ShieldCheck size={12} className="text-gray-400" />
+                          Aadhar: <strong className="text-gray-700 tracking-wide">{student.aadhar_number}</strong>
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -169,16 +206,25 @@ const TenantRegistrations = () => {
                 {student.status === 'pending' && (
                   <>
                     <button onClick={() => handleStatusUpdate(student.id, 'verified')} className="rounded-xl bg-green-50 text-green-700 px-4 py-2 text-sm font-bold border border-green-200 hover:bg-green-100 transition">
-                      Approve
+                      Accept
                     </button>
-                    <button onClick={() => handleStatusUpdate(student.id, 'rejected')} className="rounded-xl bg-red-50 text-red-700 px-4 py-2 text-sm font-bold border border-red-200 hover:bg-red-100 transition">
+                    <button onClick={() => setRejectTarget(student)} disabled={submitting} className="rounded-xl bg-red-50 text-red-700 px-4 py-2 text-sm font-bold border border-red-200 hover:bg-red-100 transition disabled:opacity-50">
                       Reject
                     </button>
                   </>
                 )}
 
-                {student.status === 'verified' && <span className="px-4 py-2 text-xs font-bold text-green-700 bg-green-50 rounded-xl border border-green-200">Verified ✅</span>}
-                {student.status === 'rejected' && <span className="px-4 py-2 text-xs font-bold text-red-700 bg-red-50 rounded-xl border border-red-200">Rejected ❌</span>}
+                {student.status === 'verified' && <span className="px-4 py-2 text-xs font-bold text-green-700 bg-green-50 rounded-xl border border-green-200">Enrolled ✅</span>}
+                {student.status === 'rejected' && (
+                  <div className="flex flex-col items-end gap-1.5">
+                    <span className="px-4 py-2 text-xs font-bold text-red-700 bg-red-50 rounded-xl border border-red-200">Rejected ❌</span>
+                    {student.rejection_note && (
+                      <p className="max-w-xs text-right text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                        Reason: {student.rejection_note}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* PDF Download */}
                 <button onClick={() => generatePDF(student)} className="flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-gray-800">
@@ -189,6 +235,15 @@ const TenantRegistrations = () => {
           ))
         )}
       </div>
+
+      <RejectReasonModal
+        isOpen={Boolean(rejectTarget)}
+        onClose={() => setRejectTarget(null)}
+        onSubmit={(note) => handleStatusUpdate(rejectTarget.id, "rejected", note)}
+        tenantName={rejectTarget?.student_name}
+        pgTitle={rejectTarget?.pg_title}
+        submitting={submitting}
+      />
     </div>
   );
 };

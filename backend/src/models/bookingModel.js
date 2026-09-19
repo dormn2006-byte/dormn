@@ -1,4 +1,7 @@
-import db from "../config/db.js";
+import Booking from "../schemas/bookingSchema.js";
+import PG from "../schemas/pgSchema.js";
+import User from "../schemas/userSchema.js";
+import { serialize } from "../utils/serialize.js";
 
 // Create Booking
 export const createBooking = async ({
@@ -6,114 +9,115 @@ export const createBooking = async ({
   pg_id,
   owner_id,
   message,
-  selected_room_type, // NEW: Extract selected room type
-  booked_price,       // NEW: Extract booked price
+  selected_room_type,
+  booked_price,
 }) => {
-  const query = `
-    INSERT INTO bookings (
-      student_id,
-      pg_id,
-      owner_id,
-      message,
-      selected_room_type,
-      booked_price
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-  `;
-
-  const [result] = await db.execute(query, [
+  const booking = await Booking.create({
     student_id,
     pg_id,
     owner_id,
     message,
-    selected_room_type, // NEW: Insert into database
-    booked_price,       // NEW: Insert into database
+    selected_room_type,
+    booked_price,
+  });
+
+  return { insertId: booking._id, affectedRows: 1 };
+};
+
+const withBookingJoins = (bookings, pgMap, userMap, userField, alias) =>
+  bookings.map((booking) => {
+    const pg = pgMap.get(booking.pg_id) || {};
+    const user = userMap.get(booking[userField]) || {};
+
+    return {
+      ...booking,
+      title: pg.title,
+      city: pg.city,
+      area: pg.area,
+      price: pg.price,
+      profile_image: pg.profile_image,
+      [`${alias}_name`]: user.full_name ?? null,
+      [`${alias}_email`]: user.email ?? null,
+      [`${alias}_phone`]: user.phone ?? null,
+    };
+  });
+
+const loadJoinMaps = async (bookings) => {
+  const pgIds = [...new Set(bookings.map((b) => b.pg_id).filter((v) => v != null))];
+  const userIds = [
+    ...new Set(
+      bookings
+        .flatMap((b) => [b.owner_id, b.student_id])
+        .filter((v) => v != null)
+    ),
+  ];
+
+  const [pgs, users] = await Promise.all([
+    PG.find({ _id: { $in: pgIds } }).lean(),
+    User.find({ _id: { $in: userIds } }).lean(),
   ]);
 
-  return result;
+  return {
+    pgMap: new Map(pgs.map((pg) => [pg._id, pg])),
+    userMap: new Map(users.map((user) => [user._id, user])),
+  };
 };
 
 // Get Student Bookings
 export const getStudentBookings = async (student_id) => {
-  const query = `
-    SELECT
-      bookings.*,
-      pgs.title,
-      pgs.city,
-      pgs.area,
-      pgs.price,
-      pgs.profile_image,
-      users.full_name AS owner_name,
-      users.phone AS owner_phone
-    FROM bookings
-    JOIN pgs ON bookings.pg_id = pgs.id
-    JOIN users ON bookings.owner_id = users.id
-    WHERE bookings.student_id = ?
-    ORDER BY bookings.booking_date DESC
-  `;
+  const bookings = await Booking.find({ student_id })
+    .sort({ booking_date: -1 })
+    .lean();
 
-  const [rows] = await db.execute(query, [student_id]);
+  const { pgMap, userMap } = await loadJoinMaps(bookings);
 
-  return rows;
+  return serialize(
+    withBookingJoins(bookings, pgMap, userMap, "owner_id", "owner")
+  );
 };
 
 // Get Owner Booking Requests
 export const getOwnerBookings = async (owner_id) => {
-  const query = `
-    SELECT
-      bookings.*,
-      pgs.title,
-      pgs.city,
-      pgs.area,
-      pgs.price,
-      pgs.profile_image,
-      users.full_name AS student_name,
-      users.email AS student_email,
-      users.phone AS student_phone
-    FROM bookings
-    JOIN pgs ON bookings.pg_id = pgs.id
-    JOIN users ON bookings.student_id = users.id
-    WHERE bookings.owner_id = ? AND bookings.status != 'paused'
-    ORDER BY bookings.booking_date DESC
-  `;
+  const bookings = await Booking.find({
+    owner_id,
+    status: { $ne: "paused" },
+  })
+    .sort({ booking_date: -1 })
+    .lean();
 
-  const [rows] = await db.execute(query, [owner_id]);
+  const { pgMap, userMap } = await loadJoinMaps(bookings);
 
-  return rows;
+  return serialize(
+    withBookingJoins(bookings, pgMap, userMap, "student_id", "student")
+  );
 };
 
 // Update Booking Status
-export const updateBookingStatus = async ({
-  booking_id,
-  status,
-}) => {
+export const updateBookingStatus = async ({ booking_id, status }) => {
   const isCancelled = status === "cancelled" || status === "rejected";
-  const query = isCancelled
-    ? `UPDATE bookings SET status = ?, cancelled_at = NOW() WHERE id = ?`
-    : `UPDATE bookings SET status = ? WHERE id = ?`;
 
-  const [result] = await db.execute(query, [
-    status,
-    booking_id,
-  ]);
-
-  return result;
+  return Booking.updateOne(
+    { _id: booking_id },
+    isCancelled
+      ? { status, cancelled_at: new Date() }
+      : { status }
+  );
 };
 
 // Get student_id from a booking
 export const getStudentIdByBooking = async (booking_id) => {
-  const [rows] = await db.execute(
-    `SELECT student_id FROM bookings WHERE id = ?`,
-    [booking_id]
-  );
-  return rows.length > 0 ? rows[0].student_id : null;
+  const booking = await Booking.findById(booking_id).select("student_id").lean();
+  return booking ? booking.student_id : null;
 };
 
 // Pause all other pending bookings for a student (when one gets approved)
 export const pauseOtherBookings = async (student_id, exclude_booking_id) => {
-  const [result] = await db.execute(
-    `UPDATE bookings SET status = 'paused' WHERE student_id = ? AND id != ? AND status = 'pending'`,
-    [student_id, exclude_booking_id]
+  return Booking.updateMany(
+    {
+      student_id,
+      _id: { $ne: exclude_booking_id },
+      status: "pending",
+    },
+    { status: "paused" }
   );
-  return result;
 };

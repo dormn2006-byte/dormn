@@ -1,4 +1,103 @@
-import db from "../config/db.js";
+import PG from "../schemas/pgSchema.js";
+import Booking from "../schemas/bookingSchema.js";
+import User from "../schemas/userSchema.js";
+import SavedPG from "../schemas/savedPGSchema.js";
+import { serialize } from "../utils/serialize.js";
+
+const escapeRegex = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Only PGs whose owner is on a usable subscription are publicly visible.
+const ownerSubscriptionMatch = () => ({
+  $or: [
+    { "owner.role": { $ne: "owner" } },
+    { "owner.subscription_status": null },
+    { "owner.subscription_status": { $in: ["trial", "active"] } },
+    { "owner.subscription_expires_at": { $gt: new Date() } },
+  ],
+});
+
+const ownerLookup = [
+  {
+    $lookup: {
+      from: "users",
+      localField: "owner_id",
+      foreignField: "_id",
+      as: "owner",
+    },
+  },
+  { $unwind: { path: "$owner", preserveNullAndEmptyArrays: true } },
+];
+
+const occupancyLookup = [
+  {
+    $lookup: {
+      from: "bookings",
+      let: { pgId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ["$pg_id", "$$pgId"] },
+                {
+                  $or: [
+                    { $eq: ["$status", "approved"] },
+                    { $eq: ["$payment_status", "paid"] },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        { $count: "total" },
+      ],
+      as: "occupancy",
+    },
+  },
+  {
+    $addFields: {
+      occupied_spots: {
+        $ifNull: [{ $arrayElemAt: ["$occupancy.total", 0] }, 0],
+      },
+    },
+  },
+  {
+    $addFields: {
+      spots_left: {
+        $max: [
+          0,
+          { $subtract: [{ $ifNull: ["$available_rooms", 0] }, "$occupied_spots"] },
+        ],
+      },
+    },
+  },
+];
+
+const ownerNameFields = [
+  {
+    $addFields: {
+      owner_name: "$owner.full_name",
+      owner_email: "$owner.email",
+      owner_phone: "$owner.phone",
+    },
+  },
+];
+
+const publicListPipeline = (match = {}) => [
+  { $match: match },
+  ...ownerLookup,
+  ...occupancyLookup,
+  { $match: ownerSubscriptionMatch() },
+  {
+    $addFields: {
+      _spots_available: { $cond: [{ $gt: ["$spots_left", 0] }, 1, 0] },
+    },
+  },
+  { $sort: { _spots_available: -1, created_at: -1 } },
+  ...ownerNameFields,
+  { $project: { owner: 0, occupancy: 0, _spots_available: 0, gallery: 0 } },
+];
 
 // Create New PG
 export const createPG = async (pgData) => {
@@ -20,29 +119,7 @@ export const createPG = async (pgData) => {
     sharing_options,
   } = pgData;
 
-  const query = `
-    INSERT INTO pgs (
-      owner_id,
-      title,
-      description,
-      pg_type,
-      price,
-      address,
-      city,
-      area,
-      nearby_college,
-      available_rooms,
-      amenities,
-      rules,
-      profile_image,
-      google_map_link,
-      status,
-      sharing_options
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-
-  const [result] = await db.execute(query, [
+  const pg = await PG.create({
     owner_id,
     title,
     description,
@@ -57,116 +134,52 @@ export const createPG = async (pgData) => {
     rules,
     profile_image,
     google_map_link,
-    'pending',
-    sharing_options, // NEW: Insert into database
-  ]);
+    status: "pending",
+    sharing_options,
+  });
 
-  return result;
+  return { insertId: pg._id, affectedRows: 1 };
 };
 
 // Get All PGs
 export const getAllPGs = async () => {
-  const query = `
-    SELECT
-      pgs.*,
-      users.full_name AS owner_name,
-      users.email AS owner_email,
-      COALESCE((
-        SELECT COUNT(*) FROM bookings b 
-        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
-      ), 0) AS occupied_spots,
-      GREATEST(0, CAST(COALESCE(pgs.available_rooms, 0) AS SIGNED) - COALESCE((
-        SELECT COUNT(*) FROM bookings b 
-        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
-      ), 0)) AS spots_left
-    FROM pgs
-    LEFT JOIN users ON pgs.owner_id = users.id
-    WHERE pgs.status = 'approved'
-      AND (
-        users.role != 'owner'
-        OR users.subscription_status IS NULL
-        OR users.subscription_status IN ('trial', 'active')
-        OR users.subscription_expires_at > NOW()
-      )
-    ORDER BY (spots_left > 0) DESC, pgs.created_at DESC
-  `;
-
-  const [rows] = await db.execute(query);
-
-  return rows;
+  const rows = await PG.aggregate(publicListPipeline({ status: "approved" }));
+  return serialize(rows);
 };
 
 // Get Single PG By ID
 export const getPGById = async (id) => {
-  // Fetch PG details
-  const pgQuery = `
-    SELECT
-      pgs.*,
-      users.full_name AS owner_name,
-      users.email AS owner_email,
-      users.phone AS owner_phone,
-      COALESCE((
-        SELECT COUNT(*) FROM bookings b 
-        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
-      ), 0) AS occupied_spots,
-      GREATEST(0, CAST(COALESCE(pgs.available_rooms, 0) AS SIGNED) - COALESCE((
-        SELECT COUNT(*) FROM bookings b 
-        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
-      ), 0)) AS spots_left
-    FROM pgs
-    JOIN users ON pgs.owner_id = users.id
-    WHERE pgs.id = ?
-  `;
+  const pgId = Number(id);
+  if (!Number.isFinite(pgId)) return null;
 
-  const [pgRows] = await db.execute(pgQuery, [id]);
+  const [pg] = await PG.aggregate([
+    { $match: { _id: pgId } },
+    ...ownerLookup,
+    ...occupancyLookup,
+    ...ownerNameFields,
+    { $project: { owner: 0, occupancy: 0 } },
+    { $limit: 1 },
+  ]);
 
-  if (pgRows.length === 0) {
-    return null;
-  }
+  if (!pg) return null;
 
-  const pg = pgRows[0];
+  pg.gallery = (pg.gallery || [])
+    .slice()
+    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
 
-  // Fetch gallery images
-  const imageQuery = `
-    SELECT
-      id,
-      image_url,
-      display_order,
-      is_cover
-    FROM pg_images
-    WHERE pg_id = ?
-    ORDER BY display_order ASC
-  `;
-
-  const [images] = await db.execute(imageQuery, [id]);
-
-  // Attach gallery to PG object
-  pg.gallery = images;
-
-  return pg;
+  return serialize(pg);
 };
 
 // Get PGs By Owner
 export const getPGsByOwner = async (ownerId) => {
-  const query = `
-    SELECT 
-      pgs.*,
-      COALESCE((
-        SELECT COUNT(*) FROM bookings b 
-        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
-      ), 0) AS occupied_spots,
-      GREATEST(0, CAST(COALESCE(pgs.available_rooms, 0) AS SIGNED) - COALESCE((
-        SELECT COUNT(*) FROM bookings b 
-        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
-      ), 0)) AS spots_left
-    FROM pgs
-    WHERE owner_id = ?
-    ORDER BY created_at DESC
-  `;
+  const rows = await PG.aggregate([
+    { $match: { owner_id: Number(ownerId) } },
+    ...occupancyLookup,
+    { $sort: { created_at: -1 } },
+    { $project: { occupancy: 0, gallery: 0 } },
+  ]);
 
-  const [rows] = await db.execute(query, [ownerId]);
-
-  return rows;
+  return serialize(rows);
 };
 
 // Update PG
@@ -185,137 +198,110 @@ export const updatePG = async (id, pgData) => {
     rules,
     google_map_link,
     profile_image,
-    sharing_options, // NEW: Extract sharing options
+    sharing_options,
   } = pgData;
 
-  const query = `
-    UPDATE pgs
-    SET
-      title = ?,
-      description = ?,
-      pg_type = ?,
-      price = ?,
-      address = ?,
-      city = ?,
-      area = ?,
-      nearby_college = ?,
-      available_rooms = ?,
-      amenities = ?,
-      rules = ?,
-      google_map_link = ?,
-      profile_image = ?,
-      sharing_options = ?
-    WHERE id = ?
-  `;
-
-  const [result] = await db.execute(query, [
-    title,
-    description,
-    pg_type,
-    price,
-    address,
-    city,
-    area,
-    nearby_college,
-    available_rooms,
-    amenities,
-    rules,
-    google_map_link,
-    profile_image,
-    sharing_options, // NEW: Update in database
-    id,
-  ]);
+  const result = await PG.updateOne(
+    { _id: Number(id) },
+    {
+      title,
+      description,
+      pg_type,
+      price,
+      address,
+      city,
+      area,
+      nearby_college,
+      available_rooms,
+      amenities,
+      rules,
+      google_map_link,
+      profile_image,
+      sharing_options,
+    }
+  );
 
   return result;
 };
 
 // Delete PG
 export const deletePG = async (id) => {
-  const query = `DELETE FROM pgs WHERE id = ?`;
-
-  const [result] = await db.execute(query, [id]);
-
-  return result;
+  return PG.deleteOne({ _id: Number(id) });
 };
 
 // Save Multiple PG Images
 export const savePGImages = async (pgId, images) => {
-  if (!images || images.length === 0) {
-    return;
-  }
+  if (!images || images.length === 0) return;
 
-  const query = `
-    INSERT INTO pg_images (
-      pg_id,
-      image_url,
-      display_order,
-      is_cover
-    )
-    VALUES (?, ?, ?, ?)
-  `;
+  const gallery = images.map((image, index) => ({
+    image_url: image,
+    display_order: index + 1,
+    is_cover: index === 0 ? 1 : 0,
+  }));
 
-  for (let i = 0; i < images.length; i++) {
-    await db.execute(query, [
-      pgId,
-      images[i],
-      i + 1,
-      i === 0 ? 1 : 0,
-    ]);
-  }
+  await PG.updateOne({ _id: Number(pgId) }, { $push: { gallery: { $each: gallery } } });
 };
+
 // ==========================================
 // SAVED PGS (FAVORITES) MODELS
 // ==========================================
 
 // Toggle Save/Unsave a PG
 export const toggleSavePG = async (userId, pgId) => {
-  // First, check if the user has already saved this PG
-  const checkQuery = `SELECT * FROM saved_pgs WHERE user_id = ? AND pg_id = ?`;
-  const [existing] = await db.execute(checkQuery, [userId, pgId]);
+  const user = Number(userId);
+  const pg = Number(pgId);
 
-  if (existing.length > 0) {
-    // If it exists, UN-SAVE it (Delete)
-    const deleteQuery = `DELETE FROM saved_pgs WHERE user_id = ? AND pg_id = ?`;
-    await db.execute(deleteQuery, [userId, pgId]);
+  const existing = await SavedPG.findOne({ user_id: user, pg_id: pg }).lean();
+
+  if (existing) {
+    await SavedPG.deleteOne({ user_id: user, pg_id: pg });
     return { isSaved: false, message: "PG removed from saved list" };
-  } else {
-    // If it doesn't exist, SAVE it (Insert)
-    const insertQuery = `INSERT INTO saved_pgs (user_id, pg_id) VALUES (?, ?)`;
-    await db.execute(insertQuery, [userId, pgId]);
-    return { isSaved: true, message: "PG saved successfully" };
   }
+
+  await SavedPG.create({ user_id: user, pg_id: pg });
+
+  return { isSaved: true, message: "PG saved successfully" };
 };
 
 // Get all PGs saved by a specific user
 export const getSavedPGsByUser = async (userId) => {
-  const query = `
-    SELECT 
-      pgs.*,
-      users.full_name AS owner_name,
-      users.email AS owner_email,
-      COALESCE((
-        SELECT COUNT(*) FROM bookings b 
-        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
-      ), 0) AS occupied_spots,
-      GREATEST(0, CAST(COALESCE(pgs.available_rooms, 0) AS SIGNED) - COALESCE((
-        SELECT COUNT(*) FROM bookings b 
-        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
-      ), 0)) AS spots_left
-    FROM pgs
-    JOIN saved_pgs ON pgs.id = saved_pgs.pg_id
-    LEFT JOIN users ON pgs.owner_id = users.id
-    WHERE saved_pgs.user_id = ? AND pgs.status = 'approved'
-      AND (
-        users.role != 'owner'
-        OR users.subscription_status IS NULL
-        OR users.subscription_status IN ('trial', 'active')
-        OR users.subscription_expires_at > NOW()
-      )
-    ORDER BY (spots_left > 0) DESC, saved_pgs.created_at DESC
-  `;
+  const rows = await PG.aggregate([
+    {
+      $lookup: {
+        from: "saved_pgs",
+        let: { pgId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$pg_id", "$$pgId"] },
+                  { $eq: ["$user_id", Number(userId)] },
+                ],
+              },
+            },
+          },
+          { $limit: 1 },
+        ],
+        as: "saved",
+      },
+    },
+    { $unwind: "$saved" },
+    { $match: { status: "approved" } },
+    ...ownerLookup,
+    ...occupancyLookup,
+    { $match: ownerSubscriptionMatch() },
+    {
+      $addFields: {
+        _spots_available: { $cond: [{ $gt: ["$spots_left", 0] }, 1, 0] },
+      },
+    },
+    { $sort: { _spots_available: -1, "saved.created_at": -1 } },
+    ...ownerNameFields,
+    { $project: { owner: 0, occupancy: 0, saved: 0, _spots_available: 0, gallery: 0 } },
+  ]);
 
-  const [rows] = await db.execute(query, [userId]);
-  return rows;
+  return serialize(rows);
 };
 
 // ==========================================
@@ -324,112 +310,100 @@ export const getSavedPGsByUser = async (userId) => {
 
 // Get distinct locations and landmarks for frontend dropdowns
 export const getFilterOptions = async () => {
-  // We only fetch distinct options from 'approved' PGs to ensure we don't show empty search results
-  const cityQuery = `SELECT DISTINCT city FROM pgs WHERE status = 'approved' AND city IS NOT NULL AND city != ''`;
-  const areaQuery = `SELECT DISTINCT area FROM pgs WHERE status = 'approved' AND area IS NOT NULL AND area != ''`;
-  const collegeQuery = `SELECT DISTINCT nearby_college FROM pgs WHERE status = 'approved' AND nearby_college IS NOT NULL AND nearby_college != ''`;
+  const match = { status: "approved" };
 
-  const [cities] = await db.execute(cityQuery);
-  const [areas] = await db.execute(areaQuery);
-  const [colleges] = await db.execute(collegeQuery);
+  const [cities, areas, colleges] = await Promise.all([
+    PG.distinct("city", { ...match, city: { $nin: [null, ""] } }),
+    PG.distinct("area", { ...match, area: { $nin: [null, ""] } }),
+    PG.distinct("nearby_college", {
+      ...match,
+      nearby_college: { $nin: [null, ""] },
+    }),
+  ]);
 
-  return {
-    cities: cities.map(row => row.city),
-    areas: areas.map(row => row.area),
-    colleges: colleges.map(row => row.nearby_college),
-  };
+  return { cities, areas, colleges };
 };
 
 // Advanced dynamic search query
 export const searchPGs = async (filters) => {
-  const { pg_type, city, area, nearby_college, min_price, max_price, amenity, keyword } = filters;
+  const {
+    pg_type,
+    city,
+    area,
+    nearby_college,
+    min_price,
+    max_price,
+    amenity,
+    keyword,
+  } = filters;
 
-  let query = `
-    SELECT
-      pgs.*,
-      users.full_name AS owner_name,
-      users.email AS owner_email,
-      COALESCE((
-        SELECT COUNT(*) FROM bookings b 
-        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
-      ), 0) AS occupied_spots,
-      GREATEST(0, CAST(COALESCE(pgs.available_rooms, 0) AS SIGNED) - COALESCE((
-        SELECT COUNT(*) FROM bookings b 
-        WHERE b.pg_id = pgs.id AND (b.status = 'approved' OR b.payment_status = 'paid')
-      ), 0)) AS spots_left
-    FROM pgs
-    LEFT JOIN users ON pgs.owner_id = users.id
-    WHERE pgs.status = 'approved'
-      AND (
-        users.role != 'owner'
-        OR users.subscription_status IS NULL
-        OR users.subscription_status IN ('trial', 'active')
-        OR users.subscription_expires_at > NOW()
-      )
-  `;
-  
-  const params = [];
+  const match = { status: "approved" };
+  const expressions = [];
 
-  // Dynamically append WHERE clauses only if the user provided the filter
-  if (pg_type) {
-    query += ` AND pgs.pg_type = ?`;
-    params.push(pg_type);
-  }
-  
-  if (city) {
-    query += ` AND pgs.city = ?`;
-    params.push(city);
-  }
-  
-  if (area) {
-    query += ` AND pgs.area = ?`;
-    params.push(area);
-  }
-  
-  if (nearby_college) {
-    query += ` AND pgs.nearby_college = ?`;
-    params.push(nearby_college);
-  }
+  if (pg_type) match.pg_type = pg_type;
+  if (city) match.city = city;
+  if (area) match.area = area;
+  if (nearby_college) match.nearby_college = nearby_college;
 
   if (amenity) {
-    query += ` AND pgs.amenities LIKE ?`;
-    params.push(`%${amenity}%`);
+    expressions.push({
+      $regexMatch: {
+        input: { $toString: { $ifNull: ["$amenities", []] } },
+        regex: escapeRegex(amenity),
+        options: "i",
+      },
+    });
   }
 
   if (keyword) {
-    query += ` AND (pgs.title LIKE ? OR pgs.city LIKE ? OR pgs.area LIKE ? OR pgs.address LIKE ? OR pgs.amenities LIKE ?)`;
-    const kw = `%${keyword}%`;
-    params.push(kw, kw, kw, kw, kw);
-  }
-  
-  if (min_price) {
-    query += ` AND pgs.price >= ?`;
-    params.push(Number(min_price));
-  }
-  
-  if (max_price) {
-    query += ` AND pgs.price <= ?`;
-    params.push(Number(max_price));
+    const regex = escapeRegex(keyword);
+    const fields = ["title", "city", "area", "address"];
+
+    expressions.push({
+      $or: [
+        ...fields.map((field) => ({
+          $regexMatch: {
+            input: { $ifNull: [`$${field}`, ""] },
+            regex,
+            options: "i",
+          },
+        })),
+        {
+          $regexMatch: {
+            input: { $toString: { $ifNull: ["$amenities", []] } },
+            regex,
+            options: "i",
+          },
+        },
+      ],
+    });
   }
 
-  // Finalize query with sorting: Available PGs first (spots_left > 0), full/filled PGs at the bottom
-  query += ` ORDER BY (spots_left > 0) DESC, pgs.created_at DESC`;
+  if (expressions.length > 0) {
+    match.$expr = expressions.length === 1 ? expressions[0] : { $and: expressions };
+  }
 
-  const [rows] = await db.execute(query, params);
-  
-  return rows;
+  if (min_price || max_price) {
+    match.price = {};
+    if (min_price) match.price.$gte = Number(min_price);
+    if (max_price) match.price.$lte = Number(max_price);
+  }
+
+  const rows = await PG.aggregate(publicListPipeline(match));
+
+  return serialize(rows);
 };
+
 // ==========================================
-// OWNER ANALYTICS MODEL (FIXED)
+// OWNER ANALYTICS MODEL
 // ==========================================
 export const getOwnerAnalyticsData = async (ownerId) => {
-  // Fetch owner subscription tier directly from database
-  const [userRows] = await db.execute(`SELECT subscription_tier FROM users WHERE id = ?`, [ownerId]);
-  const subscriptionTier = userRows[0]?.subscription_tier || "Pro Tier";
+  const owner = await User.findById(Number(ownerId))
+    .select("subscription_tier")
+    .lean();
+  const subscriptionTier = owner?.subscription_tier || "Pro Tier";
 
-  // 1. Fetch all PGs owned by this user
-  const pgsQuery = `SELECT * FROM pgs WHERE owner_id = ?`;
-  const [pgs] = await db.execute(pgsQuery, [ownerId]);
+  const pgs = await PG.find({ owner_id: Number(ownerId) }).lean();
 
   if (pgs.length === 0) {
     return {
@@ -447,46 +421,46 @@ export const getOwnerAnalyticsData = async (ownerId) => {
       pgTypeBreakdown: { boys: 0, girls: 0, coed: 0 },
       bookingStats: { approved: 0, pending: 0, rejected: 0 },
       recentBookings: [],
-      topPerformingPGs: []
+      topPerformingPGs: [],
     };
   }
 
-  const pgIds = pgs.map(p => p.id);
+  const pgIds = pgs.map((p) => p._id);
 
-  // 2. Fetch all bookings for these PGs
-  const placeholders = pgIds.map(() => '?').join(',');
-  const bookingsQuery = `
-    SELECT b.*, p.title AS pg_title, p.city 
-    FROM bookings b
-    JOIN pgs p ON b.pg_id = p.id
-    WHERE b.pg_id IN (${placeholders})
-    ORDER BY b.id DESC
-  `;
-  const [bookings] = await db.execute(bookingsQuery, pgIds);
+  const bookings = await Booking.find({ pg_id: { $in: pgIds } })
+    .sort({ _id: -1 })
+    .lean();
 
-  // 3. Process calculations
-  const approvedBookings = bookings.filter(b => b.status === 'approved' || b.payment_status === 'paid');
-  const pendingBookings = bookings.filter(b => b.status === 'pending');
-  const rejectedBookings = bookings.filter(b => b.status === 'rejected');
+  const approvedBookings = bookings.filter(
+    (b) => b.status === "approved" || b.payment_status === "paid"
+  );
+  const pendingBookings = bookings.filter((b) => b.status === "pending");
+  const rejectedBookings = bookings.filter((b) => b.status === "rejected");
 
-  const estimatedMonthlyRevenue = approvedBookings.reduce((sum, b) => sum + Number(b.booked_price || b.price || 0), 0);
-  
+  const estimatedMonthlyRevenue = approvedBookings.reduce(
+    (sum, b) => sum + Number(b.booked_price || 0),
+    0
+  );
+
   const totalRooms = pgs.reduce((sum, p) => sum + Number(p.available_rooms || 0), 0);
   const totalSpots = totalRooms;
   const occupiedSpots = approvedBookings.length;
   const spotsLeft = Math.max(0, totalSpots - occupiedSpots);
 
+  const priceByPg = new Map(pgs.map((p) => [p._id, p.price]));
+
   const pgTypeBreakdown = {
-    boys: pgs.filter(p => p.pg_type?.toLowerCase() === 'boys').length,
-    girls: pgs.filter(p => p.pg_type?.toLowerCase() === 'girls').length,
-    coed: pgs.filter(p => ['coed', 'both'].includes(p.pg_type?.toLowerCase())).length,
+    boys: pgs.filter((p) => p.pg_type?.toLowerCase() === "boys").length,
+    girls: pgs.filter((p) => p.pg_type?.toLowerCase() === "girls").length,
+    coed: pgs.filter((p) => ["coed", "both"].includes(p.pg_type?.toLowerCase()))
+      .length,
   };
 
   return {
     subscriptionTier,
     totalPGs: pgs.length,
-    approvedPGs: pgs.filter(p => p.status === 'approved').length,
-    pendingPGs: pgs.filter(p => p.status === 'pending').length,
+    approvedPGs: pgs.filter((p) => p.status === "approved").length,
+    pendingPGs: pgs.filter((p) => p.status === "pending").length,
     totalRooms,
     totalSpots,
     occupiedSpots,
@@ -500,20 +474,26 @@ export const getOwnerAnalyticsData = async (ownerId) => {
       pending: pendingBookings.length,
       rejected: rejectedBookings.length,
     },
-    topPerformingPGs: pgs.map(pg => {
-      const pgApproved = approvedBookings.filter(b => b.pg_id === pg.id);
-      const pgCapacity = Number(pg.available_rooms || 0);
-      const pgOccupied = pgApproved.length;
-      return {
-        id: pg.id,
-        title: pg.title,
-        city: pg.city,
-        totalSpots: pgCapacity,
-        occupiedSpots: pgOccupied,
-        spotsLeft: Math.max(0, pgCapacity - pgOccupied),
-        studentsCount: pgApproved.length,
-        revenue: pgApproved.reduce((sum, b) => sum + Number(b.booked_price || pg.price || 0), 0)
-      };
-    }).sort((a, b) => b.revenue - a.revenue)
+    topPerformingPGs: pgs
+      .map((pg) => {
+        const pgApproved = approvedBookings.filter((b) => b.pg_id === pg._id);
+        const pgCapacity = Number(pg.available_rooms || 0);
+        const pgOccupied = pgApproved.length;
+
+        return {
+          id: pg._id,
+          title: pg.title,
+          city: pg.city,
+          totalSpots: pgCapacity,
+          occupiedSpots: pgOccupied,
+          spotsLeft: Math.max(0, pgCapacity - pgOccupied),
+          studentsCount: pgApproved.length,
+          revenue: pgApproved.reduce(
+            (sum, b) => sum + Number(b.booked_price || priceByPg.get(pg._id) || 0),
+            0
+          ),
+        };
+      })
+      .sort((a, b) => b.revenue - a.revenue),
   };
 };

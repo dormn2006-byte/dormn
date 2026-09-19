@@ -16,8 +16,24 @@ import {
 import { processImage } from "../utils/imageProcessor.js"; 
 import { getOwnerAnalyticsData } from "../models/pgModel.js";
 
-import pool from '../config/db.js';
+import User from "../schemas/userSchema.js";
+import PG from "../schemas/pgSchema.js";
 import { decryptUserObject } from '../utils/encryptionService.js';
+
+// Multipart form fields arrive as strings. Structured values are now stored
+// natively in MongoDB, so decode JSON-encoded input; plain strings pass through.
+const parseStructuredInput = (value) => {
+  if (typeof value !== "string") return value;
+
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) return value;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+};
 
 // Create PG
 export const createPGController = async (req, res) => {
@@ -39,13 +55,12 @@ export const createPGController = async (req, res) => {
     } = req.body;
 
     // ── 1. Check Owner Payout Details & Subscription ──
-    const [ownerRows] = await pool.execute(
-      `SELECT subscription_tier, subscription_status, subscription_expires_at, max_pg_listings,
-              account_holder, bank_name, account_number, ifsc_code
-       FROM users WHERE id = ?`,
-      [req.user.id]
-    );
-    const owner = ownerRows[0] ? decryptUserObject(ownerRows[0]) : null;
+    const ownerDoc = await User.findById(req.user.id)
+      .select(
+        "subscription_tier subscription_status subscription_expires_at max_pg_listings account_holder bank_name account_number ifsc_code"
+      )
+      .lean();
+    const owner = ownerDoc ? decryptUserObject(ownerDoc) : null;
     if (!owner) {
       return res.status(404).json({ success: false, message: "Owner account not found." });
     }
@@ -69,10 +84,7 @@ export const createPGController = async (req, res) => {
     }
 
     // Check listing limit
-    const [[{ pgCount }]] = await pool.execute(
-      'SELECT COUNT(*) AS pgCount FROM pgs WHERE owner_id = ?',
-      [req.user.id]
-    );
+    const pgCount = await PG.countDocuments({ owner_id: Number(req.user.id) });
     const maxAllowed = owner.max_pg_listings || 1;
     if (pgCount >= maxAllowed) {
       return res.status(403).json({
@@ -124,14 +136,10 @@ export const createPGController = async (req, res) => {
     // Owner ID from Logged In User
     const owner_id = req.user.id;
 
-    // Safely ensure sharing_options and amenities are JSON strings if passed as object/array
-    const finalSharingOptions = typeof sharing_options === "object" && sharing_options !== null
-      ? JSON.stringify(sharing_options)
-      : sharing_options;
+    // Stored natively now: objects/arrays stay structured, plain strings pass through
+    const finalSharingOptions = parseStructuredInput(sharing_options) ?? null;
 
-    const finalAmenities = typeof amenities === "object" && amenities !== null
-      ? JSON.stringify(amenities)
-      : (amenities || null);
+    const finalAmenities = parseStructuredInput(amenities) ?? null;
 
     const result = await createPG({
       owner_id,
@@ -279,20 +287,18 @@ export const updatePGController = async (req, res) => {
       area: req.body.area ?? existingPG.area,
       nearby_college: req.body.nearby_college ?? existingPG.nearby_college,
       available_rooms: req.body.available_rooms ?? existingPG.available_rooms,
-      amenities: (() => {
-        const raw = req.body.amenities !== undefined ? req.body.amenities : existingPG.amenities;
-        if (raw && typeof raw === "object") return JSON.stringify(raw);
-        return raw;
-      })(),
+      amenities:
+        req.body.amenities !== undefined
+          ? parseStructuredInput(req.body.amenities)
+          : existingPG.amenities,
       rules: req.body.rules ?? existingPG.rules,
       google_map_link:
         req.body.google_map_link ?? existingPG.google_map_link,
       profile_image: req.body.profile_image ?? existingPG.profile_image,
-      sharing_options: (() => {
-        const raw = req.body.sharing_options !== undefined ? req.body.sharing_options : existingPG.sharing_options;
-        if (raw && typeof raw === "object") return JSON.stringify(raw);
-        return raw;
-      })(),
+      sharing_options:
+        req.body.sharing_options !== undefined
+          ? parseStructuredInput(req.body.sharing_options)
+          : existingPG.sharing_options,
     };
 
     console.log("Update Data:", updatedData);

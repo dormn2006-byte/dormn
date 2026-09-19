@@ -8,7 +8,10 @@ import {
 } from "../models/bookingModel.js";
 
 import { getPGById } from "../models/pgModel.js";
-import pool from "../config/db.js";
+import Booking from "../schemas/bookingSchema.js";
+import PG from "../schemas/pgSchema.js";
+import User from "../schemas/userSchema.js";
+import Payment from "../schemas/paymentSchema.js";
 import { notifyOwnerNewBooking, notifyStudentBookingStatus } from "../utils/whatsappService.js";
 import { 
   sendBookingRequestToOwnerEmail, 
@@ -16,6 +19,20 @@ import {
   sendStayCancellationAlertToOwnerEmail,
   sendStayCancellationStatusToStudentEmail
 } from "../utils/emailService.js";
+
+// Bookings that count as a live/active stay
+const activeStayFilter = (studentId) => ({
+  student_id: Number(studentId),
+  status: { $ne: "cancelled" },
+  $or: [{ status: "approved" }, { status: "paid" }],
+});
+
+// Malformed ids used to match no rows under MySQL; map them to a value that
+// likewise matches nothing instead of letting NaN raise a CastError.
+const toNumericId = (value) => {
+  const id = Number(value);
+  return Number.isFinite(id) ? id : -1;
+};
 
 // Create Booking Request
 export const createBookingController = async (req, res) => {
@@ -55,24 +72,19 @@ export const createBookingController = async (req, res) => {
     }
 
     // ── Guard: Block booking if student already has an active PG stay ──
-    const [activeStay] = await pool.execute(
-      `SELECT b.id, b.pg_id, p.title AS pg_title
-       FROM bookings b
-       JOIN pgs p ON b.pg_id = p.id
-       WHERE b.student_id = ?
-         AND (b.status = 'approved' OR b.payment_status = 'paid')
-         AND b.status != 'cancelled'
-       LIMIT 1`,
-      [student_id]
-    );
+    const activeStay = await Booking.findOne(activeStayFilter(student_id))
+      .sort({ _id: -1 })
+      .lean();
 
-    if (activeStay.length > 0) {
+    if (activeStay) {
+      const stayPg = await PG.findById(activeStay.pg_id).select("title").lean();
+
       return res.status(400).json({
         success: false,
-        message: `You already have an active PG stay at "${activeStay[0].pg_title}". Please request a cancellation from your current PG owner before booking a new one.`,
+        message: `You already have an active PG stay at "${stayPg?.title}". Please request a cancellation from your current PG owner before booking a new one.`,
         code: "ACTIVE_STAY_EXISTS",
-        activePgTitle: activeStay[0].pg_title,
-        activeBookingId: activeStay[0].id,
+        activePgTitle: stayPg?.title,
+        activeBookingId: activeStay._id,
       });
     }
 
@@ -88,11 +100,10 @@ export const createBookingController = async (req, res) => {
 
     // ── Notifications: Notify PG Owner of new booking (WhatsApp & Email) ──
     try {
-      const [ownerRows] = await pool.execute(`SELECT full_name, email, phone FROM users WHERE id = ?`, [pg.owner_id]);
-      const [studentRows] = await pool.execute(`SELECT full_name, email, phone FROM users WHERE id = ?`, [student_id]);
-      
-      const ownerUser = ownerRows[0];
-      const studentUser = studentRows[0];
+      const [ownerUser, studentUser] = await Promise.all([
+        User.findById(pg.owner_id).select("full_name email phone").lean(),
+        User.findById(student_id).select("full_name email phone").lean(),
+      ]);
 
       if (ownerUser) {
         const notifyPayload = {
@@ -208,12 +219,14 @@ export const updateBookingStatusController = async (
     }
 
     // Row-Level Security: Verify that this booking belongs to the logged-in owner
-    const [ownerCheck] = await pool.execute(
-      `SELECT id FROM bookings WHERE id = ? AND owner_id = ?`,
-      [id, req.user.id]
-    );
+    const ownerCheck = await Booking.findOne({
+      _id: toNumericId(id),
+      owner_id: Number(req.user.id),
+    })
+      .select("_id")
+      .lean();
 
-    if (ownerCheck.length === 0 && req.user.role !== "superadmin" && req.user.role !== "admin") {
+    if (!ownerCheck && req.user.role !== "superadmin" && req.user.role !== "admin") {
       return res.status(403).json({
         success: false,
         message: "Unauthorized. This booking does not belong to your property.",
@@ -222,10 +235,12 @@ export const updateBookingStatusController = async (
 
     // Capacity check if approving
     if (status === "approved") {
-      const [bookingDetails] = await pool.execute(`SELECT pg_id, status FROM bookings WHERE id = ?`, [id]);
-      if (bookingDetails.length > 0 && bookingDetails[0].status !== "approved") {
-        const pgId = bookingDetails[0].pg_id;
-        const pg = await getPGById(pgId);
+      const bookingDetails = await Booking.findById(toNumericId(id))
+        .select("pg_id status")
+        .lean();
+
+      if (bookingDetails && bookingDetails.status !== "approved") {
+        const pg = await getPGById(bookingDetails.pg_id);
         if (pg && pg.spots_left <= 0) {
           return res.status(400).json({
             success: false,
@@ -242,42 +257,41 @@ export const updateBookingStatusController = async (
 
     // Auto-pause: when a booking is approved, pause all other pending bookings by the same student
     if (status === "approved") {
-      const studentId = await getStudentIdByBooking(id);
+      const studentId = await getStudentIdByBooking(toNumericId(id));
       if (studentId) {
-        await pauseOtherBookings(studentId, id);
+        await pauseOtherBookings(studentId, toNumericId(id));
       }
     }
 
     // ── Notifications: Notify Student of booking status change (WhatsApp & Email) ──
     try {
-      const [bookingRows] = await pool.execute(
-        `SELECT b.student_id, b.pg_id, p.title AS pg_title, u.full_name AS owner_name, 
-                s.full_name AS student_name, s.email AS student_email, s.phone AS student_phone
-         FROM bookings b
-         JOIN pgs p ON b.pg_id = p.id
-         JOIN users u ON b.owner_id = u.id
-         JOIN users s ON b.student_id = s.id
-         WHERE b.id = ?`,
-        [id]
-      );
-      if (bookingRows.length > 0) {
-        const row = bookingRows[0];
+      const bookingDoc = await Booking.findById(toNumericId(id))
+        .select("student_id pg_id owner_id")
+        .lean();
+
+      if (bookingDoc) {
+        const [pgDoc, ownerDoc, studentDoc] = await Promise.all([
+          PG.findById(bookingDoc.pg_id).select("title").lean(),
+          User.findById(bookingDoc.owner_id).select("full_name").lean(),
+          User.findById(bookingDoc.student_id).select("full_name email phone").lean(),
+        ]);
+
         const statusPayload = {
           bookingId: id,
           status,
-          pgTitle: row.pg_title,
-          ownerName: row.owner_name,
+          pgTitle: pgDoc?.title,
+          ownerName: ownerDoc?.full_name,
         };
 
         // 1. WhatsApp Alert
-        if (row.student_phone) {
-          notifyStudentBookingStatus(row.student_phone, statusPayload)
+        if (studentDoc?.phone) {
+          notifyStudentBookingStatus(studentDoc.phone, statusPayload)
             .catch(err => console.error("[WhatsApp] Status notify error:", err.message));
         }
 
         // 2. Email Alert
-        if (row.student_email) {
-          sendBookingStatusToStudentEmail(row.student_email, row.student_name, statusPayload)
+        if (studentDoc?.email) {
+          sendBookingStatusToStudentEmail(studentDoc.email, studentDoc.full_name, statusPayload)
             .catch(err => console.error("[EmailService] Status notify error:", err.message));
         }
       }
@@ -302,38 +316,48 @@ export const getMyPgs = async (req, res) => {
   try {
     const student_id = req.user.id; // From the protect middleware
 
-    // This SQL query is 100% aligned with your actual MySQL database columns
-    const [bookings] = await pool.execute(
-      `SELECT 
-        b.id AS booking_id, 
-        b.status AS booking_status, 
-        b.payment_status, 
-        b.booking_date, 
-        b.selected_room_type,
-        b.cancellation_status,
-        b.cancellation_reason,
-        b.cancellation_requested_at,
-        p.id AS pg_id, 
-        p.title, 
-        p.city, 
-        p.area, 
-        p.address,
-        p.profile_image, 
-        pay.amount AS amount_paid, 
-        pay.razorpay_payment_id,
-        pay.created_at AS payment_date
-       FROM bookings b
-       JOIN pgs p ON b.pg_id = p.id
-       LEFT JOIN payments pay ON b.id = pay.booking_id AND pay.status = 'successful'
-       WHERE b.student_id = ? AND (b.payment_status = 'paid' OR b.status = 'approved') AND b.status != 'cancelled'
-       ORDER BY b.booking_date DESC
-       LIMIT 1`,
-      [student_id]
-    );
+    const booking = await Booking.findOne({
+      student_id: Number(student_id),
+      status: { $ne: "cancelled" },
+      $or: [{ payment_status: "paid" }, { status: "approved" }],
+    })
+      .sort({ booking_date: -1 })
+      .lean();
+
+    if (!booking) {
+      return res.status(200).json({ success: true, booking: null });
+    }
+
+    const [pg, payment] = await Promise.all([
+      PG.findById(booking.pg_id).lean(),
+      Payment.findOne({ booking_id: booking._id, status: "successful" })
+        .sort({ _id: -1 })
+        .lean(),
+    ]);
+
+    const row = {
+      booking_id: booking._id,
+      booking_status: booking.status,
+      payment_status: booking.payment_status,
+      booking_date: booking.booking_date,
+      selected_room_type: booking.selected_room_type,
+      cancellation_status: booking.cancellation_status,
+      cancellation_reason: booking.cancellation_reason,
+      cancellation_requested_at: booking.cancellation_requested_at,
+      pg_id: pg?._id,
+      title: pg?.title,
+      city: pg?.city,
+      area: pg?.area,
+      address: pg?.address,
+      profile_image: pg?.profile_image,
+      amount_paid: payment?.amount,
+      razorpay_payment_id: payment?.razorpay_payment_id,
+      payment_date: payment?.created_at,
+    };
 
     res.status(200).json({ 
       success: true, 
-      booking: bookings.length > 0 ? bookings[0] : null 
+      booking: row
     });
   } catch (error) {
     console.error("Fetch My Pgs Error:", error);
@@ -348,22 +372,24 @@ export const cancelBookingController = async (req, res) => {
     const { id } = req.params;
 
     // Verify this booking belongs to the student and is still pending
-    const [rows] = await pool.execute(
-      `SELECT id, status FROM bookings WHERE id = ? AND student_id = ?`,
-      [id, student_id]
-    );
+    const rows = await Booking.findOne({
+      _id: toNumericId(id),
+      student_id: Number(student_id),
+    })
+      .select("_id status")
+      .lean();
 
-    if (rows.length === 0) {
+    if (!rows) {
       return res.status(404).json({
         success: false,
         message: "Booking not found or does not belong to you",
       });
     }
 
-    if (rows[0].status !== "pending") {
+    if (rows.status !== "pending") {
       return res.status(400).json({
         success: false,
-        message: `Cannot cancel a booking that is already ${rows[0].status}`,
+        message: `Cannot cancel a booking that is already ${rows.status}`,
       });
     }
 
@@ -402,64 +428,64 @@ export const requestStayCancellationController = async (req, res) => {
       });
     }
 
-    let targetBookingId = bookingId;
+    let targetBookingId = bookingId ? toNumericId(bookingId) : null;
 
     // If no bookingId provided, look up the active paid/approved booking for this student
     if (!targetBookingId) {
-      const [activeBookings] = await pool.execute(
-        `SELECT id FROM bookings WHERE student_id = ? AND (payment_status = 'paid' OR status = 'approved') AND status != 'cancelled' ORDER BY booking_date DESC LIMIT 1`,
-        [student_id]
-      );
-      if (activeBookings.length === 0) {
+      const activeBooking = await Booking.findOne(activeStayFilter(student_id))
+        .sort({ booking_date: -1 })
+        .select("_id")
+        .lean();
+
+      if (!activeBooking) {
         return res.status(404).json({
           success: false,
           message: "No active stay found to cancel.",
         });
       }
-      targetBookingId = activeBookings[0].id;
+      targetBookingId = activeBooking._id;
     }
 
     // Verify booking belongs to student
-    const [rows] = await pool.execute(
-      `SELECT b.id, b.owner_id, b.pg_id, b.status, p.title AS pg_title 
-       FROM bookings b 
-       JOIN pgs p ON b.pg_id = p.id 
-       WHERE b.id = ? AND b.student_id = ?`,
-      [targetBookingId, student_id]
-    );
+    const booking = await Booking.findOne({
+      _id: targetBookingId,
+      student_id: Number(student_id),
+    })
+      .select("_id owner_id pg_id status")
+      .lean();
 
-    if (rows.length === 0) {
+    if (!booking) {
       return res.status(404).json({
         success: false,
         message: "Booking record not found or does not belong to you.",
       });
     }
 
-    const booking = rows[0];
+    const pg = await PG.findById(booking.pg_id).select("title").lean();
 
     // Update cancellation status to 'pending'
-    await pool.execute(
-      `UPDATE bookings 
-       SET cancellation_status = 'pending', 
-           cancellation_reason = ?, 
-           cancellation_requested_at = NOW() 
-       WHERE id = ?`,
-      [reason.trim(), targetBookingId]
+    await Booking.updateOne(
+      { _id: targetBookingId },
+      {
+        cancellation_status: "pending",
+        cancellation_reason: reason.trim(),
+        cancellation_requested_at: new Date(),
+      }
     );
 
     // ── Notifications: Notify Owner of Cancellation / Move-out Request ──
     try {
-      const [ownerRows] = await pool.execute(`SELECT full_name, email, phone FROM users WHERE id = ?`, [booking.owner_id]);
-      const [studentRows] = await pool.execute(`SELECT full_name, email, phone FROM users WHERE id = ?`, [student_id]);
-      const ownerUser = ownerRows[0];
-      const studentUser = studentRows[0];
+      const [ownerUser, studentUser] = await Promise.all([
+        User.findById(booking.owner_id).select("full_name email phone").lean(),
+        User.findById(student_id).select("full_name email phone").lean(),
+      ]);
 
       if (ownerUser?.email) {
         sendStayCancellationAlertToOwnerEmail(ownerUser.email, ownerUser.full_name, {
           bookingId: targetBookingId,
           studentName: studentUser?.full_name || "Resident",
           studentPhone: studentUser?.phone || "N/A",
-          pgTitle: booking.pg_title,
+          pgTitle: pg?.title,
           reason: reason.trim(),
         }).catch(err => console.error("[EmailService] Stay cancellation email error:", err.message));
       }
@@ -483,67 +509,74 @@ export const requestStayCancellationController = async (req, res) => {
 // 2. Owner fetches all cancellation requests for their PGs
 export const getOwnerCancellationsController = async (req, res) => {
   try {
-    const owner_id = req.user.id;
+    const owner_id = Number(req.user.id);
     const { status } = req.query; // 'pending' | 'approved' | 'rejected' | 'all'
 
-    let query = `
-      SELECT 
-        b.id AS booking_id,
-        b.id,
-        b.student_id,
-        b.pg_id,
-        b.status AS booking_status,
-        b.payment_status,
-        b.selected_room_type,
-        b.booked_price,
-        b.booking_date,
-        b.cancellation_status,
-        b.cancellation_reason,
-        b.cancellation_requested_at,
-        p.title AS pg_title,
-        p.address AS pg_address,
-        p.city AS pg_city,
-        p.area AS pg_area,
-        p.profile_image AS pg_image,
-        p.price AS pg_price,
-        u.full_name AS student_name,
-        u.email AS student_email,
-        u.phone AS student_phone
-      FROM bookings b
-      JOIN pgs p ON b.pg_id = p.id
-      JOIN users u ON b.student_id = u.id
-      WHERE b.owner_id = ? AND (b.cancellation_status != 'none' AND b.cancellation_status IS NOT NULL)
-    `;
+    const baseFilter = {
+      owner_id,
+      cancellation_status: { $nin: [null, "none"] },
+    };
 
-    const params = [owner_id];
-
-    if (status && status !== 'all') {
-      query += ` AND b.cancellation_status = ?`;
-      params.push(status);
+    const listFilter = { ...baseFilter };
+    if (status && status !== "all") {
+      listFilter.cancellation_status = status;
     }
 
-    query += ` ORDER BY b.cancellation_requested_at DESC, b.booking_date DESC`;
-
-    const [rows] = await pool.execute(query, params);
+    const bookings = await Booking.find(listFilter)
+      .sort({ cancellation_requested_at: -1, booking_date: -1 })
+      .lean();
 
     // Calculate count stats across all cancellation statuses
-    const [statsRows] = await pool.execute(
-      `SELECT 
-        COUNT(*) AS total,
-        SUM(CASE WHEN cancellation_status = 'pending' THEN 1 ELSE 0 END) AS pending,
-        SUM(CASE WHEN cancellation_status = 'approved' THEN 1 ELSE 0 END) AS approved,
-        SUM(CASE WHEN cancellation_status = 'rejected' THEN 1 ELSE 0 END) AS rejected
-       FROM bookings 
-       WHERE owner_id = ? AND (cancellation_status != 'none' AND cancellation_status IS NOT NULL)`,
-      [owner_id]
-    );
+    const [total, pending, approved, rejected] = await Promise.all([
+      Booking.countDocuments(baseFilter),
+      Booking.countDocuments({ ...baseFilter, cancellation_status: "pending" }),
+      Booking.countDocuments({ ...baseFilter, cancellation_status: "approved" }),
+      Booking.countDocuments({ ...baseFilter, cancellation_status: "rejected" }),
+    ]);
 
-    const counts = {
-      total: statsRows[0]?.total || 0,
-      pending: Number(statsRows[0]?.pending || 0),
-      approved: Number(statsRows[0]?.approved || 0),
-      rejected: Number(statsRows[0]?.rejected || 0),
-    };
+    const pgIds = [...new Set(bookings.map((b) => b.pg_id).filter((v) => v != null))];
+    const studentIds = [
+      ...new Set(bookings.map((b) => b.student_id).filter((v) => v != null)),
+    ];
+
+    const [pgs, students] = await Promise.all([
+      PG.find({ _id: { $in: pgIds } }).lean(),
+      User.find({ _id: { $in: studentIds } }).lean(),
+    ]);
+
+    const pgMap = new Map(pgs.map((p) => [p._id, p]));
+    const studentMap = new Map(students.map((u) => [u._id, u]));
+
+    const rows = bookings.map((b) => {
+      const pg = pgMap.get(b.pg_id) || {};
+      const student = studentMap.get(b.student_id) || {};
+
+      return {
+        booking_id: b._id,
+        id: b._id,
+        student_id: b.student_id,
+        pg_id: b.pg_id,
+        booking_status: b.status,
+        payment_status: b.payment_status,
+        selected_room_type: b.selected_room_type,
+        booked_price: b.booked_price,
+        booking_date: b.booking_date,
+        cancellation_status: b.cancellation_status,
+        cancellation_reason: b.cancellation_reason,
+        cancellation_requested_at: b.cancellation_requested_at,
+        pg_title: pg.title,
+        pg_address: pg.address,
+        pg_city: pg.city,
+        pg_area: pg.area,
+        pg_image: pg.profile_image,
+        pg_price: pg.price,
+        student_name: student.full_name,
+        student_email: student.email,
+        student_phone: student.phone,
+      };
+    });
+
+    const counts = { total, pending, approved, rejected };
 
     return res.status(200).json({
       success: true,
@@ -563,7 +596,7 @@ export const getOwnerCancellationsController = async (req, res) => {
 // 3. Owner accepts or rejects cancellation request
 export const handleStayCancellationController = async (req, res) => {
   try {
-    const owner_id = req.user.id;
+    const owner_id = Number(req.user.id);
     const { bookingId, action } = req.body; // action: 'approve' | 'reject'
 
     if (!bookingId || !action || !['approve', 'reject'].includes(action)) {
@@ -574,56 +607,53 @@ export const handleStayCancellationController = async (req, res) => {
     }
 
     // Verify booking belongs to owner
-    const [rows] = await pool.execute(
-      `SELECT b.id, b.student_id, b.pg_id, b.cancellation_status, p.title AS pg_title, 
-              u.full_name AS student_name, u.email AS student_email, u.phone AS student_phone,
-              o.full_name AS owner_name
-       FROM bookings b
-       JOIN pgs p ON b.pg_id = p.id
-       JOIN users u ON b.student_id = u.id
-       JOIN users o ON b.owner_id = o.id
-       WHERE b.id = ? AND b.owner_id = ?`,
-      [bookingId, owner_id]
-    );
+    const booking = await Booking.findOne({
+      _id: toNumericId(bookingId),
+      owner_id,
+    })
+      .select("_id student_id pg_id cancellation_status")
+      .lean();
 
-    if (rows.length === 0) {
+    if (!booking) {
       return res.status(404).json({
         success: false,
         message: "Booking record not found or does not belong to your property.",
       });
     }
 
-    const booking = rows[0];
+    const [pg, student, owner] = await Promise.all([
+      PG.findById(booking.pg_id).select("title").lean(),
+      User.findById(booking.student_id).select("full_name email phone").lean(),
+      User.findById(owner_id).select("full_name").lean(),
+    ]);
 
     if (action === 'approve') {
       // Set cancellation_status to 'approved' and booking status to 'cancelled'
       // This frees up the room spot automatically, while preserving student profile & registration KYC!
-      await pool.execute(
-        `UPDATE bookings 
-         SET cancellation_status = 'approved', 
-             status = 'cancelled',
-             cancelled_at = NOW()
-         WHERE id = ? AND owner_id = ?`,
-        [bookingId, owner_id]
+      await Booking.updateOne(
+        { _id: toNumericId(bookingId), owner_id },
+        {
+          cancellation_status: "approved",
+          status: "cancelled",
+          cancelled_at: new Date(),
+        }
       );
     } else {
       // Action is 'reject'
-      await pool.execute(
-        `UPDATE bookings 
-         SET cancellation_status = 'rejected' 
-         WHERE id = ? AND owner_id = ?`,
-        [bookingId, owner_id]
+      await Booking.updateOne(
+        { _id: toNumericId(bookingId), owner_id },
+        { cancellation_status: "rejected" }
       );
     }
 
     // Email: Notify Student of Cancellation Decision
     try {
-      if (booking.student_email) {
-        sendStayCancellationStatusToStudentEmail(booking.student_email, booking.student_name, {
+      if (student?.email) {
+        sendStayCancellationStatusToStudentEmail(student.email, student.full_name, {
           bookingId,
           action,
-          pgTitle: booking.pg_title,
-          ownerName: booking.owner_name,
+          pgTitle: pg?.title,
+          ownerName: owner?.full_name,
         }).catch(err => console.error("[EmailService] Stay cancellation decision email error:", err.message));
       }
     } catch (emailErr) {

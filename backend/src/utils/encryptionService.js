@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 // Ensure a strictly 32-byte (256-bit) master encryption key derived with SHA-256
 const SECRET_SEED = process.env.DATA_ENCRYPTION_KEY || process.env.JWT_SECRET || "dormn_secure_enterprise_encryption_key_2026_aes256";
@@ -118,6 +118,8 @@ export const decryptEnrollmentObject = (form) => {
     "guardianPhone",
     "college_id_number",
     "collegeIdNumber",
+    "aadhar_number",
+    "aadharNumber",
     "medical_details",
     "medicalDetails",
     "allergies"

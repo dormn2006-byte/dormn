@@ -1,18 +1,18 @@
 import mongoose from "mongoose";
+import { autoIncrement } from "../models/plugins/autoIncrement.js";
 
-// ==========================================
-// CLUB IMAGE SUBSCHEMA
-// ==========================================
-const clubImageSchema = new mongoose.Schema({
-  image_url: { type: String, required: true },
-  display_order: { type: Number, default: 0 },
-});
+const clubImageSchema = new mongoose.Schema(
+  {
+    image_url: { type: String, required: true },
+    display_order: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
 
-// ==========================================
-// CLUB SCHEMA
-// ==========================================
 const clubSchema = new mongoose.Schema(
   {
+    _id: { type: Number },
+
     name: { type: String, required: true },
     tagline: { type: String, default: "" },
     description: { type: String, default: "" },
@@ -28,55 +28,39 @@ const clubSchema = new mongoose.Schema(
       enum: ["active", "inactive", "deleted"],
       default: "active",
     },
-    images: [clubImageSchema],
+    images: { type: [clubImageSchema], default: [] },
   },
-  { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }
+  {
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+    collection: "clubs",
+  }
 );
 
-// ==========================================
-// CLUB EVENT SCHEMA
-// ==========================================
 const clubEventSchema = new mongoose.Schema(
   {
-    club_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Club",
-      required: true,
-    },
+    _id: { type: Number },
+
+    club_id: { type: Number, ref: "Club", required: true },
     title: { type: String, required: true },
     date: { type: Date, required: true },
     start_time: { type: String, required: true },
     end_time: { type: String, required: true },
-    capacity: { type: Number, required: true }, // counts PEOPLE
+    capacity: { type: Number, required: true },
   },
-  { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }
+  {
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+    collection: "club_events",
+  }
 );
 
-// ==========================================
-// CLUB BOOKING SCHEMA
-// ==========================================
 const clubBookingSchema = new mongoose.Schema(
   {
-    club_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Club",
-      required: true,
-    },
-    event_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "ClubEvent",
-      required: true,
-    },
-    booker_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    partner_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
+    _id: { type: Number },
+
+    club_id: { type: Number, ref: "Club", required: true },
+    event_id: { type: Number, ref: "ClubEvent", required: true },
+    booker_id: { type: Number, ref: "User", required: true },
+    partner_id: { type: Number, ref: "User", default: null },
     booking_type: {
       type: String,
       enum: ["single", "couple"],
@@ -98,41 +82,23 @@ const clubBookingSchema = new mongoose.Schema(
     razorpay_payment_id: { type: String, default: null },
     razorpay_signature: { type: String, default: null },
   },
-  { timestamps: { createdAt: "booking_date", updatedAt: "updated_at" } }
+  {
+    timestamps: { createdAt: "booking_date", updatedAt: "updated_at" },
+    collection: "club_bookings",
+  }
 );
 
-// ==========================================
-// CLUB TICKET SCHEMA
-// ==========================================
 const clubTicketSchema = new mongoose.Schema(
   {
-    booking_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "ClubBooking",
-      required: true,
-    },
-    user_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    club_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Club",
-      required: true,
-    },
-    event_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "ClubEvent",
-      required: true,
-    },
+    _id: { type: Number },
+
+    booking_id: { type: Number, ref: "ClubBooking", required: true },
+    user_id: { type: Number, ref: "User", required: true },
+    club_id: { type: Number, ref: "Club", required: true },
+    event_id: { type: Number, ref: "ClubEvent", required: true },
     ticket_code: { type: String, required: true, unique: true },
     holder_name: { type: String, required: true },
-    type: {
-      type: String,
-      enum: ["single", "couple"],
-      required: true,
-    },
+    type: { type: String, enum: ["single", "couple"], required: true },
     amount: { type: Number, default: 0 },
     status: {
       type: String,
@@ -140,16 +106,25 @@ const clubTicketSchema = new mongoose.Schema(
       default: "active",
     },
   },
-  { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }
+  {
+    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+    collection: "club_tickets",
+  }
 );
 
-// Indexes for performance
+clubSchema.index({ status: 1 });
+clubSchema.index({ city: 1 });
 clubEventSchema.index({ club_id: 1, date: 1 });
 clubBookingSchema.index({ booker_id: 1 });
 clubBookingSchema.index({ event_id: 1 });
 clubBookingSchema.index({ invite_token: 1 });
 clubTicketSchema.index({ user_id: 1 });
-clubTicketSchema.index({ ticket_code: 1 });
+clubTicketSchema.index({ booking_id: 1 });
+
+autoIncrement(clubSchema, "clubs");
+autoIncrement(clubEventSchema, "club_events");
+autoIncrement(clubBookingSchema, "club_bookings");
+autoIncrement(clubTicketSchema, "club_tickets");
 
 const Club = mongoose.model("Club", clubSchema);
 const ClubEvent = mongoose.model("ClubEvent", clubEventSchema);

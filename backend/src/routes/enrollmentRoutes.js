@@ -1,5 +1,5 @@
 import express from "express";
-import { submitEnrollment, getEnrollmentForOwner, getOwnerEnrollments, updateEnrollmentStatus } from "../controllers/enrollmentController.js";
+import { submitEnrollment, getEnrollmentForOwner, getOwnerEnrollments, updateEnrollmentStatus, getMyEnrollment } from "../controllers/enrollmentController.js";
 import { protect, ownerOnly } from "../middleware/authMiddleware.js";
 
 const router = express.Router(); 
@@ -15,5 +15,8 @@ router.post("/submit", protect, submitEnrollment);
 router.get("/owner/:bookingId", protect, ownerOnly, getEnrollmentForOwner);
 router.get("/owner-list", protect, ownerOnly, getOwnerEnrollments);
 router.put("/status", protect, ownerOnly, updateEnrollmentStatus);
+
+// Student's own KYC status + rejection reason
+router.get("/mine", protect, getMyEnrollment);
 
 export default router;

@@ -1,8 +1,9 @@
-import pool from '../config/db.js';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
+import { connectDB, disconnectDB } from '../config/db.js';
+import User from '../schemas/userSchema.js';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 /**
  * CLI Script to Seed/Update Master Super Admin & Master Event Manager Accounts
@@ -32,30 +33,37 @@ async function seedMasterAdmins() {
   console.log('🚀 Starting Master Admin Seeding Script...');
 
   try {
+    await connectDB();
+
     for (const acc of MASTER_ACCOUNTS) {
-      const [existing] = await pool.execute(
-        'SELECT id, role, password FROM users WHERE email = ?',
-        [acc.email]
-      );
+      const email = acc.email.toLowerCase();
+      const existing = await User.findOne({ email }).select('_id role').lean();
 
       const hashedPassword = await bcrypt.hash(acc.password, 10);
 
-      if (existing.length > 0) {
+      if (existing) {
         // Update role and password if user already exists
-        await pool.execute(
-          `UPDATE users 
-           SET role = ?, password = ?, full_name = ?, is_email_verified = 1 
-           WHERE email = ?`,
-          [acc.role, hashedPassword, acc.full_name, acc.email]
+        await User.updateOne(
+          { _id: existing._id },
+          {
+            role: acc.role,
+            password: hashedPassword,
+            full_name: acc.full_name,
+            is_email_verified: 1,
+          }
         );
         console.log(`✅ [UPDATED] Account: ${acc.email} | Role: ${acc.role}`);
       } else {
         // Create new master account
-        await pool.execute(
-          `INSERT INTO users (full_name, email, password, role, gender, is_email_verified, auth_provider)
-           VALUES (?, ?, ?, ?, ?, 1, 'local')`,
-          [acc.full_name, acc.email, hashedPassword, acc.role, acc.gender]
-        );
+        await User.create({
+          full_name: acc.full_name,
+          email,
+          password: hashedPassword,
+          role: acc.role,
+          gender: acc.gender,
+          is_email_verified: 1,
+          auth_provider: 'local',
+        });
         console.log(`✨ [CREATED] Account: ${acc.email} | Role: ${acc.role}`);
       }
     }
@@ -74,8 +82,10 @@ async function seedMasterAdmins() {
     console.log('======================================================\n');
   } catch (err) {
     console.error('❌ Seeding Error:', err.message);
+    process.exitCode = 1;
   } finally {
-    process.exit(0);
+    await disconnectDB();
+    process.exit(process.exitCode || 0);
   }
 }
 

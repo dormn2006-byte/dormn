@@ -1,7 +1,7 @@
-import pool from "../config/db.js";
+import WhatsappLog from "../schemas/whatsappLogSchema.js";
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 // ══════════════════════════════════════════════════════════
 // WhatsApp Cloud API Service for Dormn PG Platform
@@ -64,13 +64,17 @@ const sendWhatsAppMessage = async (phone, messageText) => {
 // ─── Deduplication: Check if this event was already sent ───
 const isDuplicate = async (eventType, eventRefId, recipientPhone) => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT id FROM whatsapp_logs WHERE event_type = ? AND event_ref_id = ? AND recipient_phone = ?`,
-      [eventType, String(eventRefId), formatPhone(recipientPhone)]
-    );
-    return rows.length > 0;
+    const existing = await WhatsappLog.findOne({
+      event_type: eventType,
+      event_ref_id: String(eventRefId),
+      recipient_phone: formatPhone(recipientPhone),
+    })
+      .select("_id")
+      .lean();
+
+    return Boolean(existing);
   } catch (err) {
-    // Table might not exist yet — treat as not duplicate
+    // Collection might not exist yet — treat as not duplicate
     console.error("[WhatsApp] Dedup check error:", err.message);
     return false;
   }
@@ -79,9 +83,21 @@ const isDuplicate = async (eventType, eventRefId, recipientPhone) => {
 // ─── Log a sent message for deduplication ───
 const logSentMessage = async (eventType, eventRefId, recipientPhone, status = "sent") => {
   try {
-    await pool.execute(
-      `INSERT IGNORE INTO whatsapp_logs (event_type, event_ref_id, recipient_phone, message_status) VALUES (?, ?, ?, ?)`,
-      [eventType, String(eventRefId), formatPhone(recipientPhone), status]
+    // Mirrors the old `INSERT IGNORE`: only writes when the (event_type,
+    // event_ref_id, recipient_phone) unique key doesn't already exist.
+    await WhatsappLog.updateOne(
+      {
+        event_type: eventType,
+        event_ref_id: String(eventRefId),
+        recipient_phone: formatPhone(recipientPhone),
+      },
+      {
+        $setOnInsert: {
+          message_status: status,
+          sent_at: new Date(),
+        },
+      },
+      { upsert: true }
     );
   } catch (err) {
     console.error("[WhatsApp] Log error:", err.message);
