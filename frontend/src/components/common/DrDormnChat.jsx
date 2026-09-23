@@ -421,7 +421,7 @@ export const DrDormnChat = memo(({ userName }) => {
         history.map((m) => ({
           role: m.role,
           text: m.content,
-          pgs: [],
+          pgs: m.pgs || [],
           streaming: false,
           error: null,
         }))

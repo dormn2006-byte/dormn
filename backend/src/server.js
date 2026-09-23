@@ -35,6 +35,17 @@ const app = express();
 
 app.disable("x-powered-by");
 
+// Behind a reverse proxy (nginx/Cloudflare). Without this, Express reports the
+// proxy's IP as req.ip, so express-rate-limit can't tell users apart (and emits
+// ERR_ERL_UNEXPECTED_X_FORWARDED_FOR). TRUST_PROXY is the number of proxy hops
+// in front of the app — 1 for a single nginx. Use "loopback" or a CIDR list if
+// your topology differs.
+const trustProxy = (process.env.TRUST_PROXY || "1").trim();
+app.set(
+  "trust proxy",
+  Number.isNaN(Number(trustProxy)) ? trustProxy : Number(trustProxy)
+);
+
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");

@@ -15,6 +15,10 @@ const dormnAiMessageSchema = new mongoose.Schema(
     role: { type: String, enum: ["user", "assistant"], required: true },
     content: { type: String, default: "" },
 
+    // PG listing cards the tools returned for this turn, stored so they survive
+    // a reload (the browser keeps them in state only for the live stream).
+    pgs: { type: [mongoose.Schema.Types.Mixed], default: [] },
+
     // Which tools the assistant used for this turn, e.g.
     // [{ name: "search_pgs", args: {...} }]. Stored for auditability only —
     // it is never replayed into the model context.

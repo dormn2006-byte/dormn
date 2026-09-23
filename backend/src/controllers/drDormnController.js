@@ -152,6 +152,11 @@ export const streamChat = async (req, res) => {
     let streamError = null;
     let usedTools = [];
 
+    // PG cards come from tool results during the stream; keep them so the
+    // assistant turn can be re-rendered with its listings after a reload.
+    const collectedPgs = [];
+    const seenPgIds = new Set();
+
     try {
       const result = await runAgentLoop({
         systemPrompt: buildSystemPrompt({
@@ -169,6 +174,11 @@ export const streamChat = async (req, res) => {
           } else if (event.type === "status") {
             send("status", { label: event.label });
           } else if (event.type === "pgs") {
+            for (const pg of event.pgs || []) {
+              if (pg?.id == null || seenPgIds.has(pg.id)) continue;
+              seenPgIds.add(pg.id);
+              collectedPgs.push(pg);
+            }
             send("pgs", { pgs: event.pgs });
           }
         },
@@ -201,6 +211,7 @@ export const streamChat = async (req, res) => {
         user_id: userId,
         role: "assistant",
         content: finalText,
+        pgs: collectedPgs,
         tool_calls: usedTools.length ? usedTools : null,
       });
       assistantId = assistant._id;
@@ -293,7 +304,7 @@ export const getConversationMessages = async (req, res) => {
       user_id: userId,
     })
       .sort({ _id: 1 })
-      .select("role content created_at")
+      .select("role content pgs created_at")
       .lean();
 
     return res.status(200).json({
