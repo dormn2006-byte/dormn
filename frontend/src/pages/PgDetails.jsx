@@ -5,6 +5,8 @@ import Navbar from "../components/Navbar";
 import API, { IMAGE_BASE_URL } from "../services/api";
 import { AuthContext } from "../context/AuthContext";
 import EmailVerificationModal from "../components/auth/EmailVerificationModal";
+import VisitSchedulePicker from "../components/booking/VisitSchedulePicker";
+import { formatVisitDate } from "../utils/visitDate";
 import {
   Phone, MessageSquare, CheckCircle2, Clock, ChevronRight, ChevronLeft,
   X, Sparkles, Building2, MapPin, AlertCircle, ShieldCheck, User, ExternalLink,
@@ -186,9 +188,18 @@ const PgDetails = () => {
         const list = res.data?.bookings || res.data || [];
         if (!Array.isArray(list)) { setExistingBooking(null); setActiveStayAtOtherPG(null); return; }
 
+        // A booking stops counting as an active stay once it is cancelled.
+        // An owner-approved stay cancellation flips status to "cancelled" but
+        // keeps payment_status as "paid", so cancelled must be excluded here.
+        const isCancelledBooking = (b) =>
+          b.status === "cancelled" ||
+          b.status === "rejected" ||
+          b.cancellation_status === "approved";
+
         // Check for existing booking at THIS PG
         const found = list.find(
           (b) => (Number(b.pg_id) === Number(id) || (b.title || b.pg_name || '').toLowerCase().trim() === (pg?.title || '').toLowerCase().trim()) && 
+                 !isCancelledBooking(b) &&
                  (b.status === "pending" || b.status === "approved" || b.payment_status === "paid")
         );
         setExistingBooking(found || null);
@@ -197,7 +208,7 @@ const PgDetails = () => {
         const otherActiveStay = list.find(
           (b) => Number(b.pg_id) !== Number(id) &&
                  (b.status === 'approved' || b.payment_status === 'paid') &&
-                 b.status !== 'cancelled'
+                 !isCancelledBooking(b)
         );
         setActiveStayAtOtherPG(otherActiveStay || null);
       } catch (err) { console.error("Check existing booking error:", err); }
@@ -297,6 +308,10 @@ const PgDetails = () => {
   const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
   const [isGalleryLoopPaused, setIsGalleryLoopPaused] = useState(false);
+
+  // Inline visit scheduler (date + time) shown inside the booking card
+  const [showVisitPicker, setShowVisitPicker] = useState(false);
+  const [scheduledVisit, setScheduledVisit] = useState({ date: "", time: "" });
 
   // Direct Share & Copy Link Handler
   const handleShare = useCallback(async () => {
@@ -410,14 +425,30 @@ const PgDetails = () => {
       return;
     }
 
+    // All checks passed — reveal the inline calendar so the student can pick
+    // the day & time they'll physically visit the PG.
+    setShowVisitPicker(true);
+  };
+
+  // Submit the visit/booking request with the student-chosen schedule
+  const handleConfirmVisit = async (date, time) => {
+    if (!date || !time) {
+      alert("Please select both a visit date and a time slot.");
+      return;
+    }
+
     try {
       setBookingLoading(true);
       await API.post("/bookings/create", {
         pg_id: Number(id),
-        message: `Interested in booking a visit for ${selectedRoom.label}`,
+        message: `Visit requested on ${formatVisitDate(date)} at ${time} for ${selectedRoom.label}`,
         selected_room_type: selectedRoom.label,
         booked_price: selectedRoom.price,
+        visit_date: date,
+        visit_time: time,
       });
+      setScheduledVisit({ date, time });
+      setShowVisitPicker(false);
       setExistingBooking({ status: "pending", pg_id: Number(id) });
       setBookingSuccessModal(true);
     } catch (error) {
@@ -888,6 +919,15 @@ const PgDetails = () => {
                     );
                   })()}
 
+                  {/* Inline visit calendar — appears right below the Request a Visit button */}
+                  {showVisitPicker && (
+                    <VisitSchedulePicker
+                      loading={bookingLoading}
+                      onCancel={() => setShowVisitPicker(false)}
+                      onConfirm={handleConfirmVisit}
+                    />
+                  )}
+
                   <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-0.5 sm:pt-1">
                     {/* WhatsApp Button */}
                     <button
@@ -1062,6 +1102,8 @@ const PgDetails = () => {
           pgTitle={pg.title}
           roomLabel={selectedRoom.label}
           price={currentRoomPrice}
+          visitDate={scheduledVisit.date}
+          visitTime={scheduledVisit.time}
           onClose={() => setBookingSuccessModal(false)}
           onTrack={() => navigate("/my-bookings")}
         />
@@ -1096,7 +1138,7 @@ const PgDetails = () => {
 
 // ── MEMOIZED MODAL SUBCOMPONENTS (Optimized to avoid re-rendering on parent carousel/scroll) ──
 
-const BookingSuccessModal = ({ pgTitle, roomLabel, price, onClose, onTrack }) => (
+const BookingSuccessModal = ({ pgTitle, roomLabel, price, visitDate, visitTime, onClose, onTrack }) => (
   <div 
     className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
     onClick={onClose}
@@ -1132,6 +1174,15 @@ const BookingSuccessModal = ({ pgTitle, roomLabel, price, onClose, onTrack }) =>
           <span className="font-semibold text-gray-500 dark:text-gray-400">Monthly Rent</span>
           <span className="font-black text-[#0D3A1D] dark:text-[#93B733]">₹{price?.toLocaleString()} / mo</span>
         </div>
+        {visitDate && visitTime && (
+          <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-white/10">
+            <span className="font-semibold text-gray-500 dark:text-gray-400">Visit Scheduled</span>
+            <span className="inline-flex items-center gap-1 font-black text-gray-900 dark:text-white">
+              <Clock size={12} className="text-[#93B733]" />
+              {formatVisitDate(visitDate)} · {visitTime}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="font-semibold text-gray-500 dark:text-gray-400">Application Status</span>
           <span className="inline-flex items-center gap-1 font-extrabold text-amber-700 dark:text-amber-400 bg-amber-100/80 dark:bg-amber-500/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider text-[10px]">

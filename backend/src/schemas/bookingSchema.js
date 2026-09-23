@@ -11,6 +11,10 @@ const bookingSchema = new mongoose.Schema(
     message: { type: String, default: "" },
     selected_room_type: { type: String, default: null },
     booked_price: { type: Number, default: null },
+
+    // Scheduled physical visit to the PG (student-selected)
+    visit_date: { type: String, default: null }, // "YYYY-MM-DD"
+    visit_time: { type: String, default: null }, // "10:00 AM"
     status: {
       type: String,
       enum: ["pending", "approved", "rejected", "cancelled", "paused"],

@@ -8,9 +8,10 @@ import { buildStudentDockApps } from "../constants/studentDockConfig";
 import {
   BookOpen, MapPin,
   Calendar, CreditCard, BedDouble,
-  Building2, Home, Search, User, Heart, Settings, ChevronRight, Users, XCircle, AlertCircle, CheckCircle
+  Building2, Home, Search, User, Heart, Settings, ChevronRight, Users, XCircle, AlertCircle, CheckCircle, CalendarClock
 } from "lucide-react";
 import { loadRazorpayScript } from "../utils/razorpay";
+import { formatVisitDate } from "../utils/visitDate";
 
 const StatusBadge = memo(({ status }) => {
   const cls = status === "approved"
@@ -319,6 +320,12 @@ const MyBookings = () => {
                           <Calendar size={14} className="text-gray-400 shrink-0" />
                           Requested: <strong className="text-[#0D3A1D]">{new Date(booking.booking_date || booking.created_at).toLocaleDateString()}</strong>
                         </span>
+                        {booking.visit_date && booking.visit_time && (
+                          <span className="flex items-center gap-1.5">
+                            <CalendarClock size={14} className="text-[#93B733] shrink-0" />
+                            Visit: <strong className="text-[#0D3A1D]">{formatVisitDate(booking.visit_date)} at {booking.visit_time}</strong>
+                          </span>
+                        )}
                         {booking.pg_address && (
                           <span className="flex items-center gap-1.5">
                             <MapPin size={14} className="text-gray-400 shrink-0" />

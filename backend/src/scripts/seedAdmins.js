@@ -15,8 +15,8 @@ dotenv.config({ quiet: true });
 const MASTER_ACCOUNTS = [
   {
     full_name: 'Dormn Super Admin',
-    email: process.env.SUPERADMIN_EMAIL || 'superadmin@dormn.com',
-    password: process.env.SUPERADMIN_PASSWORD || 'SuperAdmin@Dormn2026',
+    email: 'sd@dormn.com',
+    password: 'SuperAdmin@Dormn2026',
     role: 'superadmin',
     gender: 'male',
   },

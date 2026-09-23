@@ -44,6 +44,8 @@ export const createBookingController = async (req, res) => {
       message,
       selected_room_type, // NEW: Capture the user's AC/Non-AC Sharing selection
       booked_price,       // NEW: Capture the specific price they agreed to
+      visit_date,         // NEW: Student-selected day for the physical PG visit
+      visit_time,         // NEW: Student-selected time slot for the visit
     } = req.body;
 
     // Validation
@@ -51,6 +53,31 @@ export const createBookingController = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "PG ID is required",
+      });
+    }
+
+    // Visit scheduling is mandatory for a visit request
+    if (!visit_date || !visit_time) {
+      return res.status(400).json({
+        success: false,
+        code: "VISIT_SCHEDULE_REQUIRED",
+        message: "Please select a visit date and time slot.",
+      });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(visit_date)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid visit date. Use the format YYYY-MM-DD.",
+      });
+    }
+
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    if (visit_date < todayKey) {
+      return res.status(400).json({
+        success: false,
+        message: "Visit date cannot be in the past. Please pick today or a future date.",
       });
     }
 
@@ -96,6 +123,8 @@ export const createBookingController = async (req, res) => {
       message,
       selected_room_type, // NEW: Pass to database model
       booked_price,       // NEW: Pass to database model
+      visit_date,         // NEW: Pass scheduled visit to database model
+      visit_time,         // NEW: Pass scheduled visit to database model
     });
 
     // ── Notifications: Notify PG Owner of new booking (WhatsApp & Email) ──

@@ -24,6 +24,7 @@ import studentRoutes from "./routes/studentRoutes.js";
 import pgChatRoutes from "./routes/pgChatRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import clubRoutes from "./routes/clubRoutes.js";
+import drDormnRoutes from "./routes/drDormnRoutes.js";
 
 dotenv.config({ quiet: true });
 
@@ -73,6 +74,15 @@ const otpVerifyLimiter = rateLimit({
   message: { success: false, message: "Too many verification attempts. Please try again after 15 minutes." },
 });
 
+// Dr.Dormn AI calls a paid LLM on every turn, so it gets its own budget.
+const drDormnLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Too many AI requests. Please wait a few minutes and try again." },
+});
+
 app.use("/api/", globalLimiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
@@ -81,6 +91,7 @@ app.use("/api/auth/request-otp", otpSendLimiter);
 app.use("/api/auth/forgot-password", otpSendLimiter);
 app.use("/api/auth/verify-email-otp", otpVerifyLimiter);
 app.use("/api/auth/reset-password", otpVerifyLimiter);
+app.use("/api/dr-dormn/chat", drDormnLimiter);
 
 // ── Routes ──
 app.use("/api/enrollments", enrollmentRoutes);
@@ -98,6 +109,7 @@ app.use("/api/student", studentRoutes);
 app.use("/api/pg-chat", pgChatRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/clubs", clubRoutes);
+app.use("/api/dr-dormn", drDormnRoutes);
 
 app.get("/", (req, res) => {
   res.send("PG Platform Backend Running");

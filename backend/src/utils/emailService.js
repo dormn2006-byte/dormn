@@ -1,19 +1,47 @@
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import { isBrevoConfigured, sendBrevoMessage, verifyBrevoService } from "./brevoService.js";
+import { buildSender, normalizeRecipients, resolveSender } from "./emailAddress.js";
+import { createMailQueue } from "./mailQueue.js";
 
 dotenv.config({ quiet: true });
 
+// Re-exported so callers can build a dynamic sender without a second import,
+// e.g. buildSender("receipts", "Dormn Receipts") -> receipts@dormn.com
+export { buildSender };
+
+/**
+ * Every send funnels through this queue, so a spike of sign-ups / bookings
+ * can't open hundreds of concurrent provider calls. Tune via MAIL_QUEUE_* env.
+ */
+const mailQueue = createMailQueue({
+  concurrency: process.env.MAIL_QUEUE_CONCURRENCY,
+  minIntervalMs: process.env.MAIL_MIN_INTERVAL_MS,
+  maxSize: process.env.MAIL_QUEUE_MAX_SIZE,
+});
+
+/** Live queue counters — handy for health checks and the diagnostic script. */
+export const getMailQueueStats = () => mailQueue.snapshot();
+
+export const isMailQueueIdle = () => mailQueue.idle();
+
 let cachedTransporter = null;
 
+/** SMTP credentials — BREVO_SMTP_KEY doubles as the password for the Brevo relay. */
+const smtpCredentials = () => ({
+  user: process.env.SMTP_USER || process.env.EMAIL_USER,
+  pass: process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.BREVO_SMTP_KEY,
+});
+
 const getTransporter = () => {
-  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+  const { user, pass } = smtpCredentials();
 
   if (!user || !pass) return null;
 
   if (!cachedTransporter) {
     const isService = Boolean(process.env.SMTP_SERVICE);
-    const host = process.env.SMTP_HOST || (isService ? undefined : "smtp.gmail.com");
+    const defaultHost = process.env.BREVO_SMTP_KEY ? "smtp-relay.brevo.com" : "smtp.gmail.com";
+    const host = process.env.SMTP_HOST || (isService ? undefined : defaultHost);
     const port = parseInt(process.env.SMTP_PORT || (isService ? "465" : "587"), 10);
     const secure = process.env.SMTP_SECURE !== undefined 
       ? process.env.SMTP_SECURE === "true" 
@@ -48,15 +76,22 @@ const getTransporter = () => {
   return cachedTransporter;
 };
 
-/** Verify SMTP configuration and connection */
+/**
+ * Verifies whichever mail transport is configured.
+ * Prefers Brevo (API key) over raw SMTP, matching sendEmail().
+ */
 export const verifyEmailService = async () => {
-  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+  if (isBrevoConfigured()) {
+    return verifyBrevoService();
+  }
+
+  const { user, pass } = smtpCredentials();
 
   if (!user || !pass) {
     return {
       configured: false,
-      message: "SMTP is not configured in .env (Missing SMTP_USER and/or SMTP_PASS).",
+      message:
+        "No email transport configured. Set BREVO_API_KEY (recommended) or SMTP_USER + SMTP_PASS in backend/.env.",
     };
   }
 
@@ -66,6 +101,7 @@ export const verifyEmailService = async () => {
     return {
       configured: true,
       verified: true,
+      provider: "smtp",
       user,
       message: `SMTP connection established successfully with ${user}`,
     };
@@ -73,6 +109,7 @@ export const verifyEmailService = async () => {
     return {
       configured: true,
       verified: false,
+      provider: "smtp",
       user,
       error: error.message,
       code: error.code,
@@ -93,41 +130,127 @@ const wrapEmail = (title, innerHtml, badge = "DORMN SECURITY") => `
   </div>
 `;
 
-/** Base email dispatcher */
-export const sendEmail = async (to, subject, html) => {
+/** Strips markup to build the plain-text alternative (helps anti-spam scores). */
+const htmlToText = (html) =>
+  String(html || "")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const formatAddress = ({ name, email }) => (name ? `"${name}" <${email}>` : email);
+
+/** SMTP fallback for a normalised message. Never throws. */
+const sendViaSmtp = async (message) => {
+  const transporter = getTransporter();
+  if (!transporter) {
+    return { ok: false, provider: "smtp", error: "No SMTP transport configured" };
+  }
+
   try {
-    const transporter = getTransporter();
-    if (!transporter) {
-      console.warn(`[EmailService] ⚠️ SMTP not configured in .env (skipping send to ${to}). Set SMTP_USER and SMTP_PASS in backend/.env to send real emails.`);
-      return false;
-    }
-    const user = process.env.SMTP_USER || process.env.EMAIL_USER;
-    const from = process.env.SMTP_FROM || `"Dormn" <${user}>`;
-
-    // Generate plain-text version to maximize anti-spam reputation score
-    const plainText = html
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
     const info = await transporter.sendMail({
-      from,
-      to,
-      subject,
-      text: plainText,
-      html,
+      from: formatAddress(message.sender),
+      to: message.to,
+      ...(message.cc.length ? { cc: message.cc } : {}),
+      ...(message.bcc.length ? { bcc: message.bcc } : {}),
+      ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+      ...(message.attachments.length ? { attachments: message.attachments } : {}),
       headers: {
         "X-Entity-Ref-ID": `dormn-${Date.now()}`,
         "X-Mailer": "Dormn-Mailer-v2",
+        ...message.headers,
       },
     });
-    console.log(`[EmailService] ✅ Email sent to ${to} (${info.messageId})`);
-    return true;
+    console.log(`[EmailService] ✅ Email sent to ${message.to.map((r) => r.email).join(", ")} via SMTP (${info.messageId})`);
+    return { ok: true, provider: "smtp", messageId: info.messageId };
   } catch (error) {
-    console.error("[EmailService] ❌ Email Error:", error.message);
-    return false;
+    console.error("[EmailService] ❌ SMTP Error:", error.message);
+    return { ok: false, provider: "smtp", error: error.message };
   }
+};
+
+/** Prefers Brevo, falls back to SMTP. */
+const dispatch = (message) =>
+  isBrevoConfigured() ? sendBrevoMessage(message) : sendViaSmtp(message);
+
+/**
+ * Generic email sender — the single entry point for the whole app.
+ *
+ *   await sendMail({
+ *     from: "receipts",                 // local part, full address, or { name, email }
+ *     to: "student@example.com",         // string or array (cc/bcc too)
+ *     subject: "Your receipt",
+ *     html: "<h1>Thanks!</h1>",
+ *     text: "Thanks!",                   // optional — auto-derived from html
+ *     cc, bcc, replyTo, attachments, headers, tags, senderName,
+ *   });
+ *
+ * Queued, so bursts of traffic are paced instead of hammering the provider.
+ * Resolves to `{ ok, provider, messageId?, error? }` and never throws.
+ */
+export const sendMail = async (input = {}) => {
+  const {
+    from,
+    to,
+    subject = "(no subject)",
+    html = "",
+    text,
+    cc,
+    bcc,
+    replyTo,
+    attachments,
+    headers,
+    tags,
+    senderName,
+  } = input;
+
+  const recipients = normalizeRecipients(to);
+  if (!recipients.length) {
+    return { ok: false, provider: "none", error: "No valid recipient address provided" };
+  }
+
+  const message = {
+    sender: resolveSender(from, senderName),
+    to: recipients,
+    cc: normalizeRecipients(cc),
+    bcc: normalizeRecipients(bcc),
+    replyTo: normalizeRecipients(replyTo)[0] || null,
+    subject,
+    html,
+    text: text || htmlToText(html),
+    attachments: attachments || [],
+    headers: headers || {},
+    tags: tags || [],
+  };
+
+  return mailQueue.enqueue(() => dispatch(message));
+};
+
+/**
+ * Sends many messages with bounded concurrency.
+ * Returns `{ total, sent, failed, results }` — order matches the input.
+ */
+export const sendBulkMail = async (messages = []) => {
+  const results = await Promise.all(messages.map((message) => sendMail(message)));
+  const sent = results.filter((result) => result.ok).length;
+
+  return { total: messages.length, sent, failed: messages.length - sent, results };
+};
+
+/**
+ * Back-compat wrapper used by the transactional templates below.
+ * `senderOverride` is an email string, a local part, or `{ name, email }`.
+ * Resolves to a boolean.
+ */
+export const sendEmail = async (to, subject, html, senderOverride) => {
+  const result = await sendMail({ from: senderOverride, to, subject, html });
+  if (!result.ok && result.error !== "mail_queue_full") {
+    console.error("[EmailService] ❌ Email Error:", result.error);
+  }
+  return result.ok;
 };
 
 /** Generic OTP Card Builder */

@@ -11,6 +11,8 @@ export const createBooking = async ({
   message,
   selected_room_type,
   booked_price,
+  visit_date,
+  visit_time,
 }) => {
   const booking = await Booking.create({
     student_id,
@@ -19,6 +21,8 @@ export const createBooking = async ({
     message,
     selected_room_type,
     booked_price,
+    visit_date,
+    visit_time,
   });
 
   return { insertId: booking._id, affectedRows: 1 };

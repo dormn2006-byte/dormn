@@ -11,9 +11,11 @@ import {
   BookOpenCheck,
   Clock,
   AlertCircle,
-  Calendar
+  Calendar,
+  CalendarClock
 } from "lucide-react";
 import api from "../../services/api";
+import { formatVisitDate } from "../../utils/visitDate";
 
 const formatDateTime = (dateStr) => {
   if (!dateStr) return null;
@@ -257,6 +259,13 @@ const Bookings = () => {
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10">
                         <Calendar size={13} className="text-blue-500" />
                         <span>Booked: <strong className="font-black text-gray-900 dark:text-white ml-0.5">{formatDateTime(b.booking_date)}</strong></span>
+                      </span>
+                    )}
+
+                    {b.visit_date && b.visit_time && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#93B733]/15 text-[#4E700F] dark:text-[#93B733] border border-[#93B733]/30">
+                        <CalendarClock size={13} className="text-[#93B733]" />
+                        <span>Visit: <strong className="font-black ml-0.5">{formatVisitDate(b.visit_date)} at {b.visit_time}</strong></span>
                       </span>
                     )}
 

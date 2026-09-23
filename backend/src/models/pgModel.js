@@ -7,6 +7,54 @@ import { serialize } from "../utils/serialize.js";
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// `$toString` throws on arrays ("Unsupported conversion from array to string"),
+// and `amenities` is a Mixed field that may be an array of strings, an array of
+// objects, or a plain object. Flatten it into one searchable string so keyword
+// and amenity searches don't blow up the aggregation.
+const amenitiesSearchText = () => ({
+  $let: {
+    vars: {
+      items: {
+        $cond: [
+          { $isArray: "$amenities" },
+          { $ifNull: ["$amenities", []] },
+          {
+            $cond: [
+              { $eq: [{ $type: "$amenities" }, "object"] },
+              {
+                $map: {
+                  input: { $objectToArray: { $ifNull: ["$amenities", {}] } },
+                  in: "$$this.k",
+                },
+              },
+              [],
+            ],
+          },
+        ],
+      },
+    },
+    in: {
+      $reduce: {
+        input: "$$items",
+        initialValue: {
+          $convert: {
+            input: { $ifNull: ["$amenities", ""] },
+            to: "string",
+            onError: "",
+          },
+        },
+        in: {
+          $concat: [
+            "$$value",
+            " ",
+            { $convert: { input: "$$this", to: "string", onError: "" } },
+          ],
+        },
+      },
+    },
+  },
+});
+
 // Only PGs whose owner is on a usable subscription are publicly visible.
 const ownerSubscriptionMatch = () => ({
   $or: [
@@ -340,15 +388,23 @@ export const searchPGs = async (filters) => {
   const match = { status: "approved" };
   const expressions = [];
 
+  // Locations are stored as free text (e.g. "noida"), but callers — the AI
+  // assistant in particular — send "Noida". Match case-insensitively so a
+  // capitalised city name doesn't silently return nothing.
+  const caseInsensitive = (value) => ({
+    $regex: `^${escapeRegex(value)}$`,
+    $options: "i",
+  });
+
   if (pg_type) match.pg_type = pg_type;
-  if (city) match.city = city;
-  if (area) match.area = area;
-  if (nearby_college) match.nearby_college = nearby_college;
+  if (city) match.city = caseInsensitive(city);
+  if (area) match.area = caseInsensitive(area);
+  if (nearby_college) match.nearby_college = caseInsensitive(nearby_college);
 
   if (amenity) {
     expressions.push({
       $regexMatch: {
-        input: { $toString: { $ifNull: ["$amenities", []] } },
+        input: amenitiesSearchText(),
         regex: escapeRegex(amenity),
         options: "i",
       },
@@ -370,7 +426,7 @@ export const searchPGs = async (filters) => {
         })),
         {
           $regexMatch: {
-            input: { $toString: { $ifNull: ["$amenities", []] } },
+            input: amenitiesSearchText(),
             regex,
             options: "i",
           },
