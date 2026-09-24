@@ -5,10 +5,19 @@ import {
   IndianRupee, Plus, X, Sparkles, Building2, Check, ArrowRight,
   ArrowLeft, Clock, BedDouble, CheckCircle2, AlertCircle, FileText,
   Home, Phone, User as UserIcon, HelpCircle, ChevronRight, Eye, Users,
-  Copy, ExternalLink, MessageSquare, Share2, CreditCard
+  Copy, ExternalLink, MessageSquare, Share2, CreditCard, Video, PlayCircle
 } from "lucide-react";
 import api from "../../services/api";
 import CollegeCombobox from "../../components/ui/CollegeCombobox";
+import {
+  formatDuration,
+  VIDEO_ACCEPT,
+  VIDEO_ALLOWED_TYPES,
+  VIDEO_MAX_BYTES,
+  VIDEO_MAX_COUNT,
+  VIDEO_MAX_MB,
+  VIDEO_MAX_SECONDS,
+} from "../../config/mediaLimits";
 
 /* ═══════════════════════════════════════════
    DEFAULT AMENITIES LIST
@@ -117,6 +126,7 @@ export default function AddPG() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fileInputRef = useRef(null);
+  const videoInputRef = useRef(null);
 
   // Step state: 0 = Hero, 1-5 = Form Steps, 6 = Verification Screen
   const [currentStep, setCurrentStep] = useState(0);
@@ -150,6 +160,7 @@ export default function AddPG() {
   });
 
   const [selectedImages, setSelectedImages] = useState([]);
+  const [selectedVideos, setSelectedVideos] = useState([]);
   const [selectedAmenities, setSelectedAmenities] = useState([]);
   const [customAmenities, setCustomAmenities] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -260,6 +271,101 @@ export default function AddPG() {
 
   const handleRemoveImage = (indexToRemove) => {
     setSelectedImages((prev) => prev.filter((_, i) => i !== indexToRemove));
+  };
+
+  // Reads a local video's duration. Resolves null when the browser can't decode
+  // the file — which also means visitors won't be able to play it (an iPhone
+  // HEVC .mov in Chrome, for example), so those files are rejected.
+  const readVideoDuration = (file) =>
+    new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement("video");
+      let settled = false;
+
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        URL.revokeObjectURL(url);
+        resolve(value);
+      };
+
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        if (Number.isFinite(video.duration) && video.duration > 0) {
+          finish(video.duration);
+          return;
+        }
+
+        // Some containers report Infinity until the browser scans further in.
+        video.ondurationchange = () => {
+          if (Number.isFinite(video.duration) && video.duration > 0) finish(video.duration);
+        };
+        video.currentTime = 1e101;
+      };
+      video.onerror = () => finish(null);
+
+      window.setTimeout(() => finish(null), 15000);
+      video.src = url;
+    });
+
+  const handleVideoUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (e.target) e.target.value = "";
+    if (!files.length) return;
+
+    const remaining = VIDEO_MAX_COUNT - selectedVideos.length;
+    if (remaining <= 0) {
+      alert(`You can upload a maximum of ${VIDEO_MAX_COUNT} videos.`);
+      return;
+    }
+    if (files.length > remaining) {
+      alert(`You can add ${remaining} more video${remaining === 1 ? "" : "s"} (maximum ${VIDEO_MAX_COUNT}).`);
+      return;
+    }
+
+    const accepted = [];
+
+    for (const file of files) {
+      if (!VIDEO_ALLOWED_TYPES.includes(file.type)) {
+        alert(`"${file.name}" is not a supported format. Please upload MP4, WebM or MOV.`);
+        continue;
+      }
+
+      if (file.size > VIDEO_MAX_BYTES) {
+        alert(`"${file.name}" is larger than ${VIDEO_MAX_MB} MB.`);
+        continue;
+      }
+
+      const duration = await readVideoDuration(file);
+
+      if (duration === null) {
+        alert(`We couldn't read "${file.name}". It may be in a format browsers can't play — please try an MP4.`);
+        continue;
+      }
+
+      if (duration > VIDEO_MAX_SECONDS) {
+        alert(`"${file.name}" is ${formatDuration(duration)} long. Videos must be ${Math.round(VIDEO_MAX_SECONDS / 60)} minutes or less.`);
+        continue;
+      }
+
+      accepted.push({
+        file,
+        name: file.name,
+        duration,
+        previewUrl: URL.createObjectURL(file),
+      });
+    }
+
+    if (accepted.length) setSelectedVideos((prev) => [...prev, ...accepted]);
+  };
+
+  const handleRemoveVideo = (indexToRemove) => {
+    setSelectedVideos((prev) => {
+      const next = [...prev];
+      const [removed] = next.splice(indexToRemove, 1);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return next;
+    });
   };
 
   const validateStep = (step) => {
@@ -398,6 +504,17 @@ export default function AddPG() {
         selectedImages.forEach((img) => {
           data.append("images", img);
         });
+      }
+
+      if (selectedVideos.length > 0) {
+        selectedVideos.forEach((video) => {
+          data.append("videos", video.file, video.name);
+        });
+        // Sent in the same order as the files so the server can pair them up.
+        data.append(
+          "video_durations",
+          JSON.stringify(selectedVideos.map((video) => Math.round(video.duration)))
+        );
       }
 
       const response = await api.post("/pg/create", data, {
@@ -1144,6 +1261,100 @@ export default function AddPG() {
                 )}
               </div>
 
+              {/* Video Upload Zone */}
+              <div className="rounded-2xl border-2 border-dashed border-gray-300 dark:border-white/15 bg-gray-50/80 dark:bg-[#181818] p-6 sm:p-8 text-center transition hover:border-[#93B733]/60">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0D3A1D] text-white shadow-md mb-3">
+                  <Video size={24} />
+                </div>
+
+                <h3 className="text-lg font-black text-gray-900 dark:text-white">
+                  {selectedVideos.length >= VIDEO_MAX_COUNT
+                    ? `Maximum Limit Reached (${VIDEO_MAX_COUNT}/${VIDEO_MAX_COUNT})`
+                    : "Add a Video Tour (optional)"}
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-1 leading-relaxed">
+                  Walk students through the rooms and common areas. Up to {VIDEO_MAX_COUNT} videos,
+                  max {Math.round(VIDEO_MAX_SECONDS / 60)} minutes and {VIDEO_MAX_MB} MB each.
+                </p>
+
+                <input
+                  type="file"
+                  multiple
+                  accept={VIDEO_ACCEPT}
+                  ref={videoInputRef}
+                  onChange={handleVideoUpload}
+                  className="hidden"
+                  disabled={selectedVideos.length >= VIDEO_MAX_COUNT}
+                />
+
+                <div className="mt-4 flex flex-wrap gap-2.5 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => videoInputRef.current?.click()}
+                    disabled={selectedVideos.length >= VIDEO_MAX_COUNT}
+                    className="rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] px-6 py-2.5 text-xs font-bold text-white shadow-sm transition active:scale-95 disabled:opacity-40"
+                  >
+                    {selectedVideos.length > 0 ? "+ Add More Videos" : "Choose Video"}
+                  </button>
+                  {selectedVideos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        selectedVideos.forEach((video) => URL.revokeObjectURL(video.previewUrl));
+                        setSelectedVideos([]);
+                      }}
+                      className="rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition"
+                    >
+                      Remove All
+                    </button>
+                  )}
+                </div>
+
+                {selectedVideos.length > 0 && (
+                  <div className="mt-6 pt-5 border-t border-gray-200 dark:border-white/10 text-left">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                        Uploaded Videos ({selectedVideos.length}/{VIDEO_MAX_COUNT})
+                      </p>
+                      <p className="text-xs font-bold text-[#4E700F] dark:text-[#93B733]">
+                        {VIDEO_MAX_COUNT - selectedVideos.length} slots remaining
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {selectedVideos.map((video, index) => (
+                        <div
+                          key={`${video.name}-${index}`}
+                          className="group relative rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-black shadow-xs"
+                        >
+                          <video
+                            src={video.previewUrl}
+                            controls
+                            preload="metadata"
+                            playsInline
+                            className="h-40 w-full bg-black object-contain"
+                          />
+
+                          <div className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1 rounded bg-[#0D3A1D]/90 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                            <PlayCircle size={10} />
+                            {formatDuration(video.duration)}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveVideo(index)}
+                            className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white shadow-md transition hover:scale-110 hover:bg-red-700 active:scale-90"
+                            title="Remove video"
+                          >
+                            <X size={13} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Review Summary */}
               <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-[#181818] p-5 space-y-3">
                 <h4 className="font-bold text-sm text-gray-900 dark:text-white uppercase tracking-wider">
@@ -1156,6 +1367,7 @@ export default function AddPG() {
                   <p><strong>Location:</strong> {formData.area ? `${formData.area}, ${formData.city}` : "—"}</p>
                   <p><strong>Amenities:</strong> {selectedAmenities.length} selected</p>
                   <p><strong>Photos:</strong> {selectedImages.length} attached</p>
+                  <p><strong>Videos:</strong> {selectedVideos.length} attached</p>
                   <p className="sm:col-span-2"><strong>Description:</strong> <span className="text-gray-600 dark:text-gray-400 line-clamp-2">{formData.description || "—"}</span></p>
                   <p className="sm:col-span-2"><strong>Rules:</strong> <span className="text-gray-600 dark:text-gray-400 line-clamp-2">{formData.rules || "—"}</span></p>
                 </div>

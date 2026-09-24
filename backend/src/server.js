@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import path from "path";
 import { fileURLToPath } from "url";
 import { connectDB } from "./config/db.js";
+import { IMAGE_MAX_MB, VIDEO_MAX_MB } from "./config/media.js";
 import Booking from "./schemas/bookingSchema.js";
 import User from "./schemas/userSchema.js";
 import { initSocket } from "./socket.js";
@@ -124,6 +125,32 @@ app.use("/api/dr-dormn", drDormnRoutes);
 
 app.get("/", (req, res) => {
   res.send("PG Platform Backend Running");
+});
+
+// ── Upload error handling ──
+// multer aborts oversized or over-count uploads with a MulterError, and the
+// file filters throw errors tagged with a statusCode. Answer those with clean
+// JSON instead of letting them fall through as a generic 500.
+app.use((err, req, res, next) => {
+  if (err?.name === "MulterError") {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        success: false,
+        message: `That file is too large. Photos must be under ${IMAGE_MAX_MB} MB and videos under ${VIDEO_MAX_MB} MB.`,
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: "Too many files uploaded, or an unexpected field was sent.",
+    });
+  }
+
+  if (err?.statusCode) {
+    return res.status(err.statusCode).json({ success: false, message: err.message });
+  }
+
+  return next(err);
 });
 
 // ── Scheduled maintenance ──

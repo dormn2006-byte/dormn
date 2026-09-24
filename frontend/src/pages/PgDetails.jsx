@@ -11,8 +11,9 @@ import {
   Phone, MessageSquare, CheckCircle2, Clock, ChevronRight, ChevronLeft,
   X, Sparkles, Building2, MapPin, AlertCircle, ShieldCheck, User, ExternalLink,
   Share2, Copy, Check, ArrowLeft, BedDouble, BedSingle, Snowflake, Wind, Flame,
-  Wifi, Zap, UtensilsCrossed, Shirt, Bath, Car, Droplets, Dumbbell, Tv
+  Wifi, Zap, UtensilsCrossed, Shirt, Bath, Car, Droplets, Dumbbell, Tv, PlayCircle
 } from "lucide-react";
+import { formatDuration } from "../config/mediaLimits";
 
 const AMENITY_MAP = [
   { match: /power|backup|generator|electricity/i, icon: Zap, bg: "bg-amber-500/10 dark:bg-amber-400/15", color: "text-amber-600 dark:text-amber-400", border: "border-amber-200/60 dark:border-amber-500/25" },
@@ -59,6 +60,45 @@ const DEFAULT_DETAILS_FALLBACKS = [
   "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80",
   "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=1200&q=80",
 ];
+
+// One gallery thumbnail — a photo, or a video's first frame with a play badge.
+// Videos are muted and control-less here; the player lives in the main viewer.
+const MediaThumbnail = ({ item, index }) => {
+  if (item.type === "video") {
+    return (
+      <div className="relative h-12 w-full bg-black sm:h-20 md:h-24">
+        <video
+          src={item.url}
+          preload="metadata"
+          muted
+          playsInline
+          className="pointer-events-none h-full w-full object-cover"
+        />
+        <span className="absolute inset-0 flex items-center justify-center bg-black/35">
+          <PlayCircle className="h-4 w-4 text-white drop-shadow sm:h-5 sm:w-5" />
+        </span>
+        {Number(item.duration) > 0 && (
+          <span className="absolute bottom-0.5 right-0.5 rounded bg-black/75 px-1 py-px text-[8px] font-bold text-white sm:text-[9px]">
+            {formatDuration(Number(item.duration))}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={item.url}
+      alt={`preview ${index + 1}`}
+      loading="lazy"
+      decoding="async"
+      className="h-12 w-full object-cover sm:h-20 md:h-24"
+      onError={(e) => {
+        e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[index % DEFAULT_DETAILS_FALLBACKS.length];
+      }}
+    />
+  );
+};
 
 const parseListField = (val) => {
   if (!val) return [];
@@ -277,10 +317,40 @@ const PgDetails = () => {
     return formatted.length > 0 ? formatted : DEFAULT_DETAILS_FALLBACKS;
   }, [pg]);
 
-  const currentActiveIndex = galleryImages.length > 0 
-    ? ((activeImageIndex % galleryImages.length) + galleryImages.length) % galleryImages.length 
+  const pgVideos = useMemo(() => {
+    const list = Array.isArray(pg?.videos) ? pg.videos : [];
+
+    return list
+      .slice()
+      .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+      .map((video) => ({ ...video, url: formatImageUrl(video.video_url) }))
+      .filter((video) => video.url);
+  }, [pg]);
+
+  // Videos sit in the same gallery as the photos, listed after them so the
+  // cover photo stays first.
+  const mediaItems = useMemo(
+    () => [
+      ...galleryImages.map((url) => ({ type: "image", url })),
+      ...pgVideos.map((video) => ({
+        type: "video",
+        url: video.url,
+        duration: video.duration_seconds,
+        poster: galleryImages[0] || null,
+      })),
+    ],
+    [galleryImages, pgVideos]
+  );
+
+  const mediaCount = mediaItems.length;
+
+  const currentActiveIndex = mediaCount > 0
+    ? ((activeImageIndex % mediaCount) + mediaCount) % mediaCount
     : 0;
-  const displayActiveImage = galleryImages[currentActiveIndex] || DEFAULT_DETAILS_FALLBACKS[0];
+  const activeMedia = mediaItems[currentActiveIndex] || null;
+  const displayActiveImage = activeMedia?.type === "image"
+    ? activeMedia.url
+    : galleryImages[0] || DEFAULT_DETAILS_FALLBACKS[0];
 
   // Gallery Controls
   const showNextImage = (e) => {
@@ -288,8 +358,8 @@ const PgDetails = () => {
       e.preventDefault();
       e.stopPropagation();
     }
-    if (galleryImages.length <= 1) return;
-    setActiveImageIndex((prev) => (prev + 1) % galleryImages.length);
+    if (mediaCount <= 1) return;
+    setActiveImageIndex((prev) => (prev + 1) % mediaCount);
   };
 
   const showPreviousImage = (e) => {
@@ -297,8 +367,8 @@ const PgDetails = () => {
       e.preventDefault();
       e.stopPropagation();
     }
-    if (galleryImages.length <= 1) return;
-    setActiveImageIndex((prev) => (prev - 1 + galleryImages.length) % galleryImages.length);
+    if (mediaCount <= 1) return;
+    setActiveImageIndex((prev) => (prev - 1 + mediaCount) % mediaCount);
   };
 
   // State for sleek Booking Success Modal & Auth prompt
@@ -547,24 +617,36 @@ const PgDetails = () => {
             <div className="rounded-2xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-1.5 sm:p-2 md:rounded-[2.5rem] md:p-3 shadow-sm">
               <div className="relative overflow-hidden rounded-xl sm:rounded-[1.5rem] md:rounded-[2rem] bg-gray-200 dark:bg-gray-800">
                 
-                {/* Backside Shimmer Skeleton */}
-                {!mainImageLoaded && (
+                {/* Backside Shimmer Skeleton (photos only) */}
+                {!mainImageLoaded && activeMedia?.type !== "video" && (
                   <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 animate-pulse z-0" />
                 )}
 
-                <img
-                  src={displayActiveImage}
-                  alt="PG"
-                  onLoad={() => setMainImageLoaded(true)}
-                  className={`h-[220px] sm:h-[360px] md:h-[480px] w-full object-cover transition-all duration-700 hover:scale-105 ${
-                    mainImageLoaded ? "opacity-100" : "opacity-0"
-                  }`}
-                  onError={(e) => {
-                    e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[0];
-                    setMainImageLoaded(true);
-                  }}
-                />
-                {galleryImages.length > 1 && (
+                {activeMedia?.type === "video" ? (
+                  <video
+                    key={activeMedia.url}
+                    src={activeMedia.url}
+                    poster={activeMedia.poster || undefined}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="h-[220px] sm:h-[360px] md:h-[480px] w-full bg-black object-contain"
+                  />
+                ) : (
+                  <img
+                    src={displayActiveImage}
+                    alt="PG"
+                    onLoad={() => setMainImageLoaded(true)}
+                    className={`h-[220px] sm:h-[360px] md:h-[480px] w-full object-cover transition-all duration-700 hover:scale-105 ${
+                      mainImageLoaded ? "opacity-100" : "opacity-0"
+                    }`}
+                    onError={(e) => {
+                      e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[0];
+                      setMainImageLoaded(true);
+                    }}
+                  />
+                )}
+                {mediaCount > 1 && (
                   <>
                     <button
                       type="button"
@@ -584,19 +666,19 @@ const PgDetails = () => {
                       <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.5]" />
                     </button>
 
-                    <div className="absolute bottom-2.5 right-2.5 sm:bottom-4 sm:right-4 z-20 rounded-full bg-black/70 backdrop-blur-sm px-2.5 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-semibold text-white">
-                      {currentActiveIndex + 1} / {galleryImages.length}
+                    <div className="pointer-events-none absolute bottom-2.5 right-2.5 sm:bottom-4 sm:right-4 z-20 rounded-full bg-black/70 backdrop-blur-sm px-2.5 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-semibold text-white">
+                      {currentActiveIndex + 1} / {mediaCount}
                     </div>
                   </>
                 )}
               </div>
 
               {/* Single Section Thumbnail Strip: Static 4-col when <= 4, infinite loop marquee moving left when > 4 */}
-              {galleryImages.length <= 4 ? (
+              {mediaItems.length <= 4 ? (
                 <div className="mt-1.5 sm:mt-2 md:mt-3 grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-3">
-                  {galleryImages.map((img, index) => (
+                  {mediaItems.map((item, index) => (
                     <button
-                      key={index}
+                      key={`${item.type}-${item.url}-${index}`}
                       type="button"
                       onClick={() => setActiveImageIndex(index)}
                       className={`overflow-hidden rounded-lg sm:rounded-xl border-2 transition-all duration-300 cursor-pointer ${
@@ -605,16 +687,7 @@ const PgDetails = () => {
                           : "border-transparent opacity-70 hover:opacity-100"
                       }`}
                     >
-                      <img
-                        src={img}
-                        alt={`preview ${index + 1}`}
-                        loading="lazy"
-                        decoding="async"
-                        className="h-12 w-full object-cover sm:h-20 md:h-24"
-                        onError={(e) => {
-                          e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[index % DEFAULT_DETAILS_FALLBACKS.length];
-                        }}
-                      />
+                      <MediaThumbnail item={item} index={index} />
                     </button>
                   ))}
                 </div>
@@ -630,15 +703,15 @@ const PgDetails = () => {
                     className="thumbnail-marquee-track gap-1.5 sm:gap-2 md:gap-3 py-0.5"
                     style={{
                       animationPlayState: isGalleryLoopPaused ? "paused" : "running",
-                      animationDuration: `${Math.max(galleryImages.length * 2.2, 16)}s`
+                      animationDuration: `${Math.max(mediaItems.length * 2.2, 16)}s`
                     }}
                   >
-                    {[...galleryImages, ...galleryImages].map((img, index) => {
-                      const realIndex = index % galleryImages.length;
+                    {[...mediaItems, ...mediaItems].map((item, index) => {
+                      const realIndex = index % mediaItems.length;
                       const isSelected = currentActiveIndex === realIndex;
                       return (
                         <button
-                          key={`${realIndex}-${index >= galleryImages.length ? 'dup' : 'orig'}`}
+                          key={`${item.type}-${realIndex}-${index >= mediaItems.length ? 'dup' : 'orig'}`}
                           type="button"
                           onClick={() => setActiveImageIndex(realIndex)}
                           className={`thumbnail-marquee-item overflow-hidden rounded-lg sm:rounded-xl border-2 transition-all duration-200 cursor-pointer ${
@@ -647,16 +720,7 @@ const PgDetails = () => {
                               : "border-transparent opacity-75 hover:opacity-100"
                           }`}
                         >
-                          <img
-                            src={img}
-                            alt={`preview ${realIndex + 1}`}
-                            loading="lazy"
-                            decoding="async"
-                            className="h-12 w-full object-cover sm:h-20 md:h-24 pointer-events-none"
-                            onError={(e) => {
-                              e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[realIndex % DEFAULT_DETAILS_FALLBACKS.length];
-                            }}
-                          />
+                          <MediaThumbnail item={item} index={realIndex} />
                         </button>
                       );
                     })}

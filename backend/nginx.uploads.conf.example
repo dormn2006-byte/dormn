@@ -1,0 +1,75 @@
+# nginx: serve uploaded media straight off disk (do NOT proxy it through Node)
+# =============================================================================
+# Copy the relevant lines into your server{} block, then:
+#   nginx -t && systemctl reload nginx
+#
+# Why: Node should handle API requests, not stream media bytes. Serving from
+# nginx gives zero-copy sendfile, native Range requests (so video seeking
+# works) and immutable caching — none of which costs the Node process anything.
+#
+# Adjust:
+#   * the alias path (must be the real path to backend/src/uploads)
+#   * the port in proxy_pass (whatever the backend listens on)
+
+# -----------------------------------------------------------------------------
+# 1) Allow big uploads. nginx defaults to 1 MB, which rejects everything —
+#    including the existing photo uploads. This MUST be larger than the biggest
+#    video you accept (VIDEO_MAX_MB, default 250 MB).
+# -----------------------------------------------------------------------------
+client_max_body_size 300m;
+client_body_timeout 120s;
+
+server {
+    # ... your existing listen / server_name / TLS config ...
+
+    # -------------------------------------------------------------------------
+    # 2) Media — served from disk, never reaches Node.
+    #    The `^~` prefix makes this win over `location /api/` below, so requests
+    #    for /api/uploads/... are not proxied.
+    # -------------------------------------------------------------------------
+    location ^~ /api/uploads/ {
+        alias /root/dormn-server/backend/src/uploads/;
+
+        sendfile on;
+        tcp_nopush on;
+        aio threads;
+
+        # Filenames are unique (timestamp + random), so they never change.
+        add_header Cache-Control "public, max-age=31536000, immutable";
+
+        # Large files: give slow mobile clients room to finish downloading.
+        send_timeout 300s;
+    }
+
+    # -------------------------------------------------------------------------
+    # 3) API — proxied to Node.
+    # -------------------------------------------------------------------------
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;   # match your PORT
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Stream large upload bodies straight through to Node instead of
+        # buffering the whole 250 MB video to a temp file first.
+        proxy_request_buffering off;
+
+        # Uploads of large videos can take a while.
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
+
+# =============================================================================
+# After deploying, verify media is NOT hitting Node:
+#   curl -I https://<your-api-host>/api/uploads/<some-file>.webp
+#   -> should show Cache-Control: public, max-age=31536000, immutable
+#      and NO Server/Express-specific headers.
+#
+# And verify Range requests work (video seeking):
+#   curl -I -H "Range: bytes=0-1023" https://<your-api-host>/api/uploads/videos/<file>.mp4
+#   -> should return 206 Partial Content
+# =============================================================================

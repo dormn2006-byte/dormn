@@ -20,7 +20,7 @@ import {
   ownerOnly,
 } from "../middleware/authMiddleware.js";
 
-import upload from "../middleware/uploadMiddleware.js";
+import upload, { uploadPGMedia } from "../middleware/uploadMiddleware.js";
 
 const router = express.Router();
 
@@ -43,7 +43,7 @@ router.post(
   "/create",
   protect,
   ownerOnly,
-  upload.array("images", 20),
+  uploadPGMedia,
   createPGController
 );
 

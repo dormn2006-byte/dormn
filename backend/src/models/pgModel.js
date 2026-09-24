@@ -144,7 +144,7 @@ const publicListPipeline = (match = {}) => [
   },
   { $sort: { _spots_available: -1, created_at: -1 } },
   ...ownerNameFields,
-  { $project: { owner: 0, occupancy: 0, _spots_available: 0, gallery: 0 } },
+  { $project: { owner: 0, occupancy: 0, _spots_available: 0, gallery: 0, videos: 0 } },
 ];
 
 // Create New PG
@@ -215,6 +215,10 @@ export const getPGById = async (id) => {
     .slice()
     .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
 
+  pg.videos = (pg.videos || [])
+    .slice()
+    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
   return serialize(pg);
 };
 
@@ -224,7 +228,7 @@ export const getPGsByOwner = async (ownerId) => {
     { $match: { owner_id: Number(ownerId) } },
     ...occupancyLookup,
     { $sort: { created_at: -1 } },
-    { $project: { occupancy: 0, gallery: 0 } },
+    { $project: { occupancy: 0, gallery: 0, videos: 0 } },
   ]);
 
   return serialize(rows);
@@ -290,6 +294,19 @@ export const savePGImages = async (pgId, images) => {
   await PG.updateOne({ _id: Number(pgId) }, { $push: { gallery: { $each: gallery } } });
 };
 
+// Save PG Videos
+export const savePGVideos = async (pgId, videos) => {
+  if (!videos || videos.length === 0) return;
+
+  const entries = videos.map((video, index) => ({
+    video_url: video.video_url,
+    duration_seconds: video.duration_seconds ?? null,
+    display_order: index + 1,
+  }));
+
+  await PG.updateOne({ _id: Number(pgId) }, { $push: { videos: { $each: entries } } });
+};
+
 // ==========================================
 // SAVED PGS (FAVORITES) MODELS
 // ==========================================
@@ -346,7 +363,7 @@ export const getSavedPGsByUser = async (userId) => {
     },
     { $sort: { _spots_available: -1, "saved.created_at": -1 } },
     ...ownerNameFields,
-    { $project: { owner: 0, occupancy: 0, saved: 0, _spots_available: 0, gallery: 0 } },
+    { $project: { owner: 0, occupancy: 0, saved: 0, _spots_available: 0, gallery: 0, videos: 0 } },
   ]);
 
   return serialize(rows);

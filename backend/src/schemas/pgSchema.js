@@ -10,6 +10,17 @@ const pgImageSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// video_url is relative to the uploads root, e.g. "videos/1712-8837.mp4", so the
+// frontend's existing `/uploads/` URL prefix keeps working unchanged.
+const pgVideoSchema = new mongoose.Schema(
+  {
+    video_url: { type: String, required: true },
+    duration_seconds: { type: Number, default: null },
+    display_order: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
 const pgSchema = new mongoose.Schema(
   {
     _id: { type: Number },
@@ -39,6 +50,7 @@ const pgSchema = new mongoose.Schema(
       default: "pending",
     },
     gallery: { type: [pgImageSchema], default: [] },
+    videos: { type: [pgVideoSchema], default: [] },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

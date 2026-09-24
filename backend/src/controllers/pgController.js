@@ -1,6 +1,7 @@
 import {
   createPG,
   savePGImages,
+  savePGVideos,
   getAllPGs,
   getPGById,
   getPGsByOwner,
@@ -12,8 +13,17 @@ import {
   getSavedPGsByUser
 } from "../models/pgModel.js";
 
+import path from "path";
+
 // Import the new utility (adjust the path to match your folder structure)
 import { processImage } from "../utils/imageProcessor.js"; 
+import {
+  buildVideoEntries,
+  unlinkFiles,
+  validateImageFiles,
+  validateVideoFiles,
+} from "../utils/mediaValidation.js";
+import { UPLOAD_DIR } from "../middleware/uploadMiddleware.js";
 import { getOwnerAnalyticsData } from "../models/pgModel.js";
 
 import User from "../schemas/userSchema.js";
@@ -110,28 +120,51 @@ export const createPGController = async (req, res) => {
       });
     }
 
-    // Uploaded Image Logic Extracted
+    // ── Uploaded media ──
+    // With multer `.fields()`, req.files is an object keyed by field name.
+    const imageFiles = req.files?.images ?? [];
+    const videoFiles = req.files?.videos ?? [];
+
     let processedImages = [];
     let profile_image = "default-pg.webp";
 
-    if (req.files && req.files.length > 0) {
-      try {
-        for (const file of req.files) {
-          const processedFileName = await processImage(file);
-          processedImages.push(processedFileName);
-        }
+    // Everything multer already wrote to disk, so a later failure can roll back.
+    const writtenFiles = [...imageFiles, ...videoFiles];
+    const cleanupUploads = () =>
+      unlinkFiles([
+        ...writtenFiles,
+        ...processedImages.map((name) => path.join(UPLOAD_DIR, name)),
+      ]);
 
-        // Temporary: use the first uploaded image as the cover image.
-        profile_image = processedImages[0];
-
-        console.log("Processed Images:", processedImages);
-      } catch (imageError) {
-        return res.status(imageError.statusCode || 500).json({
-          success: false,
-          message: imageError.message,
-        });
+    // multer allows only one global size cap, so the per-type limits live here.
+    for (const check of [validateImageFiles(imageFiles), validateVideoFiles(videoFiles)]) {
+      if (!check.ok) {
+        await cleanupUploads();
+        return res.status(400).json({ success: false, message: check.error });
       }
     }
+
+    try {
+      for (const file of imageFiles) {
+        processedImages.push(await processImage(file));
+      }
+    } catch (imageError) {
+      await cleanupUploads();
+      return res.status(imageError.statusCode || 500).json({
+        success: false,
+        message: imageError.message,
+      });
+    }
+
+    // Temporary: use the first uploaded image as the cover image.
+    if (processedImages.length > 0) profile_image = processedImages[0];
+
+    // Durations are measured in the browser and sent in the same order as the
+    // files; a length mismatch simply leaves them null.
+    const videoEntries = buildVideoEntries(
+      videoFiles,
+      parseStructuredInput(req.body.video_durations)
+    );
 
     // Owner ID from Logged In User
     const owner_id = req.user.id;
@@ -141,28 +174,41 @@ export const createPGController = async (req, res) => {
 
     const finalAmenities = parseStructuredInput(amenities) ?? null;
 
-    const result = await createPG({
-      owner_id,
-      title,
-      description,
-      pg_type,
-      price,
-      address,
-      city,
-      area,
-      nearby_college,
-      available_rooms,
-      amenities: finalAmenities,
-      rules,
-      google_map_link,
-      profile_image,
-      sharing_options: finalSharingOptions, // NEW: Passed to database model
-    });
+    let result;
 
-    // Save gallery images after the PG has been created.
-    if (processedImages.length > 0) {
-      await savePGImages(result.insertId, processedImages);
-      console.log(`Saved ${processedImages.length} gallery images for PG ${result.insertId}`);
+    try {
+      result = await createPG({
+        owner_id,
+        title,
+        description,
+        pg_type,
+        price,
+        address,
+        city,
+        area,
+        nearby_college,
+        available_rooms,
+        amenities: finalAmenities,
+        rules,
+        google_map_link,
+        profile_image,
+        sharing_options: finalSharingOptions, // NEW: Passed to database model
+      });
+
+      // Attach the media now that the PG has an id to hang it off.
+      if (processedImages.length > 0) {
+        await savePGImages(result.insertId, processedImages);
+        console.log(`Saved ${processedImages.length} gallery images for PG ${result.insertId}`);
+      }
+
+      if (videoEntries.length > 0) {
+        await savePGVideos(result.insertId, videoEntries);
+        console.log(`Saved ${videoEntries.length} video(s) for PG ${result.insertId}`);
+      }
+    } catch (persistError) {
+      // Don't leave orphaned media on disk if the write failed.
+      await cleanupUploads();
+      throw persistError;
     }
 
     return res.status(201).json({
