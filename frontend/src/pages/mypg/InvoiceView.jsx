@@ -64,8 +64,11 @@ const InvoiceView = memo(({ payment, pgInfo, studentName, onBack }) => {
           <table>
             <thead><tr><th>Description</th><th>Booking Date</th><th>Status</th><th className="text-right">Amount</th></tr></thead>
             <tbody>
-              <tr><td>Monthly Rent</td><td>{formatDate(payment?.booking_date || payment?.created_at)}</td><td>{status}</td><td className="text-right">₹{amountVal.toLocaleString('en-IN')}</td></tr>
-              <tr className="total-row"><td colSpan="3">Total</td><td className="text-right">₹{amountVal.toLocaleString('en-IN')}</td></tr>
+              <tr><td>Monthly Rent</td><td>{formatDate(payment?.booking_date || payment?.created_at)}</td><td>{status}</td><td className="text-right">₹{(amountVal + (Number(payment?.discount_amount) || 0)).toLocaleString('en-IN')}</td></tr>
+              {payment?.coupon_code ? (
+                <tr><td>Promo Code Discount ({payment.coupon_code})</td><td colSpan="2">Discount</td><td className="text-right">-₹{Number(payment.discount_amount || 0).toLocaleString('en-IN')}</td></tr>
+              ) : null}
+              <tr className="total-row"><td colSpan="3">Total Paid</td><td className="text-right">₹{amountVal.toLocaleString('en-IN')}</td></tr>
             </tbody>
           </table>
         </div>
@@ -112,8 +115,32 @@ const InvoiceView = memo(({ payment, pgInfo, studentName, onBack }) => {
                 <tr><th className="py-3 px-4">Description</th><th className="py-3 px-4">Date</th><th className="py-3 px-4">Status</th><th className="py-3 px-4 text-right">Amount</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-white/5 font-medium text-gray-700 dark:text-gray-300">
-                <tr><td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">Monthly Rent</td><td className="py-3.5 px-4">{formatDate(payment?.booking_date || payment?.created_at)}</td><td className="py-3.5 px-4 capitalize">{status}</td><td className="py-3.5 px-4 text-right font-bold">₹{amountVal.toLocaleString('en-IN')}</td></tr>
-                <tr className="bg-gray-50/50 dark:bg-white/[0.02] font-black text-gray-900 dark:text-white"><td colSpan="3" className="py-3.5 px-4">Total Amount</td><td className="py-3.5 px-4 text-right text-[#0D3A1D] dark:text-[#93B733]">₹{amountVal.toLocaleString('en-IN')}</td></tr>
+                <tr>
+                  <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">Monthly Rent</td>
+                  <td className="py-3.5 px-4">{formatDate(payment?.booking_date || payment?.created_at)}</td>
+                  <td className="py-3.5 px-4 capitalize">{status}</td>
+                  <td className="py-3.5 px-4 text-right font-bold">
+                    ₹{(amountVal + (Number(payment?.discount_amount) || 0)).toLocaleString('en-IN')}
+                  </td>
+                </tr>
+                {payment?.coupon_code && (
+                  <tr className="bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300">
+                    <td className="py-3 px-4 font-bold">
+                      Promo Discount ({payment.coupon_code})
+                    </td>
+                    <td className="py-3 px-4 text-xs text-gray-400">Coupon applied</td>
+                    <td className="py-3 px-4 text-xs font-bold text-emerald-600 dark:text-emerald-400">Applied</td>
+                    <td className="py-3 px-4 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                      -₹{Number(payment.discount_amount || 0).toLocaleString('en-IN')}
+                    </td>
+                  </tr>
+                )}
+                <tr className="bg-gray-50/50 dark:bg-white/[0.02] font-black text-gray-900 dark:text-white">
+                  <td colSpan="3" className="py-3.5 px-4">Total Amount Paid</td>
+                  <td className="py-3.5 px-4 text-right text-[#0D3A1D] dark:text-[#93B733]">
+                    ₹{amountVal.toLocaleString('en-IN')}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

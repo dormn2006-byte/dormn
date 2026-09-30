@@ -11,16 +11,19 @@ import {
   Mail,
   Phone,
   Building,
-  Save
+  Save,
+  Trash2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
+import DeleteAccountModal from "../../components/auth/DeleteAccountModal";
 
 const OwnerProfileModal = ({ isOpen, onClose, initialTab = "profile" }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [subData, setSubData] = useState(null);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -37,9 +40,9 @@ const OwnerProfileModal = ({ isOpen, onClose, initialTab = "profile" }) => {
 
   const [formData, setFormData] = useState({
     fullName: user?.full_name || user?.name || "Owner",
-    email: user?.email || "owner@example.com",
-    phone: user?.phone || "+91 98765 43210",
-    businessName: user?.business_name || "Dormn PG Management",
+    email: user?.email || "",
+    phone: user?.phone || "",
+    businessName: user?.business_name || "",
     notifications: {
       bookings: true,
       sms: true,
@@ -357,6 +360,26 @@ const OwnerProfileModal = ({ isOpen, onClose, initialTab = "profile" }) => {
                 </div>
               </div>
 
+              {/* Danger Zone */}
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 flex items-center justify-between gap-3">
+                <div>
+                  <h5 className="text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                    <Trash2 size={13} />
+                    <span>Delete Account</span>
+                  </h5>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    Permanently delete your profile and listings.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold transition cursor-pointer shrink-0"
+                >
+                  Delete Account
+                </button>
+              </div>
+
               <div className="pt-4 flex justify-end">
                 <button
                   type="submit"
@@ -372,6 +395,12 @@ const OwnerProfileModal = ({ isOpen, onClose, initialTab = "profile" }) => {
         </div>
 
       </div>
+
+      {/* Permanent Account Deletion Modal */}
+      <DeleteAccountModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+      />
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+dotenv.config({ quiet: true });
 import http from "http";
 import express from "express";
 import cors from "cors";
@@ -26,6 +27,10 @@ import pgChatRoutes from "./routes/pgChatRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import clubRoutes from "./routes/clubRoutes.js";
 import drDormnRoutes from "./routes/drDormnRoutes.js";
+import staffRoutes from './routes/staffRoutes.js';
+import visitRoutes from './routes/visitRoutes.js';
+import shortStayRoutes from './routes/shortStayRoutes.js';
+import couponRoutes from './routes/couponRoutes.js';
 
 dotenv.config({ quiet: true });
 
@@ -122,6 +127,10 @@ app.use("/api/pg-chat", pgChatRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/clubs", clubRoutes);
 app.use("/api/dr-dormn", drDormnRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/visits', visitRoutes);
+app.use('/api/short-stays', shortStayRoutes);
+app.use('/api/coupons', couponRoutes);
 
 app.get("/", (req, res) => {
   res.send("PG Platform Backend Running");

@@ -20,6 +20,9 @@ import "../schemas/pgChatConversationSchema.js";
 import "../schemas/pgChatMessageSchema.js";
 import "../schemas/securityAuditLogSchema.js";
 import "../schemas/whatsappLogSchema.js";
+import "../schemas/staffSchema.js";
+import "../schemas/visitSchema.js";
+import "../schemas/shortStaySchema.js";
 
 /**
  * Creates every collection's indexes (unique constraints, lookup indexes).

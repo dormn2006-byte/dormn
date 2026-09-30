@@ -153,68 +153,68 @@ const ResidentNotifications = memo(({ onBack }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-5">
+    <div className="max-w-4xl mx-auto space-y-3.5 sm:space-y-5">
       <div className="flex items-center justify-between mb-2 pb-3 border-b border-gray-200/80 dark:border-white/10">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-[#0D3A1D] dark:hover:text-[#93B733] transition shadow-xs cursor-pointer active:scale-95"
+          className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-xl bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-[#0D3A1D] dark:hover:text-[#93B733] transition shadow-xs cursor-pointer active:scale-95"
         >
-          <ArrowLeft size={16} /> <span>Back to My PG</span>
+          <ArrowLeft size={15} /> <span>Back to My PG</span>
         </button>
-        <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">Notifications Center</span>
+        <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-gray-400">Notifications Center</span>
       </div>
 
       <div>
-        <h2 className="text-2xl sm:text-3xl font-black text-[#0D3A1D] dark:text-white tracking-tight flex items-center gap-3">
-          <Bell className="w-7 h-7 text-[#93B733]" /> Notifications Center
+        <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-[#0D3A1D] dark:text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
+          <Bell className="w-5 h-5 sm:w-7 sm:h-7 text-[#93B733]" /> Notifications Center
         </h2>
-        <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 mt-1">Real-time owner notifications. Click any card to view complete details.</p>
+        <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 mt-0.5 sm:mt-1">Real-time owner notifications. Click any card to view complete details.</p>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 p-1 rounded-2xl bg-gray-100 dark:bg-white/[0.04] border border-gray-200/80 dark:border-white/10 w-fit overflow-x-auto scrollbar-none">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2 p-1 rounded-2xl bg-gray-100 dark:bg-white/[0.04] border border-gray-200/80 dark:border-white/10 w-fit overflow-x-auto scrollbar-none">
           {[{ id: 'all', label: 'All' }, { id: 'unread', label: 'Unread', count: unreadCount }, { id: 'payment', label: 'Payments' }, { id: 'booking', label: 'Bookings' }, { id: 'maintenance', label: 'Maintenance' }].map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === tab.id ? 'bg-white dark:bg-[#181818] text-[#0D3A1D] dark:text-white shadow-xs' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}>
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-1.5 sm:gap-2 py-1.5 px-3 sm:py-2 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${activeTab === tab.id ? 'bg-white dark:bg-[#181818] text-[#0D3A1D] dark:text-white shadow-xs' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}>
               <span>{tab.label}</span>
-              {tab.count > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white">{tab.count}</span>}
+              {tab.count > 0 && <span className="px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black bg-rose-500 text-white">{tab.count}</span>}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-3">
-          {unreadCount > 0 && <button onClick={markAllRead} className="flex items-center gap-1 text-xs font-bold text-[#93B733] hover:underline cursor-pointer"><Check className="w-3.5 h-3.5" /> Mark all as read</button>}
-          {notifications.length > 0 && <button onClick={clearAll} className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-rose-500 cursor-pointer transition-colors"><Trash2 className="w-3.5 h-3.5" /> Clear all</button>}
+          {unreadCount > 0 && <button onClick={markAllRead} className="flex items-center gap-1 text-[11px] sm:text-xs font-bold text-[#93B733] hover:underline cursor-pointer"><Check className="w-3.5 h-3.5" /> Mark all as read</button>}
+          {notifications.length > 0 && <button onClick={clearAll} className="flex items-center gap-1 text-[11px] sm:text-xs font-bold text-gray-400 hover:text-rose-500 cursor-pointer transition-colors"><Trash2 className="w-3.5 h-3.5" /> Clear all</button>}
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2.5 sm:space-y-3">
         {filtered.length > 0 ? filtered.map(item => {
           const style = getStyle(item.type, item.status);
           const Icon = style.icon;
           return (
-            <div key={item.id} onClick={() => handleCardClick(item)} className={`group flex items-start gap-4 rounded-3xl border p-5 sm:p-6 transition-all cursor-pointer hover:border-[#93B733] ${!item.read ? 'border-[#93B733]/50 bg-emerald-50/20 dark:bg-[#93B733]/5 shadow-sm' : 'border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#141414]'}`}>
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${style.bg} text-white shadow-md`}>
-                <Icon size={20} />
+            <div key={item.id} onClick={() => handleCardClick(item)} className={`group flex items-start gap-3 sm:gap-4 rounded-2xl sm:rounded-3xl border p-3.5 sm:p-5 md:p-6 transition-all cursor-pointer hover:border-[#93B733] ${!item.read ? 'border-[#93B733]/50 bg-emerald-50/20 dark:bg-[#93B733]/5 shadow-sm' : 'border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#141414]'}`}>
+              <div className={`flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl ${style.bg} text-white shadow-md`}>
+                <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${style.badge}`}>{item.category || 'Notification'}</span>
+                  <span className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase border ${style.badge}`}>{item.category || 'Notification'}</span>
                   {!item.read && <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />}
                 </div>
-                <h4 className="text-sm sm:text-base font-black text-gray-900 dark:text-white leading-tight">{item.title}</h4>
-                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed font-medium line-clamp-2">{item.message}</p>
-                <div className="flex items-center gap-3 text-[11px] text-gray-400 font-bold pt-1">
-                  <span className="flex items-center gap-1"><Clock size={12} /> {formatDT(item.created_at)}</span>
+                <h4 className="text-xs sm:text-sm md:text-base font-black text-gray-900 dark:text-white leading-tight">{item.title}</h4>
+                <p className="text-[11px] sm:text-xs text-gray-600 dark:text-gray-300 leading-relaxed font-medium line-clamp-2">{item.message}</p>
+                <div className="flex items-center gap-3 text-[10px] sm:text-[11px] text-gray-400 font-bold pt-1">
+                  <span className="flex items-center gap-1"><Clock size={11} /> {formatDT(item.created_at)}</span>
                   <span className="text-[#93B733] font-black ml-auto group-hover:underline">Click for full details →</span>
                 </div>
               </div>
             </div>
           );
         }) : (
-          <div className="bg-white dark:bg-[#141414] border border-gray-200/80 dark:border-white/10 rounded-3xl p-10 sm:p-14 text-center">
-            <div className="w-16 h-16 rounded-3xl bg-[#93B733]/10 dark:bg-[#93B733]/5 flex items-center justify-center mx-auto mb-4">
-              <Bell className="w-8 h-8 text-[#93B733]" />
+          <div className="bg-white dark:bg-[#141414] border border-gray-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-6 sm:p-10 md:p-14 text-center">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl bg-[#93B733]/10 dark:bg-[#93B733]/5 flex items-center justify-center mx-auto mb-3 sm:mb-4">
+              <Bell className="w-6 h-6 sm:w-8 sm:h-8 text-[#93B733]" />
             </div>
-            <h4 className="text-lg font-black text-gray-900 dark:text-white">No notifications found</h4>
+            <h4 className="text-base sm:text-lg font-black text-gray-900 dark:text-white">No notifications found</h4>
             <p className="text-xs text-gray-400 mt-1">Real-time owner updates will automatically populate here.</p>
           </div>
         )}

@@ -7,7 +7,11 @@ import {
   User,
   CheckCircle,
   XCircle,
+  RotateCcw,
   Trash2,
+  Ban,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import api from "../../services/api";
 import { AuthContext } from "../../context/AuthContext";
@@ -20,8 +24,44 @@ const PGDetails = () => {
   const [loading, setLoading] = useState(Boolean(pgId));
   const [error, setError] = useState("");
 
+  const [modal, setModal] = useState({ type: null, note: "" });
+  const [submittingAction, setSubmittingAction] = useState(false);
+
   const { token } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  const handleAdminAction = async (endpoint, successMsg) => {
+    try {
+      await api.put(endpoint, {}, { headers: { Authorization: `Bearer ${token}` } });
+      if (successMsg) alert(successMsg);
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert("Action failed. Please try again.");
+    }
+  };
+
+  const handleModalSubmit = async () => {
+    const isRev = modal.type === "revision";
+    if (isRev && !modal.note.trim()) {
+      alert("Please enter what needs to be changed.");
+      return;
+    }
+    try {
+      setSubmittingAction(true);
+      const url = isRev
+        ? `/superadmin/revision-pg/${pg.id || pg.pg_id}`
+        : `/superadmin/remove-pg/${pg.id || pg.pg_id}`;
+      await api.put(url, { admin_note: modal.note.trim() });
+      alert(isRev ? "Revision requested! Owner has been notified with your note." : "PG removed from explore and public listings.");
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.message || `Failed to ${isRev ? "send revision request" : "remove PG listing"}`);
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
 
   const amenitiesList = Array.isArray(pg?.amenities)
     ? pg.amenities
@@ -228,44 +268,85 @@ const PGDetails = () => {
               Admin Actions
             </h3>
 
+            {/* If there is an existing admin note, show it */}
+            {pg.admin_note && (
+              <div className={`mb-4 p-3 rounded-2xl border text-xs ${
+                pg.status === 'removed'
+                  ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                  : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+              }`}>
+                <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px]">
+                  <AlertTriangle size={13} />
+                  <span>{pg.status === 'removed' ? 'Removal Reason' : 'Active Revision Feedback'}</span>
+                </div>
+                <p className="mt-1 leading-relaxed">{pg.admin_note}</p>
+              </div>
+            )}
+
             <div className="space-y-3">
-              <button
-                onClick={async () => {
-                  try {
-                    await api.put(`/superadmin/pg/${pg.id || pg.pg_id}/approve`, {}, {
-                      headers: { Authorization: `Bearer ${token}` },
-                    });
-                    window.location.reload();
-                  } catch (err) {
-                    console.error(err);
-                  }
-                }}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-5 py-4 font-bold text-white"
-              >
-                <CheckCircle size={18} />
-                Approve PG
-              </button>
+              {pg.status === "approved" ? (
+                <>
+                  <div className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 px-5 py-3.5 font-bold text-emerald-400">
+                    <CheckCircle size={18} />
+                    <span>Approved & Live</span>
+                  </div>
+
+                  <button
+                    onClick={() => setModal({ type: "remove", note: "Removed by administrator from live Explore listings." })}
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl bg-rose-600 hover:bg-rose-500 px-5 py-3.5 font-bold text-white transition shadow-sm cursor-pointer"
+                    title="Remove from explore and public pages"
+                  >
+                    <Ban size={18} />
+                    Remove from Explore
+                  </button>
+                </>
+              ) : pg.status === "removed" ? (
+                <>
+                  <div className="flex items-center justify-center gap-2 rounded-2xl bg-rose-500/20 border border-rose-500/30 px-5 py-3.5 font-bold text-rose-400">
+                    <XCircle size={18} />
+                    <span>Currently Removed / Delisted</span>
+                  </div>
+
+                  <button
+                    onClick={() => handleAdminAction(`/superadmin/pg/${pg.id || pg.pg_id}/approve`, "PG restored and approved successfully!")}
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-5 py-3.5 font-bold text-white transition shadow-sm cursor-pointer"
+                  >
+                    <CheckCircle size={18} />
+                    Restore & Approve PG
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handleAdminAction(`/superadmin/pg/${pg.id || pg.pg_id}/approve`, "PG approved successfully!")}
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-5 py-3.5 font-bold text-white transition shadow-sm cursor-pointer"
+                  >
+                    <CheckCircle size={18} />
+                    Approve PG
+                  </button>
+
+                  <button
+                    onClick={() => setModal({ type: "revision", note: pg.admin_note || "" })}
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl bg-amber-600 hover:bg-amber-500 px-5 py-3.5 font-bold text-white transition shadow-sm cursor-pointer"
+                    title="Send back to owner with revision notes"
+                  >
+                    <RotateCcw size={18} />
+                    Request Revision
+                  </button>
+
+                  <button
+                    onClick={() => handleAdminAction(`/superadmin/pg/${pg.id || pg.pg_id}/reject`, "PG rejected successfully!")}
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl bg-rose-600 hover:bg-rose-500 px-5 py-3.5 font-bold text-white transition shadow-sm cursor-pointer"
+                  >
+                    <XCircle size={18} />
+                    Reject PG
+                  </button>
+                </>
+              )}
 
               <button
                 onClick={async () => {
-                  try {
-                    await api.put(`/superadmin/pg/${pg.id || pg.pg_id}/reject`, {}, {
-                      headers: { Authorization: `Bearer ${token}` },
-                    });
-                    window.location.reload();
-                  } catch (err) {
-                    console.error(err);
-                  }
-                }}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-rose-600 px-5 py-4 font-bold text-white"
-              >
-                <XCircle size={18} />
-                Reject PG
-              </button>
-
-              <button
-                onClick={async () => {
-                  if (!window.confirm("Delete this PG?")) return;
+                  if (!window.confirm("Permanently delete this PG listing?")) return;
 
                   try {
                     await api.delete(`/superadmin/pg/${pg.id || pg.pg_id}`, {
@@ -275,9 +356,10 @@ const PGDetails = () => {
                     navigate('/superadmin/manage-pgs');
                   } catch (err) {
                     console.error(err);
+                    alert("Failed to delete PG.");
                   }
                 }}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 font-bold text-red-300"
+                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-3.5 font-bold text-red-300 hover:bg-red-500/20 transition cursor-pointer"
               >
                 <Trash2 size={18} />
                 Delete PG
@@ -296,6 +378,96 @@ const PGDetails = () => {
           </div>
         </div>
       </div>
+      {/* ── Unified Action Modal (Revision or Remove) ── */}
+      {modal.type && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-lg rounded-3xl border border-white/15 bg-slate-900 p-6 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <span
+                  className={`text-[10px] uppercase font-black tracking-wider px-2.5 py-1 rounded-full ${
+                    modal.type === "revision"
+                      ? "text-amber-400 bg-amber-500/15"
+                      : "text-rose-400 bg-rose-500/15"
+                  }`}
+                >
+                  {modal.type === "revision" ? "Action Required" : "Delist Property"}
+                </span>
+                <h3 className="text-xl font-black text-white mt-1.5">
+                  {modal.type === "revision"
+                    ? `Request Revision for ${pg.title || pg.name}`
+                    : `Remove ${pg.title || pg.name}`}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {modal.type === "revision"
+                    ? "Write what needs to be changed. The owner will see this note directly on their dashboard and can update & re-submit."
+                    : "This will remove the property from Explore and all student-facing pages. It will be moved to the owner's \"Removed\" section."}
+                </p>
+              </div>
+              <button
+                onClick={() => setModal({ type: null, note: "" })}
+                className="p-1.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                {modal.type === "revision"
+                  ? "Feedback / What Needs To Be Changed:"
+                  : "Removal Reason / Note for Owner (Optional):"}
+              </label>
+              <textarea
+                rows={modal.type === "revision" ? 4 : 3}
+                value={modal.note}
+                onChange={(e) => setModal((prev) => ({ ...prev, note: e.target.value }))}
+                placeholder={
+                  modal.type === "revision"
+                    ? "e.g. Please upload clear photos of the rooms, verify the exact street address, and clarify if food is included in rent."
+                    : "e.g. Delisted due to safety complaints / owner request / duplicate listing."
+                }
+                className={`w-full rounded-2xl border border-white/15 bg-slate-950/80 p-3.5 text-sm text-white outline-none placeholder-gray-500 ${
+                  modal.type === "revision"
+                    ? "focus:border-amber-400"
+                    : "focus:border-rose-400"
+                }`}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setModal({ type: null, note: "" })}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingAction}
+                onClick={handleModalSubmit}
+                className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold text-white transition cursor-pointer disabled:opacity-50 ${
+                  modal.type === "revision"
+                    ? "bg-amber-500 hover:bg-amber-600"
+                    : "bg-rose-600 hover:bg-rose-500"
+                }`}
+              >
+                {modal.type === "revision" ? <RotateCcw size={14} /> : <Ban size={14} />}
+                <span>
+                  {submittingAction
+                    ? modal.type === "revision"
+                      ? "Sending..."
+                      : "Removing..."
+                    : modal.type === "revision"
+                    ? "Send Revision Note"
+                    : "Confirm Removal"}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -63,7 +63,7 @@ const Footer = () => {
             </Link>
 
             <p className="text-xs sm:text-sm leading-relaxed text-gray-300 font-medium max-w-sm">
-              Simplifying student and professional accommodation discovery with verified PG listings, zero brokerage friction, and direct owner connections.
+              Simplifying student and professional accommodation discovery with verified PG listings, transparent pricing, and direct owner connections.
             </p>
 
             <div className="space-y-2 pt-1 text-xs font-semibold text-gray-300">

@@ -56,8 +56,112 @@ export default function PGChatRoom({
   const [savingEdit, setSavingEdit] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
   const pollTimerRef = useRef(null);
   const scrollToBottom = (smooth = true) => messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [windowResizedByKeyboard, setWindowResizedByKeyboard] = useState(false);
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : false);
+  const initialWindowHeightRef = useRef(typeof window !== "undefined" ? window.innerHeight : 0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    initialWindowHeightRef.current = window.innerHeight;
+
+    const handleViewportChange = () => {
+      if (window.innerWidth >= 768) {
+        setKeyboardHeight(0);
+        setWindowResizedByKeyboard(false);
+        return;
+      }
+      
+      const currentInnerHeight = window.innerHeight;
+      const initialHeight = initialWindowHeightRef.current;
+      const innerHeightDiff = initialHeight - currentInnerHeight;
+      const isInnerResized = innerHeightDiff > 120;
+      setWindowResizedByKeyboard(isInnerResized);
+
+      const vv = window.visualViewport;
+      if (vv) {
+        const vvDiff = Math.max(0, currentInnerHeight - vv.height);
+        if (vvDiff > 100) {
+          setKeyboardHeight(vvDiff);
+          window.dispatchEvent(new CustomEvent("dormn_chat_keyboard", {
+            detail: { focused: true, keyboardHeight: vvDiff }
+          }));
+        } else {
+          setKeyboardHeight(0);
+        }
+      }
+    };
+
+    window.addEventListener("resize", handleViewportChange);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", handleViewportChange);
+      window.visualViewport.addEventListener("scroll", handleViewportChange);
+    }
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", handleViewportChange);
+        window.visualViewport.removeEventListener("scroll", handleViewportChange);
+      }
+    };
+  }, []);
+
+  let mobileLift = 0;
+  if (isMobile && isInputFocused) {
+    if (windowResizedByKeyboard) {
+      mobileLift = 0;
+    } else if (keyboardHeight > 0) {
+      mobileLift = keyboardHeight;
+    } else {
+      mobileLift = 260;
+    }
+  }
+
+  useEffect(() => {
+    if (isInputFocused && isMobile) {
+      const t1 = setTimeout(() => scrollToBottom(true), 80);
+      const t2 = setTimeout(() => scrollToBottom(true), 250);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, [isInputFocused, mobileLift, isMobile]);
+
+  useEffect(() => {
+    setIsInputFocused(false);
+  }, [activeChannel]);
+
+  const handleInputFocus = () => {
+    setIsInputFocused(true);
+    window.dispatchEvent(new CustomEvent("dormn_chat_keyboard", {
+      detail: { focused: true, keyboardHeight: mobileLift || 260 }
+    }));
+    setTimeout(() => scrollToBottom(true), 100);
+  };
+
+  const handleInputBlur = () => {
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (active && (active.tagName === "INPUT" || active.closest("form") || active.closest("[data-chat-controls]"))) {
+        return;
+      }
+      setIsInputFocused(false);
+      window.dispatchEvent(new CustomEvent("dormn_chat_keyboard", {
+        detail: { focused: false, keyboardHeight: 0 }
+      }));
+    }, 120);
+  };
 
   const fetchConversations = useCallback(async (isBackground = false) => {
     if (!pgId) return;
@@ -140,6 +244,16 @@ export default function PGChatRoom({
       if (isForActiveChannel) {
         setMessages((prev) => {
           if (prev.some((m) => m.id === incomingMsg.id)) return prev;
+          const optimisticIdx = prev.findIndex(
+            (m) => String(m.id).startsWith("temp-") &&
+                   Number(m.sender_id) === Number(incomingMsg.sender_id) &&
+                   m.message === incomingMsg.message
+          );
+          if (optimisticIdx !== -1) {
+            const next = [...prev];
+            next[optimisticIdx] = incomingMsg;
+            return next;
+          }
           return [...prev, incomingMsg];
         });
       }
@@ -238,7 +352,14 @@ export default function PGChatRoom({
         isEncrypted: true
       });
       if (res.data?.success && res.data.message) {
-        setMessages((prev) => prev.map((m) => (m.id === optimisticMsg.id ? res.data.message : m)));
+        const savedMsg = res.data.message;
+        setMessages((prev) => {
+          const alreadyExists = prev.some((m) => m.id === savedMsg.id);
+          if (alreadyExists) {
+            return prev.filter((m) => m.id !== optimisticMsg.id);
+          }
+          return prev.map((m) => (m.id === optimisticMsg.id ? savedMsg : m));
+        });
         fetchConversations(true);
       }
     } catch (err) {
@@ -352,9 +473,9 @@ export default function PGChatRoom({
   }
 
   return (
-    <div className="w-full h-full min-h-[calc(100vh-70px)] rounded-none bg-white dark:bg-[#0c1017] border-0 flex overflow-hidden relative">
+    <div className="w-full flex-1 h-full min-h-0 rounded-none bg-white dark:bg-[#0c1017] border-0 flex overflow-hidden relative">
       {/* ══════════ LEFT SIDEBAR ══════════ */}
-      <aside className={`w-full md:w-80 lg:w-88 shrink-0 bg-gray-50/90 dark:bg-[#080b11] border-r border-gray-200/80 dark:border-white/10 flex flex-col z-30 ${mobileSidebarOpen ? "fixed inset-0 bg-white dark:bg-[#0c1017] z-50 flex" : "hidden md:flex"}`}>
+      <aside className={`w-full md:w-80 lg:w-88 shrink-0 bg-gray-50/90 dark:bg-[#080b11] border-r border-gray-200/80 dark:border-white/10 flex flex-col z-30 ${mobileSidebarOpen ? "fixed inset-0 bg-white dark:bg-[#0c1017] z-50 flex pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0" : "hidden md:flex"}`}>
         <div className="p-3.5 sm:p-4 border-b border-gray-200/80 dark:border-white/10 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -515,8 +636,11 @@ export default function PGChatRoom({
       </aside>
 
       {/* ══════════ MAIN CHAT PANEL ══════════ */}
-      <main className="flex-1 flex flex-col h-full bg-white dark:bg-[#0c1017] overflow-hidden">
-        <header className="px-3.5 sm:px-5 py-3 border-b border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-3 bg-white/80 dark:bg-[#0c1017]/80 backdrop-blur-md z-10">
+      <main 
+        className="flex-1 min-h-0 flex flex-col h-full bg-white dark:bg-[#0c1017] overflow-hidden transition-[padding] duration-200"
+        style={{ paddingBottom: isMobile && mobileLift > 0 ? `${mobileLift}px` : undefined }}
+      >
+        <header className="shrink-0 px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-gray-200/80 dark:border-white/10 flex items-center justify-between gap-3 bg-white/80 dark:bg-[#0c1017]/80 backdrop-blur-md z-10">
           <div className="flex items-center gap-2.5 min-w-0">
             <button onClick={() => setMobileSidebarOpen(true)} className="p-1.5 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 md:hidden">
               <Users size={18} />
@@ -566,8 +690,16 @@ export default function PGChatRoom({
           </div>
         )}
 
-        {/* Messages Stream */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3.5 custom-scrollbar">
+        {/* Message Thread */}
+        <div 
+          className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-3.5 custom-scrollbar"
+          onClick={() => {
+            if (isMobile && isInputFocused) {
+              inputRef.current?.blur();
+              setIsInputFocused(false);
+            }
+          }}
+        >
           {messagesLoading && messages.length === 0 ? (
             <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-3 border-[#93B733] border-t-transparent rounded-full animate-spin" /></div>
           ) : messages.length === 0 ? (
@@ -590,21 +722,21 @@ export default function PGChatRoom({
 
               if (isAnnouncementMsg) {
                 return (
-                  <div key={msg.id || index} className="w-full my-3 p-4 sm:p-5 rounded-3xl bg-amber-50 dark:bg-[#18140c] border-2 border-amber-400 dark:border-amber-500/60 shadow-lg animate-in fade-in duration-200">
-                    <div className="flex items-center justify-between gap-2 mb-2.5 pb-2.5 border-b border-amber-200 dark:border-amber-500/30">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-black flex items-center justify-center font-black shadow-md shrink-0">
-                          <Sparkles size={18} />
+                  <div key={msg.id || index} className="w-full my-2 sm:my-3 p-3 sm:p-5 rounded-2xl sm:rounded-3xl bg-amber-50 dark:bg-[#18140c] border border-amber-300 dark:border-amber-500/60 shadow-md animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between gap-2 mb-2 sm:mb-2.5 pb-2 sm:pb-2.5 border-b border-amber-200 dark:border-amber-500/30">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-black flex items-center justify-center font-black shadow-xs shrink-0">
+                          <Sparkles className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" />
                         </div>
                         <div>
-                          <p className="text-xs sm:text-sm font-black text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                          <p className="text-[11px] sm:text-sm font-black text-amber-900 dark:text-amber-300 flex items-center gap-1 sm:gap-1.5">
                             <span>Official Host Announcement</span>
-                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 uppercase">Verified</span>
+                            <span className="text-[8px] sm:text-[10px] font-black px-1.5 py-0.2 rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 uppercase">Verified</span>
                           </p>
-                          <p className="text-[11px] text-amber-800/80 dark:text-amber-200/70 font-bold">By {msg.sender_name} • {msg.room_no || "Management"}</p>
+                          <p className="text-[10px] sm:text-[11px] text-amber-800/80 dark:text-amber-200/70 font-bold">By {msg.sender_name} • {msg.room_no || "Management"}</p>
                         </div>
                       </div>
-                      <span className="text-[11px] font-bold text-amber-700/80 dark:text-amber-400/80">
+                      <span className="text-[10px] sm:text-[11px] font-bold text-amber-700/80 dark:text-amber-400/80">
                         {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Just now"}
                       </span>
                     </div>
@@ -626,10 +758,10 @@ export default function PGChatRoom({
                         </div>
                       </div>
                     ) : (
-                      <p className="text-sm sm:text-base font-black text-amber-950 dark:text-amber-100 leading-relaxed tracking-wide">{msg.message}</p>
+                      <p className="text-xs sm:text-base font-bold sm:font-black text-amber-950 dark:text-amber-100 leading-snug sm:leading-relaxed tracking-normal">{msg.message}</p>
                     )}
 
-                    <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-amber-200 dark:border-amber-500/20 text-[11px] font-black">
+                    <div className="flex items-center justify-between mt-2.5 sm:mt-3 pt-2 sm:pt-2.5 border-t border-amber-200 dark:border-amber-500/20 text-[10px] sm:text-[11px] font-black">
                       <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-black">
                         <Lock size={12} /><span>Verified Community Announcement</span>
                       </span>
@@ -646,10 +778,10 @@ export default function PGChatRoom({
 
               return (
                 <div key={msg.id || index} className={`flex items-start gap-2.5 sm:gap-3 group ${isMine ? "flex-row-reverse" : "flex-row"}`}>
-                  <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 select-none shadow-xs ${isOwner ? "bg-amber-500 text-black border border-amber-400" : isMine ? "bg-[#93B733] text-black border border-[#82a32d]" : "bg-gray-200 dark:bg-white/10 text-gray-900 dark:text-white border border-gray-300 dark:border-white/10"}`}>
+                  <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-xl sm:rounded-2xl flex items-center justify-center font-black text-xs shrink-0 select-none shadow-xs ${isOwner ? "bg-amber-500 text-black border border-amber-400" : isMine ? "bg-[#93B733] text-black border border-[#82a32d]" : "bg-gray-200 dark:bg-white/10 text-gray-900 dark:text-white border border-gray-300 dark:border-white/10"}`}>
                     {msg.sender_name ? msg.sender_name.charAt(0).toUpperCase() : "U"}
                   </div>
-                  <div className={`max-w-[80%] sm:max-w-[70%] space-y-1 ${isMine ? "items-end text-right" : "items-start text-left"}`}>
+                  <div className={`max-w-[85%] sm:max-w-[70%] space-y-1 ${isMine ? "items-end text-right" : "items-start text-left"}`}>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[11px] font-black text-gray-900 dark:text-white">{isMine ? "You" : msg.sender_name}</span>
                       {isOwner && <span className="text-[8px] font-black px-1.5 py-0.2 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 uppercase">👑 Host</span>}
@@ -674,10 +806,10 @@ export default function PGChatRoom({
                         </div>
                       </div>
                     ) : (
-                      <div className={`relative p-3 sm:p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed break-words shadow-sm ${isMine ? "bg-[#93B733] text-[#0A2312] border border-[#83a628] rounded-tr-xs" : "bg-white dark:bg-[#141a24] text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-white/10 rounded-tl-xs shadow-xs"}`}>
-                        <p className={`font-black text-xs sm:text-sm ${isMine ? "text-[#0A2312]" : "text-gray-900 dark:text-gray-100"}`}>{msg.message}</p>
-                        <div className={`flex items-center gap-1.5 mt-1 text-[10px] font-extrabold ${isMine ? "text-[#0A2312]/80 justify-end" : "text-gray-400 justify-start"}`}>
-                          <Lock size={10} /><span>Encrypted</span>{isMine && <CheckCheck size={12} className="text-[#0A2312]" />}
+                      <div className={`relative p-2.5 sm:p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed break-words shadow-sm ${isMine ? "bg-[#93B733] border border-[#83a628] rounded-tr-xs" : "bg-white dark:bg-[#141a24] text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-white/10 rounded-tl-xs shadow-xs"}`}>
+                        <p className={`font-black text-xs sm:text-sm ${isMine ? "!text-[#0A2312] dark:!text-[#0A2312]" : "text-gray-900 dark:text-gray-100"}`}>{msg.message}</p>
+                        <div className={`flex items-center gap-1.5 mt-1 text-[10px] font-extrabold ${isMine ? "!text-[#0A2312]/80 dark:!text-[#0A2312]/80 justify-end" : "text-gray-400 justify-start"}`}>
+                          <Lock size={10} className={isMine ? "!text-[#0A2312] dark:!text-[#0A2312]" : ""} /><span>Encrypted</span>{isMine && <CheckCheck size={12} className="!text-[#0A2312] dark:!text-[#0A2312]" />}
                         </div>
                       </div>
                     )}
@@ -701,17 +833,26 @@ export default function PGChatRoom({
         </div>
 
         {/* Reactions */}
-        <div className="px-3.5 sm:px-5 py-2 border-t border-gray-100 dark:border-white/5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0 mr-1">Quick:</span>
+        <div data-chat-controls="true" className="shrink-0 px-2.5 sm:px-5 py-1 sm:py-2 border-t border-gray-100 dark:border-white/5 flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar">
+          <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0 mr-0.5 sm:mr-1">Quick:</span>
           {QUICK_REACTIONS.map((r, i) => (
-            <button key={i} onClick={() => setInputMsg(r)} className="px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-[#93B733]/15 hover:text-[#93B733] border border-transparent text-[11px] font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap transition cursor-pointer">
+            <button 
+              key={i} 
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setInputMsg(r);
+                inputRef.current?.focus();
+              }} 
+              className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg sm:rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-[#93B733]/15 hover:text-[#93B733] border border-transparent text-[10px] sm:text-[11px] font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap transition cursor-pointer"
+            >
               {r}
             </button>
           ))}
         </div>
 
         {/* Input Footer */}
-        <footer className="p-3 sm:p-4 border-t border-gray-200/80 dark:border-white/10 bg-gray-50/70 dark:bg-[#080b11]/70 space-y-2">
+        <footer className="shrink-0 p-2.5 sm:p-4 border-t border-gray-200/80 dark:border-white/10 bg-gray-50/70 dark:bg-[#080b11]/70 space-y-1.5 sm:space-y-2">
           {typingUsers.length > 0 && (
             <div className="px-2 py-0.5 text-[11px] font-bold text-[#93B733] flex items-center gap-1.5 animate-pulse">
               <span className="w-2 h-2 rounded-full bg-[#93B733]" />
@@ -720,25 +861,33 @@ export default function PGChatRoom({
           )}
           {isOwnerMode && (
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400 cursor-pointer">
+              <label className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-bold text-amber-600 dark:text-amber-400 cursor-pointer select-none">
                 <input type="checkbox" checked={isAnnouncement} onChange={(e) => setIsAnnouncement(e.target.checked)} className="accent-amber-500 rounded cursor-pointer" />
-                <Megaphone size={14} /><span>Post as Verified Host Announcement</span>
+                <Megaphone size={13} className="shrink-0" /><span>Post as Verified Host Announcement</span>
               </label>
             </div>
           )}
           <form onSubmit={handleSend} className="flex items-center gap-2">
             <div className="relative flex-1">
-              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"><Lock size={13} className="text-[#93B733]" /></div>
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><Lock size={13} className="text-[#93B733]" /></div>
               <input
+                ref={inputRef}
                 type="text"
                 value={inputMsg}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
                 onChange={handleInputChange}
                 placeholder={isAnnouncement ? "Write official PG announcement (pinned to notice board)..." : `Message ${activeChannel.title}...`}
-                className={`w-full bg-white dark:bg-[#111622] border rounded-2xl pl-9 pr-4 py-3 text-xs sm:text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none transition ${isAnnouncement ? "border-amber-400 focus:ring-1 focus:ring-amber-500" : "border-gray-300 dark:border-white/15 focus:border-[#93B733] focus:ring-1 focus:ring-[#93B733]"}`}
+                className={`w-full bg-white dark:bg-[#111622] border rounded-2xl pl-8 sm:pl-9 pr-3 sm:pr-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none transition ${isAnnouncement ? "border-amber-400 focus:ring-1 focus:ring-amber-500" : "border-gray-300 dark:border-white/15 focus:border-[#93B733] focus:ring-1 focus:ring-[#93B733]"}`}
               />
             </div>
-            <button type="submit" disabled={!inputMsg.trim() || sending} className={`px-5 py-3 rounded-2xl disabled:opacity-50 text-xs sm:text-sm font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md transition cursor-pointer shrink-0 active:scale-95 ${isAnnouncement ? "bg-amber-500 hover:bg-amber-600 text-black" : "bg-[#93B733] hover:bg-[#82a32d] text-white"}`}>
-              <span>{isAnnouncement ? "Post" : "Send"}</span><Send size={15} />
+            <button 
+              type="submit" 
+              onMouseDown={(e) => e.preventDefault()}
+              disabled={!inputMsg.trim() || sending} 
+              className={`px-4 sm:px-5 py-2 sm:py-3 rounded-2xl disabled:opacity-50 text-xs sm:text-sm font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md transition cursor-pointer shrink-0 active:scale-95 ${isAnnouncement ? "bg-amber-500 hover:bg-amber-600 text-black" : "bg-[#93B733] hover:bg-[#82a32d] text-white"}`}
+            >
+              <span>{isAnnouncement ? "Post" : "Send"}</span><Send size={14} />
             </button>
           </form>
         </footer>

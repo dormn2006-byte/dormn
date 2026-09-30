@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/webp" href="/logo-sm.webp" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
 
-    <!-- Instant Theme Init (Zero-FOUC & 1-click sync) -->
-    <script>try{var d=document.documentElement,s=localStorage.getItem('theme'),c=s?s==='dark':window.matchMedia('(prefers-color-scheme:dark)').matches;d.classList.toggle('dark',c)}catch(e){}</script>
+    <!-- Instant Theme Init (Default Light/White theme, Dark only if explicitly selected) -->
+    <script>try{var d=document.documentElement,s=localStorage.getItem('theme');d.classList.toggle('dark',s==='dark')}catch(e){}</script>
 
     <!-- Google Fonts Fast Preconnect & Async Non-Blocking Load -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

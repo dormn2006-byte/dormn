@@ -13,6 +13,8 @@ const maskAadhar = (value) => {
   return digits.length === 12 ? `XXXX XXXX ${digits.slice(-4)}` : null;
 };
 
+const cleanPassport = (p) => (typeof p === "string" && !/googleusercontent|lh3\.google/i.test(p) ? p : null);
+
 export const submitEnrollment = async (req, res) => {
   try {
     const student_id = req.user.id;
@@ -28,6 +30,8 @@ export const submitEnrollment = async (req, res) => {
         passportPhoto, aadharFront, aadharBack, collegeIdImage,
         interests, suggestions, isPublic
       } = req.body;
+
+    const cleanPhoto = cleanPassport(passportPhoto);
 
     if (!booking_id) {
       return res.status(400).json({ success: false, message: "Booking ID is required." });
@@ -92,7 +96,7 @@ export const submitEnrollment = async (req, res) => {
         suggestions,
       };
       // Images use COALESCE(?, col): keep the stored value when nothing new is supplied.
-      if (passportPhoto) updateData.passport_photo = passportPhoto;
+      if (cleanPhoto) updateData.passport_photo = cleanPhoto;
       if (aadharFront) updateData.aadhar_front = aadharFront;
       if (aadharBack) updateData.aadhar_back = aadharBack;
       if (collegeIdImage) updateData.college_id_image = collegeIdImage;
@@ -129,7 +133,7 @@ export const submitEnrollment = async (req, res) => {
         college_id_number: encCollegeId,
         course_name: courseName,
         course_year: courseYear,
-        passport_photo: passportPhoto || null,
+        passport_photo: cleanPhoto || null,
         aadhar_front: aadharFront || null,
         aadhar_back: aadharBack || null,
         college_id_image: collegeIdImage || null,
@@ -176,7 +180,7 @@ export const submitEnrollment = async (req, res) => {
         suggestions,
         is_public: pubFlag,
       };
-      if (passportPhoto) updateData.passport_photo = passportPhoto;
+      if (cleanPhoto) updateData.passport_photo = cleanPhoto;
       if (aadharFront) updateData.aadhar_front = aadharFront;
       if (aadharBack) updateData.aadhar_back = aadharBack;
       if (collegeIdImage) updateData.college_id_image = collegeIdImage;
@@ -212,7 +216,7 @@ export const submitEnrollment = async (req, res) => {
         college_id_number: encCollegeId,
         workplace_name: workplaceName,
         designation,
-        passport_photo: passportPhoto || null,
+        passport_photo: cleanPhoto || null,
         aadhar_front: aadharFront || null,
         aadhar_back: aadharBack || null,
         college_id_image: collegeIdImage || null,

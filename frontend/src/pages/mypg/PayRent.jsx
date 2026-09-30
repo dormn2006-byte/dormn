@@ -113,7 +113,7 @@ const PayRent = memo(({ onBack }) => {
       }
 
       new window.Razorpay({
-        key: data.key_id || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
         amount: data.amount,
         currency: data.currency,
         name: 'Dormn Resident Stay',
@@ -151,30 +151,30 @@ const PayRent = memo(({ onBack }) => {
   }
 
   return (
-    <div className="space-y-5 max-w-4xl mx-auto">
+    <div className="space-y-3.5 sm:space-y-5 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-2 pb-3 border-b border-gray-200/80 dark:border-white/10">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-[#0D3A1D] dark:hover:text-[#93B733] transition shadow-xs cursor-pointer active:scale-95"
+          className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-xl bg-white dark:bg-[#121212] border border-gray-200 dark:border-gray-800 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:text-[#0D3A1D] dark:hover:text-[#93B733] transition shadow-xs cursor-pointer active:scale-95"
         >
-          <ArrowLeft size={16} /> <span>Back to My PG</span>
+          <ArrowLeft size={15} /> <span>Back to My PG</span>
         </button>
-        <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">Payment Portal</span>
+        <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-gray-400">Payment Portal</span>
       </div>
 
       <div>
-        <h2 className="text-2xl sm:text-3xl font-black text-[#0D3A1D] dark:text-white tracking-tight">Rent & Invoices</h2>
-        <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 mt-1">Real-time payment dashboard for {activeStay?.title || activeStay?.pg_name || 'your PG stay'}</p>
+        <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-[#0D3A1D] dark:text-white tracking-tight">Rent & Invoices</h2>
+        <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 mt-0.5 sm:mt-1">Real-time payment dashboard for {activeStay?.title || activeStay?.pg_name || 'your PG stay'}</p>
       </div>
 
-      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-gray-100 dark:bg-white/[0.04] border border-gray-200/80 dark:border-white/10 max-w-md">
-        <button onClick={() => setSubTab('dues')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${subTab === 'dues' ? 'bg-white dark:bg-[#181818] text-[#0D3A1D] dark:text-white shadow-sm' : 'text-gray-500'}`}>
-          <CreditCard className="w-4 h-4" /> <span>Current Dues</span>
-          {currentDues.length > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">{currentDues.length}</span>}
+      <div className="flex items-center gap-1.5 sm:gap-2 p-1 sm:p-1.5 rounded-2xl bg-gray-100 dark:bg-white/[0.04] border border-gray-200/80 dark:border-white/10 max-w-md">
+        <button onClick={() => setSubTab('dues')} className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-1.5 sm:py-2.5 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${subTab === 'dues' ? 'bg-white dark:bg-[#181818] text-[#0D3A1D] dark:text-white shadow-sm' : 'text-gray-500'}`}>
+          <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span>Current Dues</span>
+          {currentDues.length > 0 && <span className="px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black bg-amber-500 text-white">{currentDues.length}</span>}
         </button>
-        <button onClick={() => setSubTab('history')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${subTab === 'history' ? 'bg-white dark:bg-[#181818] text-[#0D3A1D] dark:text-white shadow-sm' : 'text-gray-500'}`}>
-          <Receipt className="w-4 h-4" /> <span>Payment History</span>
-          {history.length > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#93B733]/20 text-[#0D3A1D] dark:text-[#93B733]">{history.length}</span>}
+        <button onClick={() => setSubTab('history')} className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-1.5 sm:py-2.5 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${subTab === 'history' ? 'bg-white dark:bg-[#181818] text-[#0D3A1D] dark:text-white shadow-sm' : 'text-gray-500'}`}>
+          <Receipt className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span>Payment History</span>
+          {history.length > 0 && <span className="px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black bg-[#93B733]/20 text-[#0D3A1D] dark:text-[#93B733]">{history.length}</span>}
         </button>
       </div>
 
@@ -188,26 +188,26 @@ const PayRent = memo(({ onBack }) => {
       ) : subTab === 'dues' ? (
         <div className="space-y-4">
           {currentDues.length > 0 ? currentDues.map((due) => (
-            <div key={due.id} className="bg-white dark:bg-[#141414] border border-amber-300 dark:border-amber-500/30 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div key={due.id} className="bg-white dark:bg-[#141414] border border-amber-300 dark:border-amber-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-500/10 text-amber-600 border border-amber-200"><Clock className="w-3.5 h-3.5 inline mr-1" /> Rent Due</span>
                   <span className="text-xs text-gray-400">Booked: {fmtDate(due.booking_date || due.created_at)}</span>
                 </div>
                 <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-3xl sm:text-4xl font-black text-[#0D3A1D] dark:text-white">₹{(Number(due.booked_price || due.price || 0)).toLocaleString('en-IN')}</span>
+                  <span className="text-2xl sm:text-4xl font-black text-[#0D3A1D] dark:text-white">₹{(Number(due.booked_price || due.price || 0)).toLocaleString('en-IN')}</span>
                   <span className="text-xs text-gray-400 font-semibold">/ month</span>
                 </div>
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-2 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-[#93B733]" /> {due.title || due.pg_name} • {due.selected_room_type || due.room_type || 'Standard Room'}
                 </p>
               </div>
-              <button onClick={() => handlePay(due)} disabled={isPaying} className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-[#93B733] hover:bg-[#82a32d] active:scale-95 text-white font-bold text-sm shadow-md transition-all cursor-pointer disabled:opacity-50">
+              <button onClick={() => handlePay(due)} disabled={isPaying} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-[#93B733] hover:bg-[#82a32d] active:scale-95 text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer disabled:opacity-50">
                 <IndianRupee className="w-4 h-4" /> {isPaying ? 'Processing...' : `Pay ₹${(Number(due.booked_price || due.price || 0)).toLocaleString('en-IN')}`}
               </button>
             </div>
           )) : (
-            <div className="bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-200/60 dark:border-emerald-500/20 rounded-3xl p-8 sm:p-12 text-center">
+            <div className="bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-200/60 dark:border-emerald-500/20 rounded-2xl sm:rounded-3xl p-6 sm:p-12 text-center">
               <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-3xl flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="w-9 h-9" />
               </div>

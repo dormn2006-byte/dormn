@@ -34,11 +34,13 @@ export default function PGChat({ pgInfo, onBack }) {
   }
 
   return (
-    <PGChatRoom
-      pgId={activePgId}
-      initialPgInfo={pgInfo}
-      onBack={onBack}
-      isOwnerMode={false}
-    />
+    <div className="w-full flex-1 h-full min-h-0 flex flex-col">
+      <PGChatRoom
+        pgId={activePgId}
+        initialPgInfo={pgInfo}
+        onBack={onBack}
+        isOwnerMode={false}
+      />
+    </div>
   );
 }

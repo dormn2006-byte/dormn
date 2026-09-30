@@ -2,7 +2,21 @@ const SNOOZE_PREFIX = "dormn_verify_snooze_";
 
 export const getVerifyUserKey = (user) => (!user ? "guest" : String(user.id || user.email || "guest").toLowerCase().trim());
 
-export const isEmailVerified = (user) => (!user ? false : Boolean(user.is_email_verified || user.email_verified || user.isEmailVerified) || user.auth_provider === "google");
+export const isEmailVerified = (user) => {
+  if (!user) return false;
+  if (user.auth_provider === "google") return true;
+  return Boolean(
+    user.is_email_verified === 1 ||
+    user.is_email_verified === true ||
+    user.is_email_verified === "1" ||
+    user.email_verified === 1 ||
+    user.email_verified === true ||
+    user.email_verified === "1" ||
+    user.isEmailVerified === true ||
+    user.isEmailVerified === 1 ||
+    user.isEmailVerified === "1"
+  );
+};
 
 export const isVerificationSnoozed = (user) => {
   if (!user || isEmailVerified(user)) return true;

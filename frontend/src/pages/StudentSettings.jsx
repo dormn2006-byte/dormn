@@ -10,6 +10,7 @@ import {
   ShieldAlert, ShieldCheck, ArrowRight, CheckCircle2, Clock
 } from "lucide-react";
 import EmailVerificationModal from "../components/auth/EmailVerificationModal";
+import DeleteAccountModal from "../components/auth/DeleteAccountModal";
 import { isEmailVerified } from "../utils/verificationStorage";
 
 
@@ -74,6 +75,7 @@ const StudentSettings = () => {
 
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
   const DOCK_APPS = useMemo(() => buildStudentDockApps(user?.id), [user?.id]);
@@ -143,7 +145,7 @@ const StudentSettings = () => {
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : "S";
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#f8f9f3] to-[#f0f1eb] pb-28 relative">
+    <div className="min-h-screen bg-[#FAF9F5] dark:bg-[#000000] pb-28 relative font-sans selection:bg-[#93B733] selection:text-white">
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-40 border-b border-gray-200/40 dark:border-gray-800/40 bg-white/70 dark:bg-black/70 backdrop-blur-2xl">
         <div className="mx-auto flex max-w-[1600px] h-14 items-center justify-between px-4 sm:px-6">
@@ -249,12 +251,12 @@ const StudentSettings = () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Full Name</p>
-              <p className="text-sm sm:text-base font-bold text-[#0D3A1D] truncate capitalize">{user?.name || "Student"}</p>
+              <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-[#93B733] mb-1">Full Name</p>
+              <p className="text-sm sm:text-base font-medium text-gray-600 dark:text-gray-300 truncate capitalize">{user?.name || "Student"}</p>
             </div>
             <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
               <div className="flex items-center justify-between gap-1 mb-1">
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Email Address</p>
+                <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-[#93B733]">Email Address</p>
                 {isVerified ? (
                   <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                     <CheckCircle2 size={11} /> Verified
@@ -269,15 +271,15 @@ const StudentSettings = () => {
                   </button>
                 )}
               </div>
-              <p className="text-sm sm:text-base font-bold text-[#0D3A1D] truncate">{user?.email || "—"}</p>
+              <p className="text-sm sm:text-base font-medium text-gray-600 dark:text-gray-300 truncate">{user?.email || "—"}</p>
             </div>
             <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Role</p>
-              <p className="text-sm sm:text-base font-bold text-[#0D3A1D] truncate capitalize">{user?.role || "student"}</p>
+              <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-[#93B733] mb-1">Role</p>
+              <p className="text-sm sm:text-base font-medium text-gray-600 dark:text-gray-300 truncate capitalize">{user?.role || "student"}</p>
             </div>
             <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Member Since</p>
-              <p className="text-sm sm:text-base font-bold text-[#0D3A1D] truncate capitalize">{memberSince}</p>
+              <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-[#93B733] mb-1">Member Since</p>
+              <p className="text-sm sm:text-base font-medium text-gray-600 dark:text-gray-300 truncate capitalize">{memberSince}</p>
             </div>
           </div>
         </SectionCard>
@@ -320,14 +322,21 @@ const StudentSettings = () => {
           </h3>
           <div className="space-y-3.5">
             <button onClick={handleClear}
-              className="w-full flex items-center justify-between rounded-xl border border-gray-200/80 bg-white px-4 py-3.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all group">
-              <span className="flex items-center gap-2.5"><Trash2 size={16} className="text-gray-400" /> Clear Profile Data</span>
+              className="w-full flex items-center justify-between rounded-xl border border-gray-200/80 bg-white px-4 py-3.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all group cursor-pointer">
+              <span className="flex items-center gap-2.5"><Trash2 size={16} className="text-gray-400" /> Clear Local Profile Data</span>
               <ChevronRight size={16} className="opacity-40 group-hover:opacity-100 transition-opacity" />
             </button>
             <button onClick={handleLogout}
-              className="w-full flex items-center justify-between rounded-xl border border-gray-200/80 bg-white px-4 py-3.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all group">
+              className="w-full flex items-center justify-between rounded-xl border border-gray-200/80 bg-white px-4 py-3.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all group cursor-pointer">
               <span className="flex items-center gap-2.5"><LogOut size={16} className="text-gray-400" /> Logout</span>
               <ChevronRight size={16} className="opacity-40 group-hover:opacity-100 transition-opacity" />
+            </button>
+            <button 
+              onClick={() => setShowDeleteModal(true)}
+              className="w-full flex items-center justify-between rounded-xl border border-red-200/80 bg-red-50/40 hover:bg-red-50 px-4 py-3.5 text-sm font-bold text-red-600 transition-all group cursor-pointer"
+            >
+              <span className="flex items-center gap-2.5"><Trash2 size={16} className="text-red-500" /> Delete Account</span>
+              <ChevronRight size={16} className="opacity-40 group-hover:opacity-100 text-red-500 transition-opacity" />
             </button>
           </div>
         </SectionCard>
@@ -341,6 +350,12 @@ const StudentSettings = () => {
         title="Verify your email to book PG"
         description="Please enter the 6-digit code sent to your email to verify your account and unlock PG reservations."
         onSuccess={handleVerifySuccess}
+      />
+
+      {/* Permanent Account Deletion Modal */}
+      <DeleteAccountModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
       />
 
       {/* ── DOCK ── */}

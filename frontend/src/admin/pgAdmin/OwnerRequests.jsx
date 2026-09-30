@@ -119,23 +119,23 @@ export default function OwnerRequests() {
   }), [requests, activeFilter, searchTerm]);
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-5 shadow-sm">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
+    <div className="space-y-4 max-w-[1600px] mx-auto">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-2.5 sm:p-3 shadow-xs">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
           {[{ id: 'all', label: 'All Requests', count: counts.all }, { id: 'open', label: 'Open / New', count: counts.open }, { id: 'in_progress', label: 'In Progress', count: counts.in_progress }, { id: 'resolved', label: 'Resolved', count: counts.resolved }].map(tab => (
-            <button key={tab.id} onClick={() => setActiveFilter(tab.id)} className={`flex items-center gap-2 rounded-2xl px-5 py-3 text-xs font-black transition-all shrink-0 cursor-pointer ${activeFilter === tab.id ? 'bg-[#0D3A1D] text-white shadow-lg' : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'}`}>
+            <button key={tab.id} onClick={() => setActiveFilter(tab.id)} className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black transition-all shrink-0 cursor-pointer ${activeFilter === tab.id ? 'bg-[#0D3A1D] text-white shadow-xs' : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'}`}>
               <span>{tab.label}</span>
-              <span className={`rounded-xl px-2 py-0.5 text-xs font-black ${activeFilter === tab.id ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-200'}`}>{tab.count}</span>
+              <span className={`rounded-lg px-1.5 py-0.5 text-[10px] font-black ${activeFilter === tab.id ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-200'}`}>{tab.count}</span>
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div className="relative w-full lg:w-72">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input type="text" placeholder="Search requests..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full rounded-2xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 py-3 pl-10 pr-4 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-[#93B733]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+            <input type="text" placeholder="Search requests..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full rounded-xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 py-2 pl-9 pr-3 text-xs sm:text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-[#93B733]" />
           </div>
-          <button onClick={fetchRequests} className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-3 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition shrink-0 cursor-pointer">
-            <RefreshCw size={14} className={loading ? 'animate-spin text-[#93B733]' : 'text-[#93B733]'} />
+          <button onClick={fetchRequests} className="flex items-center gap-1.5 sm:gap-2 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition shrink-0 cursor-pointer">
+            <RefreshCw size={13} className={loading ? 'animate-spin text-[#93B733]' : 'text-[#93B733]'} />
             <span>Sync</span>
           </button>
         </div>

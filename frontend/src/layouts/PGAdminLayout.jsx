@@ -1,15 +1,15 @@
-
-
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useState, useMemo, useEffect } from "react";
 import Sidebar from "../admin/shared/AdminSidebar";
 import AdminTopbar from "../admin/shared/AdminTopbar";
 import { LayoutDashboard, Building2, BookOpenCheck, CreditCard } from "lucide-react";
 import api from "../services/api";
+import { getUnseenCount, markOwnerCategorySeen } from "../utils/ownerSeenBadges";
 
 const PGAdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [seenTick, setSeenTick] = useState(0);
   const [dockCounts, setDockCounts] = useState({
     myPgs: 0,
     bookings: 0,
@@ -23,6 +23,21 @@ const PGAdminLayout = () => {
   const isChat = location.pathname.includes("/owner/chat");
   const isFullBleed = isPricing || isChat;
   const toggleCollapse = () => setIsCollapsed(!isCollapsed);
+
+  // Auto-mark categories as seen when owner visits their pages
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes("/owner/my-pgs")) {
+      markOwnerCategorySeen("myPgs", dockCounts.myPgs);
+    }
+    if (path.includes("/owner/bookings")) {
+      markOwnerCategorySeen("pendingBookings", dockCounts.pendingBookings);
+      markOwnerCategorySeen("bookings", dockCounts.bookings);
+    }
+    if (path.includes("/owner/payments")) {
+      markOwnerCategorySeen("payments", dockCounts.payments);
+    }
+  }, [location.pathname, dockCounts]);
 
   // Fetch live counts for mobile dock badges
   useEffect(() => {
@@ -61,12 +76,16 @@ const PGAdminLayout = () => {
       }
     };
 
+    const handleSeenUpdate = () => setSeenTick((t) => t + 1);
+
     fetchDockCounts();
     window.addEventListener('storage', fetchDockCounts);
     window.addEventListener('dormn_request_updated', fetchDockCounts);
+    window.addEventListener('dormn_seen_counts_updated', handleSeenUpdate);
     return () => {
       window.removeEventListener('storage', fetchDockCounts);
       window.removeEventListener('dormn_request_updated', fetchDockCounts);
+      window.removeEventListener('dormn_seen_counts_updated', handleSeenUpdate);
     };
   }, []);
 
@@ -79,31 +98,41 @@ const PGAdminLayout = () => {
     return "";
   }, [location.pathname]);
 
-  const ownerNavItems = useMemo(() => [
-    {
-      id: "/owner/dashboard",
-      name: "Dashboard",
-      icon: LayoutDashboard,
-    },
-    {
-      id: "/owner/my-pgs",
-      name: "My PGs",
-      icon: Building2,
-      badge: dockCounts.myPgs > 0 ? dockCounts.myPgs : null,
-    },
-    {
-      id: "/owner/bookings",
-      name: "Bookings",
-      icon: BookOpenCheck,
-      badge: dockCounts.pendingBookings > 0 ? dockCounts.pendingBookings : (dockCounts.bookings > 0 ? dockCounts.bookings : null),
-    },
-    {
-      id: "/owner/payments",
-      name: "Payments",
-      icon: CreditCard,
-      badge: dockCounts.payments > 0 ? dockCounts.payments : null,
-    },
-  ], [dockCounts]);
+  const ownerNavItems = useMemo(() => {
+    const unseenPgs = activeAppId === "/owner/my-pgs" ? 0 : getUnseenCount("myPgs", dockCounts.myPgs);
+    const unseenBookings = activeAppId === "/owner/bookings" ? 0 : (
+      dockCounts.pendingBookings > 0
+        ? getUnseenCount("pendingBookings", dockCounts.pendingBookings)
+        : getUnseenCount("bookings", dockCounts.bookings)
+    );
+    const unseenPayments = activeAppId === "/owner/payments" ? 0 : getUnseenCount("payments", dockCounts.payments);
+
+    return [
+      {
+        id: "/owner/dashboard",
+        name: "Dashboard",
+        icon: LayoutDashboard,
+      },
+      {
+        id: "/owner/my-pgs",
+        name: "My PGs",
+        icon: Building2,
+        badge: unseenPgs > 0 ? unseenPgs : null,
+      },
+      {
+        id: "/owner/bookings",
+        name: "Bookings",
+        icon: BookOpenCheck,
+        badge: unseenBookings > 0 ? unseenBookings : null,
+      },
+      {
+        id: "/owner/payments",
+        name: "Payments",
+        icon: CreditCard,
+        badge: unseenPayments > 0 ? unseenPayments : null,
+      },
+    ];
+  }, [dockCounts, seenTick, activeAppId]);
 
   return (
     <div className="h-screen overflow-hidden bg-[#FAFAFA] dark:bg-black text-gray-900 dark:text-white transition-colors duration-300 relative">
@@ -123,7 +152,7 @@ const PGAdminLayout = () => {
 
         {/* Mobile Sidebar Overlay / Drawer with Smooth Slide Transition */}
         <div
-          className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-sm transition-opacity duration-200 xl:hidden ${
+          className={`fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm transition-opacity duration-200 xl:hidden ${
             sidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
           }`}
           onClick={() => setSidebarOpen(false)}
@@ -149,8 +178,16 @@ const PGAdminLayout = () => {
           />
 
           {/* Page Content Centered (with mobile bottom padding for navbar) */}
-          <main className={`flex-1 overflow-y-auto w-full ${isFullBleed ? "p-0 pb-20 sm:pb-24 xl:pb-0" : "p-3 sm:p-5 md:p-6 lg:p-8 pb-32 sm:pb-36 xl:pb-8"} bg-[#FAFAFA] dark:bg-black`}>
-            <div className={`w-full ${isChat ? "h-full" : isPricing ? "w-full min-h-full" : "mx-auto max-w-[1600px]"}`}>
+          <main
+            className={`flex-1 w-full bg-[#FAFAFA] dark:bg-black ${
+              isChat
+                ? "overflow-hidden p-0 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] xl:pb-0 flex flex-col min-h-0"
+                : isFullBleed
+                ? "overflow-y-auto p-0 pb-20 sm:pb-24 xl:pb-0"
+                : "overflow-y-auto p-3 sm:p-5 md:p-6 lg:p-8 pb-32 sm:pb-36 xl:pb-8"
+            }`}
+          >
+            <div className={`w-full ${isChat ? "h-full min-h-0 flex-1 flex flex-col" : isPricing ? "w-full min-h-full" : "mx-auto max-w-[1600px]"}`}>
               <Outlet />
             </div>
           </main>
@@ -158,7 +195,7 @@ const PGAdminLayout = () => {
       </div>
 
       {/* Mobile Bottom Navigation Bar: Visible ONLY on mobile/phone (hidden on laptop xl:hidden) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-black border-t border-gray-200 dark:border-zinc-800 shadow-[0_-4px_24px_rgba(0,0,0,0.35)] xl:hidden pb-[calc(env(safe-area-inset-bottom)+6px)]">
+      <nav className="owner-bottom-nav fixed bottom-0 left-0 right-0 z-[60] bg-white dark:bg-black text-gray-900 dark:text-white border-t border-gray-200 dark:border-zinc-800 shadow-[0_-4px_24px_rgba(0,0,0,0.15)] dark:shadow-[0_-4px_30px_rgba(0,0,0,0.95)] xl:hidden pb-[calc(env(safe-area-inset-bottom)+6px)] transition-colors duration-200">
         <div className="flex items-center justify-around max-w-lg mx-auto px-2">
           {ownerNavItems.map((item) => {
             const isActive = activeAppId === item.id;
@@ -166,11 +203,19 @@ const PGAdminLayout = () => {
             return (
               <button
                 key={item.id}
-                onClick={() => navigate(item.id)}
+                onClick={() => {
+                  if (item.id === "/owner/my-pgs") markOwnerCategorySeen("myPgs", dockCounts.myPgs);
+                  if (item.id === "/owner/bookings") {
+                    markOwnerCategorySeen("pendingBookings", dockCounts.pendingBookings);
+                    markOwnerCategorySeen("bookings", dockCounts.bookings);
+                  }
+                  if (item.id === "/owner/payments") markOwnerCategorySeen("payments", dockCounts.payments);
+                  navigate(item.id);
+                }}
                 className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-1.5 transition-all cursor-pointer select-none ${
                   isActive
-                    ? "text-[#93B733] dark:text-[#a3e635]"
-                    : "text-gray-800 hover:text-black dark:text-gray-100 dark:hover:text-white"
+                    ? "text-[#0D3A1D] dark:text-[#93B733]"
+                    : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
                 }`}
               >
                 <div className="relative flex items-center justify-center">
@@ -181,13 +226,13 @@ const PGAdminLayout = () => {
                     </span>
                   )}
                 </div>
-                <span className={`text-[13px] sm:text-sm md:text-base tracking-tight truncate ${isActive ? "font-black text-[#93B733] dark:text-[#a3e635]" : "font-extrabold text-gray-800 dark:text-gray-100"}`}>
+                <span className={`text-[13px] sm:text-sm md:text-base tracking-tight truncate ${isActive ? "font-black text-[#0D3A1D] dark:text-[#93B733]" : "font-extrabold text-gray-700 dark:text-gray-300"}`}>
                   {item.name}
                 </span>
 
                 {/* Active Green Underline Indicator */}
                 {isActive && (
-                  <span className="absolute bottom-0 left-2 right-2 h-[3.5px] bg-[#93B733] dark:bg-[#a3e635] rounded-t-full shadow-[0_-2px_10px_rgba(147,183,51,0.7)]" />
+                  <span className="absolute bottom-0 left-2 right-2 h-[3.5px] bg-[#0D3A1D] dark:bg-[#93B733] rounded-t-full shadow-[0_-2px_10px_rgba(147,183,51,0.8)]" />
                 )}
               </button>
             );

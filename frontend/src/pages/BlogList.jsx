@@ -40,7 +40,7 @@ const BlogList = () => {
     <PublicLayout>
       <SEOHead
         title="Noida Student & Corporate PG Guides | Dormn Guides"
-        description="Explore custom guides for finding verified PGs in Noida near Amity University, Sector 62, Knowledge Park, and major corporate parks with zero brokerage."
+        description="Explore custom guides for finding verified PGs in Noida near Amity University, Sector 62, Knowledge Park, and major corporate parks with direct owner booking."
         canonicalUrl="https://dormn.com/blogs"
         ogImage="https://dormn.com/logo.jpg"
         schema={hubSchema}

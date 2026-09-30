@@ -6,6 +6,7 @@ import {
   getSinglePGController,
   getOwnerPGsController,
   updatePGController,
+  resubmitPGController,
   deletePGController,
   getFilterOptionsController, // NEW: Added for Phase 1
   searchPGsController,        // NEW: Added for Phase 2
@@ -52,7 +53,7 @@ router.get("/all", getAllPGsController);
 
 // Get Logged In Owner PGs
 router.get(
-  "/owner/my-pgs",
+  ["/owner/my-pgs", "/my"],
   protect,
   ownerOnly,
   getOwnerPGsController
@@ -74,6 +75,14 @@ router.put(
   protect,
   ownerOnly,
   updatePGController
+);
+
+// Resubmit PG for Approval
+router.put(
+  "/resubmit/:id",
+  protect,
+  ownerOnly,
+  resubmitPGController
 );
 
 // Delete PG

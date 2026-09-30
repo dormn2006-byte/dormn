@@ -147,7 +147,7 @@ const About = () => {
                       <Sparkles className="h-4 w-4 text-[#93B733]" />
                       <span className="text-xs font-bold uppercase tracking-wider text-white">Verified Stays</span>
                     </div>
-                    <span className="rounded-xl bg-[#93B733] px-3 py-1 text-xs font-black text-[#0D3A1D]">Zero Brokerage</span>
+                    <span className="rounded-xl bg-[#93B733] px-3 py-1 text-xs font-black text-[#0D3A1D]">Direct Booking</span>
                   </div>
 
                   <div className="my-auto text-center">
@@ -172,8 +172,8 @@ const About = () => {
                       <p className="text-[10px] font-semibold text-gray-300">Direct Owners</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-lg font-black text-[#93B733] sm:text-xl">0</p>
-                      <p className="text-[10px] font-semibold text-gray-300">Brokerage Fees</p>
+                      <p className="text-lg font-black text-[#93B733] sm:text-xl">100%</p>
+                      <p className="text-[10px] font-semibold text-gray-300">Verified Hosts</p>
                     </div>
                   </div>
                 </div>
@@ -231,8 +231,8 @@ const About = () => {
                         <span className="text-xs font-bold text-emerald-600">✓ Connected</span>
                       </div>
                       <div className="rounded-xl bg-white p-3.5 shadow-sm border border-gray-100 flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#0D3A1D]">Zero Brokerage Guarantee</span>
-                        <span className="text-xs font-bold text-[#93B733]">100% Policy</span>
+                        <span className="text-xs font-bold text-[#0D3A1D]">Direct Booking Guarantee</span>
+                        <span className="text-xs font-bold text-[#93B733]">100% Direct</span>
                       </div>
                     </div>
 

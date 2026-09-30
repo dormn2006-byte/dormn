@@ -354,79 +354,79 @@ const Students = () => {
                 )}
 
                 {/* PG Assignment & Payment Info Box */}
-                <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] p-4 space-y-2.5">
+                <div className="rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-2.5 sm:p-3 space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-400 font-bold uppercase text-[10px]">Property Stay</span>
-                    <span className="font-black text-blue-500 flex items-center gap-1.5 text-sm">
-                      <Building2 size={15} />
-                      {s.title || s.pg_title || "PG Accommodations"}
+                    <span className="text-gray-400 font-bold uppercase text-[9px] sm:text-[10px]">Property Stay</span>
+                    <span className="font-bold text-blue-500 flex items-center gap-1 text-xs truncate max-w-[170px]">
+                      <Building2 size={13} className="shrink-0" />
+                      <span className="truncate">{s.title || s.pg_title || "PG Accommodations"}</span>
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs border-t border-gray-200/60 dark:border-white/10 pt-2.5">
-                    <span className="text-gray-400 font-bold uppercase text-[10px]">Room Plan</span>
-                    <span className="font-bold text-gray-900 dark:text-gray-200 flex items-center gap-1">
-                      <BedDouble size={13} className="text-purple-500" />
-                      {s.selected_room_type || "Standard Room"}
+                  <div className="flex items-center justify-between text-xs border-t border-gray-200/50 dark:border-white/5 pt-1.5">
+                    <span className="text-gray-400 font-bold uppercase text-[9px] sm:text-[10px]">Room Plan</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-200 flex items-center gap-1 text-[11px] sm:text-xs">
+                      <BedDouble size={12} className="text-purple-500 shrink-0" />
+                      <span>{s.selected_room_type || "Standard Room"}</span>
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs border-t border-gray-200/60 dark:border-white/10 pt-2.5">
-                    <span className="text-gray-400 font-bold uppercase text-[10px]">Payment Status</span>
+                  <div className="flex items-center justify-between text-xs border-t border-gray-200/50 dark:border-white/5 pt-1.5">
+                    <span className="text-gray-400 font-bold uppercase text-[9px] sm:text-[10px]">Payment Status</span>
                     {s.payment_status === "paid" ? (
-                      <span className="font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                        <CreditCard size={13} />
-                        <span>Paid ₹{(Number(s.booked_price || s.price || 0)).toLocaleString()}</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 text-[11px] sm:text-xs">
+                        <CreditCard size={12} className="shrink-0" />
+                        <span>Paid ₹{(Number(s.booked_price || s.price || 0)).toLocaleString('en-IN')}</span>
                       </span>
                     ) : s.status === "approved" ? (
-                      <span className="font-black text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                        <Clock size={13} />
-                        <span>Unpaid (₹{(Number(s.booked_price || s.price || 0)).toLocaleString()} Due)</span>
+                      <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 text-[11px] sm:text-xs">
+                        <Clock size={12} className="shrink-0" />
+                        <span>Unpaid (₹{(Number(s.booked_price || s.price || 0)).toLocaleString('en-IN')} Due)</span>
                       </span>
                     ) : (
-                      <span className="font-bold text-gray-500 flex items-center gap-1">
-                        <span>₹{(Number(s.booked_price || s.price || 0)).toLocaleString()} (Pending)</span>
+                      <span className="font-medium text-gray-500 flex items-center gap-1 text-[11px] sm:text-xs">
+                        <span>₹{(Number(s.booked_price || s.price || 0)).toLocaleString('en-IN')} (Pending)</span>
                       </span>
                     )}
                   </div>
 
                   {s.student_email && (
-                    <div className="flex items-center justify-between text-xs border-t border-gray-200/60 dark:border-white/10 pt-2.5">
-                      <span className="text-gray-400 font-bold uppercase text-[10px]">Email</span>
-                      <span className="font-bold text-gray-900 dark:text-gray-200 truncate max-w-[180px]">
+                    <div className="flex items-center justify-between text-xs border-t border-gray-200/50 dark:border-white/5 pt-1.5">
+                      <span className="text-gray-400 font-bold uppercase text-[9px] sm:text-[10px]">Email</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-200 truncate max-w-[180px] text-[11px] sm:text-xs">
                         {s.student_email}
                       </span>
                     </div>
                   )}
 
                   {s.student_phone && (
-                    <div className="flex items-center justify-between text-xs border-t border-gray-200/60 dark:border-white/10 pt-2.5">
-                      <span className="text-gray-400 font-bold uppercase text-[10px]">Contact</span>
-                      <span className="font-bold text-gray-900 dark:text-gray-200">
+                    <div className="flex items-center justify-between text-xs border-t border-gray-200/50 dark:border-white/5 pt-1.5">
+                      <span className="text-gray-400 font-bold uppercase text-[9px] sm:text-[10px]">Contact</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-200 text-[11px] sm:text-xs">
                         {s.student_phone}
                       </span>
                     </div>
                   )}
                 </div>
 
-                {/* Big Action Buttons */}
-                <div className="flex items-center gap-3 pt-1">
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 pt-0.5">
                   {s.student_phone && (
                     <a
                       href={`tel:${s.student_phone}`}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-500 py-2.5 sm:py-3.5 text-xs font-black text-white transition shadow-md shadow-blue-500/20"
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold text-white transition shadow-sm shadow-blue-500/20"
                     >
-                      <Phone size={16} />
-                      <span>Call Tenant</span>
+                      <Phone size={13} />
+                      <span>Call</span>
                     </a>
                   )}
 
                   {s.student_email && (
                     <a
                       href={`mailto:${s.student_email}`}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 py-2.5 sm:py-3.5 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition"
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition"
                     >
-                      <Mail size={16} />
+                      <Mail size={13} />
                       <span>Email</span>
                     </a>
                   )}

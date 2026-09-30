@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Standard amenities options and alias matching helper
  */
 
@@ -19,64 +19,77 @@ export const AMENITY_OPTIONS = [
   { value: "tv", label: "Television" },
 ];
 
+const AMENITY_PATTERNS = {
+  ac: /\b(ac|air conditioner|air conditioning|cooling)\b/i,
+  wifi: /\b(wifi|wi-fi|internet|high-speed)\b/i,
+  food: /\b(food|meal|dinner|lunch|breakfast|kitchen|cook|mess)\b/i,
+  parking: /\b(parking|car|bike|vehicle)\b/i,
+  power: /\b(power|backup|generator|electricity)\b/i,
+  geyser: /\b(geyser|hot water|heater)\b/i,
+  laundry: /\b(laundry|wash|iron)\b/i,
+  security: /\b(security|cctv|guard|safety)\b/i,
+  bath: /\b(bath|washroom|toilet|attached)\b/i,
+  gym: /\b(gym|fitness|workout)\b/i,
+  tv: /\b(tv|television)\b/i,
+  ro: /\b(ro|purified|drinking|water)\b/i,
+  housekeeping: /\b(housekeeping|cleaning|clean|maid)\b/i,
+  fridge: /\b(fridge|refrigerator)\b/i,
+};
+
 /**
  * Checks whether a PG's amenities string/list matches the query term or amenity tag
- * @param {Object} pg - The PG listing object
- * @param {string} targetAmenity - The amenity keyword or filter value
- * @returns {boolean}
  */
 export const hasAmenityMatch = (pg, targetAmenity) => {
   if (!targetAmenity || !pg) return true;
   const raw = String(pg.amenities || "").toLowerCase();
   const search = targetAmenity.toLowerCase().trim();
   if (!search) return true;
-
-  // Direct substring check
   if (raw.includes(search)) return true;
 
-  // Keyword / Alias dictionary matching
-  if (search === "ac" || search.includes("air condition")) {
-    return /\b(ac|air conditioner|air conditioning|cooling)\b/i.test(raw);
+  for (const [key, regex] of Object.entries(AMENITY_PATTERNS)) {
+    if (search.includes(key) && regex.test(raw)) return true;
   }
-  if (search === "wifi" || search === "wi-fi" || search.includes("internet")) {
-    return /\b(wifi|wi-fi|internet|high-speed)\b/i.test(raw);
-  }
-  if (search === "food" || search === "meals" || search === "mess" || search.includes("dinner") || search.includes("lunch")) {
-    return /\b(food|meal|dinner|lunch|breakfast|kitchen|cook|mess)\b/i.test(raw);
-  }
-  if (search === "parking" || search.includes("vehicle") || search.includes("bike") || search.includes("car")) {
-    return /\b(parking|car|bike|vehicle)\b/i.test(raw);
-  }
-  if (search === "power" || search.includes("backup") || search.includes("electricity") || search.includes("generator")) {
-    return /\b(power|backup|generator|electricity)\b/i.test(raw);
-  }
-  if (search === "geyser" || search.includes("hot water") || search.includes("heater")) {
-    return /\b(geyser|hot water|heater)\b/i.test(raw);
-  }
-  if (search === "laundry" || search.includes("wash") || search.includes("iron")) {
-    return /\b(laundry|wash|iron)\b/i.test(raw);
-  }
-  if (search === "security" || search === "cctv" || search.includes("guard")) {
-    return /\b(security|cctv|guard|safety)\b/i.test(raw);
-  }
-  if (search === "bath" || search.includes("bathroom") || search.includes("washroom") || search.includes("toilet")) {
-    return /\b(bath|washroom|toilet|attached)\b/i.test(raw);
-  }
-  if (search === "gym" || search.includes("fitness") || search.includes("workout")) {
-    return /\b(gym|fitness|workout)\b/i.test(raw);
-  }
-  if (search === "tv" || search.includes("television")) {
-    return /\b(tv|television)\b/i.test(raw);
-  }
-  if (search === "ro" || search.includes("water") || search.includes("drinking")) {
-    return /\b(ro|purified|drinking|water)\b/i.test(raw);
-  }
-  if (search === "housekeeping" || search.includes("cleaning") || search.includes("maid")) {
-    return /\b(housekeeping|cleaning|clean|maid)\b/i.test(raw);
-  }
-  if (search === "fridge" || search.includes("refrigerator")) {
-    return /\b(fridge|refrigerator)\b/i.test(raw);
-  }
+  if (["veg", "pure veg", "vegetarian"].includes(search)) return matchesFoodPreference(pg, "veg");
+  if (["non-veg", "non veg", "nonveg"].includes(search)) return matchesFoodPreference(pg, "non-veg");
 
   return false;
 };
+
+/**
+ * Resolves the food preference and metadata of a PG (Strictly Veg or Non-Veg)
+ */
+export const getPgFoodPreference = (pg) => {
+  if (!pg) return { type: "Veg", label: "Veg", tag: "Veg 🟢", isVeg: true, isNonVeg: false };
+
+  const raw = String(pg.food_type || "").trim().toLowerCase();
+  if (["veg", "pure veg", "vegetarian", "pure-veg"].includes(raw)) {
+    return { type: "Veg", label: "Veg", tag: "Veg 🟢", isVeg: true, isNonVeg: false };
+  }
+  if (["non-veg", "nonveg", "non veg", "non_veg"].includes(raw)) {
+    return { type: "Non-Veg", label: "Non-Veg", tag: "Non-Veg 🟤", isVeg: false, isNonVeg: true };
+  }
+
+  // Fallback: check text in description, rules, amenities, and title
+  const text = `${pg.title || ""} ${pg.description || ""} ${pg.rules || ""} ${pg.amenities || ""}`.toLowerCase();
+  if (/\b(pure veg|strictly veg|veg only|pure vegetarian|strictly vegetarian)\b/i.test(text)) {
+    return { type: "Veg", label: "Veg", tag: "Veg 🟢", isVeg: true, isNonVeg: false };
+  }
+  if (/\b(non-veg|non veg|nonveg|chicken|meat|egg)\b/i.test(text)) {
+    return { type: "Non-Veg", label: "Non-Veg", tag: "Non-Veg 🟤", isVeg: false, isNonVeg: true };
+  }
+
+  return { type: "Veg", label: "Veg", tag: "Veg 🟢", isVeg: true, isNonVeg: false };
+};
+
+/**
+ * Checks whether a PG matches a food diet filter ('veg' or 'non-veg')
+ */
+export const matchesFoodPreference = (pg, preference) => {
+  if (!preference || !pg) return true;
+  const pref = preference.toLowerCase().trim();
+  const food = getPgFoodPreference(pg);
+  if (["veg", "pure veg", "pure-veg"].includes(pref)) return food.isVeg;
+  if (["non-veg", "non veg", "nonveg"].includes(pref)) return food.isNonVeg;
+  return true;
+};
+

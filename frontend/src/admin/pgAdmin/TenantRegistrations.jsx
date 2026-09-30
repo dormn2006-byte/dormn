@@ -25,7 +25,7 @@ const TenantRegistrations = () => {
   };
 
   const handleStatusUpdate = async (enrollment_id, newStatus, rejection_note) => {
-    if (newStatus === "verified" && !window.confirm("Are you sure you want to mark this application as VERIFIED?")) return;
+    if (!window.confirm(`Are you sure you want to mark this application as ${newStatus.toUpperCase()}?`)) return;
 
     setSubmitting(true);
     try {

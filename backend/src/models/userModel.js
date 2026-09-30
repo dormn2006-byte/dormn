@@ -43,7 +43,9 @@ export const createUser = async ({
 
 // Find User By Email
 export const findUserByEmail = async (email) => {
-  const user = await User.findOne({ email }).lean();
+  if (!email) return null;
+  const cleanEmail = String(email).trim().toLowerCase();
+  const user = await User.findOne({ email: cleanEmail }).lean();
   return user ? serialize(decryptUserObject(user)) : null;
 };
 

@@ -1,17 +1,18 @@
-import { lazy, Suspense, useContext } from "react";
+import { Suspense, useContext } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
+import lazyWithRetry from "../utils/lazyRetry";
 
 // Core routes
 import ProtectedRoute from "./ProtectedRoute";
 import { AudioProvider } from "../context/AudioContext";
 
 // Lazy-loaded routes to keep initial bundle size ultra-light
-const Home = lazy(() => import("../pages/Home"));
-const ExplorePGs = lazy(() => import("../pages/ExplorePGs"));
-const PgDetails = lazy(() => import("../pages/PgDetails"));
-const GlobalAudioPlayer = lazy(() => import("../components/common/GlobalAudioPlayer"));
-const DrDormn = lazy(() => import("../pages/DrDormn"));
+const Home = lazyWithRetry(() => import("../pages/Home"), "Home");
+const ExplorePGs = lazyWithRetry(() => import("../pages/ExplorePGs"), "ExplorePGs");
+const PgDetails = lazyWithRetry(() => import("../pages/PgDetails"), "PgDetails");
+const GlobalAudioPlayer = lazyWithRetry(() => import("../components/common/GlobalAudioPlayer"), "GlobalAudioPlayer");
+const DrDormn = lazyWithRetry(() => import("../pages/DrDormn"), "DrDormn");
 
 // Smart role-based dashboard router
 const DashboardRedirect = () => {
@@ -24,70 +25,78 @@ const DashboardRedirect = () => {
 };
 
 // Lazy-loaded routes to keep initial bundle size light
-const Auth = lazy(() => import("../pages/auth/Auth"));
-const About = lazy(() => import("../pages/About"));
-const FAQ = lazy(() => import("../pages/faq"));
-const Contact = lazy(() => import("../pages/Contact"));
-const MyBookings = lazy(() => import("../pages/MyBookings"));
+const Auth = lazyWithRetry(() => import("../pages/auth/Auth"), "Auth");
+const About = lazyWithRetry(() => import("../pages/About"), "About");
+const FAQ = lazyWithRetry(() => import("../pages/faq"), "FAQ");
+const Contact = lazyWithRetry(() => import("../pages/Contact"), "Contact");
+const MyBookings = lazyWithRetry(() => import("../pages/MyBookings"), "MyBookings");
 
-const StudentDashboard = lazy(() => import("../pages/StudentDashboard"));
-const SavedPGs = lazy(() => import("../pages/SavedPGs"));
-const StudentSettings = lazy(() => import("../pages/StudentSettings"));
-const MyPG = lazy(() => import("../pages/MyPG"));
+const StudentDashboard = lazyWithRetry(() => import("../pages/StudentDashboard"), "StudentDashboard");
+const SavedPGs = lazyWithRetry(() => import("../pages/SavedPGs"), "SavedPGs");
+const StudentSettings = lazyWithRetry(() => import("../pages/StudentSettings"), "StudentSettings");
+const MyPG = lazyWithRetry(() => import("../pages/MyPG"), "MyPG");
 
-const PrivacyPolicy = lazy(() => import("../pages/PrivacyPolicy"));
-const TermsConditions = lazy(() => import("../pages/TermsConditions"));
-const CookiePolicy = lazy(() => import("../pages/CookiePolicy"));
+const PrivacyPolicy = lazyWithRetry(() => import("../pages/PrivacyPolicy"), "PrivacyPolicy");
+const TermsConditions = lazyWithRetry(() => import("../pages/TermsConditions"), "TermsConditions");
+const CookiePolicy = lazyWithRetry(() => import("../pages/CookiePolicy"), "CookiePolicy");
 
-const BlogList = lazy(() => import("../pages/BlogList"));
-const AmityPGGuide = lazy(() => import("../pages/blogs/AmityPGGuide"));
-const Sector62Guide = lazy(() => import("../pages/blogs/Sector62Guide"));
-const NotFound = lazy(() => import("../pages/NotFound"));
-const Events = lazy(() => import("../pages/Events"));
-const EventInvite = lazy(() => import("../pages/EventInvite"));
-const CookieConsent = lazy(() => import("../components/CookieConsent"));
+const BlogList = lazyWithRetry(() => import("../pages/BlogList"), "BlogList");
+const AmityPGGuide = lazyWithRetry(() => import("../pages/blogs/AmityPGGuide"), "AmityPGGuide");
+const Sector62Guide = lazyWithRetry(() => import("../pages/blogs/Sector62Guide"), "Sector62Guide");
+const NotFound = lazyWithRetry(() => import("../pages/NotFound"), "NotFound");
+const Events = lazyWithRetry(() => import("../pages/Events"), "Events");
+const EventInvite = lazyWithRetry(() => import("../pages/EventInvite"), "EventInvite");
+const CookieConsent = lazyWithRetry(() => import("../components/CookieConsent"), "CookieConsent");
 
 // Admin & SuperAdmin routes (Lazy loaded)
-const PGAdminLayout = lazy(() => import("../layouts/PGAdminLayout"));
-const Dashboard = lazy(() => import("../admin/pgAdmin/Dashboard"));
-const AddPG = lazy(() => import("../admin/pgAdmin/AddPG"));
-const MyPGs = lazy(() => import("../admin/pgAdmin/MyPGs"));
-const Pricing = lazy(() => import("../admin/pgAdmin/Pricing"));
-const EditPG = lazy(() => import("../admin/pgAdmin/components/EditPG"));
-const Bookings = lazy(() => import("../admin/pgAdmin/Bookings"));
-const Students = lazy(() => import("../admin/pgAdmin/Students"));
-const Notifications = lazy(() => import("../admin/pgAdmin/Notifications"));
-const BookingDetails = lazy(() => import("../admin/pgAdmin/BookingDetails"));
+const PGAdminLayout = lazyWithRetry(() => import("../layouts/PGAdminLayout"), "PGAdminLayout");
+const Dashboard = lazyWithRetry(() => import("../admin/pgAdmin/Dashboard"), "Dashboard");
+const AddPG = lazyWithRetry(() => import("../admin/pgAdmin/AddPG"), "AddPG");
+const MyPGs = lazyWithRetry(() => import("../admin/pgAdmin/MyPGs"), "MyPGs");
+const Pricing = lazyWithRetry(() => import("../admin/pgAdmin/Pricing"), "Pricing");
+const EditPG = lazyWithRetry(() => import("../admin/pgAdmin/components/EditPG"), "EditPG");
+const Bookings = lazyWithRetry(() => import("../admin/pgAdmin/Bookings"), "Bookings");
+const Students = lazyWithRetry(() => import("../admin/pgAdmin/Students"), "Students");
+const Notifications = lazyWithRetry(() => import("../admin/pgAdmin/Notifications"), "Notifications");
+const BookingDetails = lazyWithRetry(() => import("../admin/pgAdmin/BookingDetails"), "BookingDetails");
 
 
-const OwnerPayments = lazy(() => import("../admin/pgAdmin/OwnerPayments"));
-const TenantRegistrations = lazy(() => import("../admin/pgAdmin/TenantRegistrations"));
-const OwnerRequests = lazy(() => import("../admin/pgAdmin/OwnerRequests"));
-const PgAnalyticsDetails = lazy(() => import("../admin/pgAdmin/PgAnalyticsDetails"));
-const Cancellations = lazy(() => import("../admin/pgAdmin/Cancellations"));
-const OwnerPGChat = lazy(() => import("../admin/pgAdmin/PGChat"));
-const OwnerProfile = lazy(() => import("../admin/pgAdmin/OwnerProfile"));
+const OwnerPayments = lazyWithRetry(() => import("../admin/pgAdmin/OwnerPayments"), "OwnerPayments");
+const TenantRegistrations = lazyWithRetry(() => import("../admin/pgAdmin/TenantRegistrations"), "TenantRegistrations");
+const OwnerRequests = lazyWithRetry(() => import("../admin/pgAdmin/OwnerRequests"), "OwnerRequests");
+const PgAnalyticsDetails = lazyWithRetry(() => import("../admin/pgAdmin/PgAnalyticsDetails"), "PgAnalyticsDetails");
+const Cancellations = lazyWithRetry(() => import("../admin/pgAdmin/Cancellations"), "Cancellations");
+const OwnerPGChat = lazyWithRetry(() => import("../admin/pgAdmin/PGChat"), "OwnerPGChat");
+const OwnerProfile = lazyWithRetry(() => import("../admin/pgAdmin/OwnerProfile"), "OwnerProfile");
+
+// New features from Downloads backup
+const Gym = lazyWithRetry(() => import("../pages/Gym"), "Gym");
+const MyShortStays = lazyWithRetry(() => import("../pages/MyShortStays"), "MyShortStays");
+const PgVisits = lazyWithRetry(() => import("../admin/pgAdmin/PgVisits"), "PgVisits");
+const PgShortStays = lazyWithRetry(() => import("../admin/pgAdmin/PgShortStays"), "PgShortStays");
+const ManagePromoCodes = lazyWithRetry(() => import("../admin/pgAdmin/ManagePromoCodes"), "ManagePromoCodes");
+const ManageStaff = lazyWithRetry(() => import("../admin/pgAdmin/ManageStaff"), "ManageStaff");
 
 
 
-const SuperAdminDashboard = lazy(() => import("../admin/superAdmin/SuperAdminDashboard"));
-const ManageOwners = lazy(() => import("../admin/superAdmin/ManageOwners"));
-const ManagePGs = lazy(() => import("../admin/superAdmin/ManagePGs"));
-const ManageStudents = lazy(() => import("../admin/superAdmin/ManageStudents"));
-const OwnerDetails = lazy(() => import("../admin/superAdmin/OwnerDetails"));
-const PGAdminDetails = lazy(() => import("../admin/superAdmin/PGDetails"));
-const StudentDetails = lazy(() => import("../admin/superAdmin/StudentDetails"));
+const SuperAdminDashboard = lazyWithRetry(() => import("../admin/superAdmin/SuperAdminDashboard"), "SuperAdminDashboard");
+const ManageOwners = lazyWithRetry(() => import("../admin/superAdmin/ManageOwners"), "ManageOwners");
+const ManagePGs = lazyWithRetry(() => import("../admin/superAdmin/ManagePGs"), "ManagePGs");
+const ManageStudents = lazyWithRetry(() => import("../admin/superAdmin/ManageStudents"), "ManageStudents");
+const OwnerDetails = lazyWithRetry(() => import("../admin/superAdmin/OwnerDetails"), "OwnerDetails");
+const PGAdminDetails = lazyWithRetry(() => import("../admin/superAdmin/PGDetails"), "PGAdminDetails");
+const StudentDetails = lazyWithRetry(() => import("../admin/superAdmin/StudentDetails"), "StudentDetails");
 
 // Events, Concerts & Clubs Management Hub
-const EventAdminLayout = lazy(() => import("../admin/eventAdmin/EventAdminLayout"));
-const EventDashboard = lazy(() => import("../admin/eventAdmin/EventDashboard"));
-const EventAnalytics = lazy(() => import("../admin/eventAdmin/EventAnalytics"));
-const ManageExperiences = lazy(() => import("../admin/eventAdmin/ManageExperiences"));
-const ManageEvents = lazy(() => import("../admin/eventAdmin/ManageEvents"));
-const ManageConcerts = lazy(() => import("../admin/eventAdmin/ManageConcerts"));
-const ManageClubs = lazy(() => import("../admin/eventAdmin/ManageClubs"));
-const ManageCoupons = lazy(() => import("../admin/eventAdmin/ManageCoupons"));
-const ManageAttendees = lazy(() => import("../admin/eventAdmin/ManageAttendees"));
+const EventAdminLayout = lazyWithRetry(() => import("../admin/eventAdmin/EventAdminLayout"), "EventAdminLayout");
+const EventDashboard = lazyWithRetry(() => import("../admin/eventAdmin/EventDashboard"), "EventDashboard");
+const EventAnalytics = lazyWithRetry(() => import("../admin/eventAdmin/EventAnalytics"), "EventAnalytics");
+const ManageExperiences = lazyWithRetry(() => import("../admin/eventAdmin/ManageExperiences"), "ManageExperiences");
+const ManageEvents = lazyWithRetry(() => import("../admin/eventAdmin/ManageEvents"), "ManageEvents");
+const ManageConcerts = lazyWithRetry(() => import("../admin/eventAdmin/ManageConcerts"), "ManageConcerts");
+const ManageClubs = lazyWithRetry(() => import("../admin/eventAdmin/ManageClubs"), "ManageClubs");
+const ManageCoupons = lazyWithRetry(() => import("../admin/eventAdmin/ManageCoupons"), "ManageCoupons");
+const ManageAttendees = lazyWithRetry(() => import("../admin/eventAdmin/ManageAttendees"), "ManageAttendees");
 
 
 // Simple loading indicator for lazy routes
@@ -97,7 +106,7 @@ const PageLoader = () => (
   </div>
 );
 
-const ManageReviews = lazy(() => import("../admin/superAdmin/ManageReviews"));
+const ManageReviews = lazyWithRetry(() => import("../admin/superAdmin/ManageReviews"), "ManageReviews");
 
 const AppRoutes = () => {
   return (
@@ -127,10 +136,11 @@ const AppRoutes = () => {
           <Route path="/blogs/pg-in-sector-62-noida" element={<Sector62Guide />} /> 
           <Route path="/events/invite/:inviteCode" element={<EventInvite />} />
           <Route path="/events" element={<Events />} />
-          <Route path="/gym" element={<MyPG defaultTab="gym" />} />
+          <Route path="/gym" element={<Gym />} />
           <Route path="/dr-dormn" element={<DrDormn />} />
           <Route path="/my-pg" element={<MyPG />} />
-          <Route path="/my-pgs" element={<MyPG />} />      
+          <Route path="/my-pgs" element={<MyPG />} />
+          <Route path="/my-short-stays" element={<MyShortStays />} />
 
           {/* Universal Dashboard & Auth Shortcuts */}
           <Route path="/dashboard" element={<DashboardRedirect />} />
@@ -291,6 +301,11 @@ const AppRoutes = () => {
             <Route path="kyc-forms" element={<TenantRegistrations />} />
             <Route path="profile" element={<OwnerProfile />} />
             <Route path="settings" element={<OwnerProfile defaultTab="security" />} />
+            <Route path="visits" element={<PgVisits />} />
+            <Route path="short-stays" element={<PgShortStays />} />
+            <Route path="promo-codes" element={<ManagePromoCodes />} />
+            <Route path="staff" element={<ManageStaff />} />
+            <Route path="all-staff" element={<Navigate to="/owner/staff" replace />} />
           </Route>
 
           {/* Events, Concerts & Clubs Management Dashboard */}

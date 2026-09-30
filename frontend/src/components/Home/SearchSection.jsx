@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import Container from "../../layouts/Container";
+import AmenitiesModal, { AMENITIES_CATALOG } from "../AmenitiesModal";
 import { 
   Search, 
   MapPin, 
@@ -10,7 +11,8 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ChevronUp,
-  Sparkles
+  Sparkles,
+  X
 } from "lucide-react";
 import { AMENITY_OPTIONS } from "../../utils/amenities";
 
@@ -91,6 +93,7 @@ const SearchSection = ({
 }) => {
   
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isAmenitiesModalOpen, setIsAmenitiesModalOpen] = useState(false);
 
   // Default slider values
   const minSliderLimit = 0;
@@ -100,6 +103,8 @@ const SearchSection = ({
   const currentMin = filters.minPrice !== "" && filters.minPrice !== undefined ? Number(filters.minPrice) : minSliderLimit;
   const currentMax = Number(filters.maxPrice) || 30000; 
 
+  const selectedAmenities = filters.amenities || (filters.amenity ? filters.amenity.split(",").map(s => s.trim().toLowerCase()).filter(Boolean) : []);
+
   // Manual Search Handler
   const handleSearch = () => {
     if (onSearch) {
@@ -108,7 +113,8 @@ const SearchSection = ({
         city: filters.city || filters.location || "",
         area: filters.area || "",
         landmark: filters.landmark || "",
-        amenity: filters.amenity || "",
+        amenity: selectedAmenities.length > 0 ? selectedAmenities.join(",") : (filters.amenity || ""),
+        amenities: selectedAmenities,
         minPrice: filters.minPrice || "",
         maxPrice: filters.maxPrice || "30000",
       });
@@ -188,23 +194,58 @@ const SearchSection = ({
               />
 
               <CustomSelect 
-                icon={Sparkles}
-                value={filters.amenity || ""}
-                onChange={(val) => setFilters((prev) => ({ ...prev, amenity: val }))}
-                placeholder="All Amenities"
-                options={AMENITY_OPTIONS}
+                icon={GraduationCap}
+                value={filters.landmark || ""}
+                onChange={(val) => setFilters((prev) => ({ ...prev, landmark: val }))}
+                placeholder="Nearby Landmark / Univ"
+                options={availableLandmarks.map(l => ({ value: l, label: l }))}
               />
 
               {/* === SECONDARY FILTERS === */}
               
               <div className={`${isExpanded ? 'block' : 'hidden'} md:block col-span-1 lg:col-span-1`}>
-                <CustomSelect 
-                  icon={GraduationCap}
-                  value={filters.landmark || ""}
-                  onChange={(val) => setFilters((prev) => ({ ...prev, landmark: val }))}
-                  placeholder="Nearby Landmark / Univ"
-                  options={availableLandmarks.map(l => ({ value: l, label: l }))}
-                />
+                <button
+                  type="button"
+                  onClick={() => setIsAmenitiesModalOpen(true)}
+                  className={`flex h-[54px] w-full cursor-pointer items-center justify-between gap-2 rounded-2xl border px-3 sm:px-4 shadow-sm transition-all select-none text-left ${
+                    selectedAmenities.length > 0
+                      ? "border-[#4A6C0B] bg-white ring-1 ring-[#4A6C0B]/30"
+                      : "border-gray-200 bg-gray-50 hover:border-gray-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                    <Sparkles size={18} className={selectedAmenities.length > 0 ? "text-[#4A6C0B]" : "text-gray-400"} />
+                    <span className={`truncate text-sm ${selectedAmenities.length > 0 ? "font-bold text-[#3A2935]" : "font-medium text-gray-500"}`}>
+                      {selectedAmenities.length > 0
+                        ? (selectedAmenities.length === 1
+                            ? (AMENITIES_CATALOG.find(a => a.value === selectedAmenities[0])?.label || selectedAmenities[0])
+                            : `${selectedAmenities.length} Amenities Selected`)
+                        : "All Amenities"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {selectedAmenities.length > 0 ? (
+                      <>
+                        <span className="flex-shrink-0 rounded-full bg-[#4A6C0B] text-white text-[10px] font-black h-5 w-5 flex items-center justify-center">
+                          {selectedAmenities.length}
+                        </span>
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFilters(prev => ({ ...prev, amenity: "", amenities: [] }));
+                          }}
+                          className="p-1 rounded-full text-gray-400 hover:text-rose-500 hover:bg-gray-100 transition-colors cursor-pointer"
+                          title="Clear amenities"
+                        >
+                          <X size={14} />
+                        </span>
+                      </>
+                    ) : (
+                      <SlidersHorizontal size={15} className="text-gray-400" />
+                    )}
+                  </div>
+                </button>
               </div>
 
               {/* === DUAL-RANGE BUDGET SLIDER === */}
@@ -261,7 +302,7 @@ const SearchSection = ({
                 className="flex items-center gap-1.5 text-[13px] font-bold text-gray-500 transition-colors hover:text-[#93B733] md:hidden"
               >
                 <SlidersHorizontal size={14} />
-                {isExpanded ? "Show Fewer Filters" : "Budget & Landmark"}
+                {isExpanded ? "Show Fewer Filters" : "Budget & Amenities"}
                 {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
 
@@ -285,6 +326,20 @@ const SearchSection = ({
           </div>
         </Container>
       </section>
+
+      {/* Modern Airbnb-style Amenities Filter Modal */}
+      <AmenitiesModal
+        isOpen={isAmenitiesModalOpen}
+        onClose={() => setIsAmenitiesModalOpen(false)}
+        selected={selectedAmenities}
+        onApply={(newAmenities) => {
+          setFilters(prev => ({
+            ...prev,
+            amenities: newAmenities,
+            amenity: newAmenities.length > 0 ? newAmenities.join(",") : ""
+          }));
+        }}
+      />
     </>
   );
 };

@@ -10,6 +10,7 @@ import {
   BookOpenCheck,
   IndianRupee,
   XCircle,
+  LogOut,
 } from "lucide-react";
 import AdminCard from "../shared/AdminCard";
 import { AuthContext } from "../../context/AuthContext";
@@ -18,7 +19,7 @@ const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { token, user } = useContext(AuthContext);
+  const { token, user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,7 +29,8 @@ const Dashboard = () => {
         setStats(response.data.stats);
       } catch (err) {
         if (err.response?.status === 401 || err.response?.status === 403) {
-          navigate("/404", { replace: true });
+          if (logout) logout();
+          navigate("/auth", { replace: true });
           return;
         }
         setError(
@@ -41,7 +43,7 @@ const Dashboard = () => {
     };
 
     fetchStats();
-  }, [token, navigate]);
+  }, [token, navigate, logout]);
 
   if (loading) {
     return (
@@ -62,13 +64,27 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen space-y-8 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white">
       <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 backdrop-blur-xl shadow-2xl">
-        <h1 className="text-4xl font-black text-white md:text-5xl">
-          Super Admin Dashboard
-        </h1>
-
-        <p className="mt-3 max-w-3xl text-gray-300">
-          Manage PG approvals, owners, students and platform activity.
-        </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-4xl font-black text-white md:text-5xl">
+              Super Admin Dashboard
+            </h1>
+            <p className="mt-3 max-w-3xl text-gray-300">
+              Manage PG approvals, owners, students and platform activity.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              if (logout) logout();
+              navigate("/auth", { replace: true });
+            }}
+            className="self-start sm:self-auto flex items-center gap-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 px-4 py-2.5 text-sm font-bold transition border border-rose-500/30 cursor-pointer shadow-lg active:scale-95"
+            title="Sign Out"
+          >
+            <LogOut size={18} />
+            <span>Sign Out</span>
+          </button>
+        </div>
         <div className="mt-6 flex flex-wrap gap-3">
           <span className="rounded-full bg-cyan-500/20 px-4 py-2 text-sm text-cyan-300">
             Live Platform Monitoring

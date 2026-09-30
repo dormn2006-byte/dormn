@@ -119,6 +119,7 @@ const CustomSelect = ({ value, onChange, options, icon: Icon = MapPin, label = "
 export default function MaintenanceRequests({ pgInfo, onBack }) {
   const { user } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('active');
+  const [userSelectedTab, setUserSelectedTab] = useState(false);
   const [requests, setRequests] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
 
@@ -181,7 +182,15 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
             resolution_note: r.resolution_note || '',
           }));
           const dbIds = new Set(dbReqs.map(r => String(r.id)));
-          setRequests([...dbReqs, ...safeLocal.filter(l => !dbIds.has(String(l.id)))]);
+          const safeLocalMap = new Map(safeLocal.map(l => [String(l.id), l]));
+          const mergedDbReqs = dbReqs.map(r => {
+            const localMatch = safeLocalMap.get(String(r.id));
+            if (localMatch?.status === 'closed') {
+              return { ...r, status: 'closed', closed_at: localMatch.closed_at || new Date().toISOString() };
+            }
+            return r;
+          });
+          setRequests([...mergedDbReqs, ...safeLocal.filter(l => !dbIds.has(String(l.id)))]);
         } else {
           setRequests(safeLocal);
         }
@@ -260,6 +269,7 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
     setToast(true);
     setTimeout(() => setToast(false), 3500);
     setActiveTab('active');
+    setUserSelectedTab(true);
   };
 
   const handleClose = (id) => {
@@ -267,8 +277,27 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
     saveRequests(requests.map(r => r.id === id ? { ...r, status: 'closed', closed_at: now } : r));
   };
 
-  const active = useMemo(() => requests.filter(r => r.status !== 'closed'), [requests]);
-  const previous = useMemo(() => requests.filter(r => r.status === 'closed'), [requests]);
+  const handleCloseAmenityModal = () => {
+    setSelectedAmenity(null);
+    setOtherText('');
+    setTitle('');
+    setDesc('');
+    setPriority('Normal');
+  };
+
+  const isCompleted = (status) => status === 'closed' || status === 'resolved';
+  const active = useMemo(() => requests.filter(r => !isCompleted(r.status)), [requests]);
+  const previous = useMemo(() => requests.filter(r => isCompleted(r.status)), [requests]);
+
+  useEffect(() => {
+    if (!userSelectedTab && requests.length > 0) {
+      const activeCount = requests.filter(r => !isCompleted(r.status)).length;
+      const prevCount = requests.filter(r => isCompleted(r.status)).length;
+      if (activeCount === 0 && prevCount > 0) {
+        setActiveTab('previous');
+      }
+    }
+  }, [requests, userSelectedTab]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -283,108 +312,54 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
       </div>
 
       <div>
-        <h2 className="text-2xl sm:text-3xl font-black text-[#0D3A1D] dark:text-white tracking-tight">Maintenance & Amenities Helpdesk</h2>
+        <h2 className="text-xl sm:text-3xl font-black text-[#0D3A1D] dark:text-white tracking-tight">Maintenance & Amenities Helpdesk</h2>
         <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 mt-1">Select an amenity below to file a complaint directly with your PG manager.</p>
       </div>
 
       {toast && (
-        <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/30 rounded-2xl p-4 flex items-center gap-3">
+        <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/30 rounded-2xl p-3.5 sm:p-4 flex items-center gap-3">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <p className="text-xs sm:text-sm font-bold text-emerald-800 dark:text-emerald-300">Your request has been submitted to the PG Owner! Track its status below.</p>
         </div>
       )}
 
       {/* AMENITIES SELECTOR & INLINE FORM */}
-      <div className="bg-white dark:bg-[#141414] border border-gray-200/80 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+      <div className="bg-white dark:bg-[#141414] border border-gray-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-6 md:p-8 shadow-xs space-y-3 sm:space-y-6">
         <div>
-          <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1 flex items-center gap-2">
-            <Sparkles className="w-3.5 h-3.5 text-[#93B733]" /> PG Amenities & Services
+          <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-400 mb-0.5 sm:mb-1 flex items-center gap-1.5 sm:gap-2">
+            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#93B733]" /> PG Amenities & Services
           </h3>
-          <p className="text-sm font-bold text-gray-800 dark:text-gray-200">Click any amenity to report an issue:</p>
+          <p className="text-[11px] sm:text-sm font-bold text-gray-800 dark:text-gray-200">Click any amenity to report an issue:</p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5 sm:gap-3">
           {availableAmenities.map((amenity) => {
-            const isSelected = selectedAmenity === amenity.name;
             const Icon = amenity.icon;
             return (
               <button
                 type="button"
                 key={amenity.name}
-                onClick={() => setSelectedAmenity(isSelected ? null : amenity.name)}
-                className={`group flex items-center gap-2.5 p-3 rounded-2xl border text-xs font-bold transition-all text-left cursor-pointer ${
-                  isSelected ? 'border-[#93B733] bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733] ring-2 ring-[#93B733]/30 shadow-xs' : 'border-gray-200/80 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02] text-gray-700 dark:text-gray-300 hover:border-gray-300'
-                }`}
+                onClick={() => setSelectedAmenity(amenity.name)}
+                className="group flex items-center gap-1.5 sm:gap-2.5 py-1.5 px-2 sm:p-3 rounded-lg sm:rounded-2xl border text-[10px] sm:text-xs font-bold transition-all text-left cursor-pointer min-h-[40px] sm:min-h-0 border-gray-200/80 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02] text-gray-700 dark:text-gray-300 hover:border-[#93B733]/60 hover:bg-[#93B733]/5 active:scale-95"
               >
-                <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-colors ${amenity.color}`}>
-                  <Icon className="w-4 h-4" strokeWidth={2.2} />
+                <div className={`w-5 h-5 sm:w-7 sm:h-7 rounded-md sm:rounded-xl flex items-center justify-center shrink-0 transition-colors ${amenity.color}`}>
+                  <Icon className="w-3 h-3 sm:w-4 sm:h-4" strokeWidth={2.2} />
                 </div>
-                <span className="truncate">{amenity.name}</span>
+                <span className="leading-tight break-words flex-1 line-clamp-2 sm:line-clamp-none">{amenity.name}</span>
               </button>
             );
           })}
         </div>
-
-        {selectedAmenity && (
-          <form onSubmit={handleCreate} className="pt-6 border-t border-gray-100 dark:border-white/5 space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733]">Selected: {selectedAmenity}</span>
-              <button type="button" onClick={() => setSelectedAmenity(null)} className="text-xs font-bold text-gray-400 hover:text-gray-700 dark:hover:text-white cursor-pointer">Cancel</button>
-            </div>
-
-            {selectedAmenity === 'Others' && (
-              <div className="space-y-1">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Specify Other Issue <span className="text-red-400">*</span></label>
-                <input type="text" required value={otherText} onChange={e => setOtherText(e.target.value)} placeholder="e.g. Door latch broken, Window repair..." className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#93B733]/50 focus:border-[#93B733] outline-none" />
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Location / Area</label>
-                <CustomSelect
-                  value={location}
-                  onChange={setLocation}
-                  options={LOCATIONS}
-                  icon={MapPin}
-                  label="Select Location / Area"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Issue Summary <span className="text-red-400">*</span></label>
-                <input type="text" required value={title} onChange={e => setTitle(e.target.value)} placeholder={`e.g. ${selectedAmenity} issue`} className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#93B733]/50 focus:border-[#93B733] outline-none" />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Detailed Description</label>
-              <textarea rows={2} value={desc} onChange={e => setDesc(e.target.value)} placeholder="Add any specific details..." className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#93B733]/50 focus:border-[#93B733] outline-none resize-none" />
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase text-gray-400">Priority:</span>
-                {['Normal', 'Urgent'].map(p => (
-                  <button type="button" key={p} onClick={() => setPriority(p)} className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${priority === p ? p === 'Urgent' ? 'border-rose-500 bg-rose-500/15 text-rose-600' : 'border-[#93B733] bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733]' : 'border-gray-200 dark:border-white/10 text-gray-500'}`}>{p}</button>
-                ))}
-              </div>
-              <button type="submit" disabled={submitting} className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#93B733] hover:bg-[#82a32d] active:scale-95 text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50">
-                <Send className="w-3.5 h-3.5" /> {submitting ? 'Submitting...' : 'Submit Complaint to Owner'}
-              </button>
-            </div>
-          </form>
-        )}
       </div>
 
       {/* REQUESTS LIST TABS */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 p-1 rounded-2xl bg-gray-100 dark:bg-white/[0.04] border border-gray-200/80 dark:border-white/10 w-fit">
-          <button onClick={() => setActiveTab('active')} className={`flex items-center gap-2 py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'active' ? 'bg-white dark:bg-[#181818] text-[#0D3A1D] dark:text-white shadow-xs' : 'text-gray-500'}`}>
+          <button onClick={() => { setUserSelectedTab(true); setActiveTab('active'); }} className={`flex items-center gap-2 py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'active' ? 'bg-white dark:bg-[#181818] text-[#0D3A1D] dark:text-white shadow-xs' : 'text-gray-500'}`}>
             <Wrench className="w-3.5 h-3.5" /> <span>Active Requests</span>
             {active.length > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500 text-white">{active.length}</span>}
           </button>
-          <button onClick={() => setActiveTab('previous')} className={`flex items-center gap-2 py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'previous' ? 'bg-white dark:bg-[#181818] text-[#0D3A1D] dark:text-white shadow-xs' : 'text-gray-500'}`}>
+          <button onClick={() => { setUserSelectedTab(true); setActiveTab('previous'); }} className={`flex items-center gap-2 py-2 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'previous' ? 'bg-white dark:bg-[#181818] text-[#0D3A1D] dark:text-white shadow-xs' : 'text-gray-500'}`}>
             <Clock className="w-3.5 h-3.5" /> <span>Previous Requests</span>
             {previous.length > 0 && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#93B733]/20 text-[#0D3A1D] dark:text-[#93B733]">{previous.length}</span>}
           </button>
@@ -397,7 +372,7 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
               <div
                 key={req.id}
                 onClick={() => setSelectedTicket(req)}
-                className="group bg-white dark:bg-[#141414] border border-gray-200/80 dark:border-white/10 hover:border-[#93B733]/60 dark:hover:border-[#93B733]/40 rounded-3xl p-5 sm:p-6 shadow-xs transition-all cursor-pointer relative overflow-hidden"
+                className="group bg-white dark:bg-[#141414] border border-gray-200/80 dark:border-white/10 hover:border-[#93B733]/60 dark:hover:border-[#93B733]/40 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xs transition-all cursor-pointer relative overflow-hidden"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-white/5">
                   <div className="flex items-center gap-2">
@@ -438,7 +413,7 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
               </div>
             ))
           ) : (
-            <div className="bg-white dark:bg-[#141414] border border-gray-200/80 dark:border-white/10 rounded-3xl p-10 text-center">
+            <div className="bg-white dark:bg-[#141414] border border-gray-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-6 sm:p-10 text-center">
               <CheckCircle2 className="w-10 h-10 text-[#93B733] mx-auto mb-2" />
               <h4 className="text-base font-black text-gray-900 dark:text-white">{activeTab === 'active' ? 'No Active Requests' : 'No Previous Requests'}</h4>
               <p className="text-xs text-gray-400 mt-1">{activeTab === 'active' ? 'Click any amenity above to file a complaint if you need assistance.' : 'Completed and closed maintenance requests will appear here.'}</p>
@@ -448,11 +423,153 @@ export default function MaintenanceRequests({ pgInfo, onBack }) {
       </div>
 
       {/* ═══════════════════════════════════════════
+          REPORT ISSUE / COMPLAINT POPUP MODAL
+          ═══════════════════════════════════════════ */}
+      {selectedAmenity && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs overflow-y-auto"
+          onClick={handleCloseAmenityModal}
+        >
+          <div
+            className="bg-white dark:bg-[#141414] border border-gray-200 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-7 max-w-lg w-full my-auto shadow-2xl relative space-y-4 sm:space-y-5 animate-in fade-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Close Modal Button */}
+            <button
+              type="button"
+              onClick={handleCloseAmenityModal}
+              className="absolute top-4 right-4 sm:top-5 sm:right-5 w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Modal Header */}
+            <div className="pr-8">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733]">
+                  {selectedAmenity}
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+                  New Complaint
+                </span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-black text-gray-900 dark:text-white tracking-tight">
+                Report Issue: {selectedAmenity}
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Submit this ticket directly to your PG manager for quick resolution.
+              </p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleCreate} className="space-y-3.5 sm:space-y-4">
+              {selectedAmenity === 'Others' && (
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Specify Other Issue <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={otherText}
+                    onChange={e => setOtherText(e.target.value)}
+                    placeholder="e.g. Door latch broken, Window repair..."
+                    className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#93B733]/50 focus:border-[#93B733] outline-none"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Location / Area
+                </label>
+                <CustomSelect
+                  value={location}
+                  onChange={setLocation}
+                  options={LOCATIONS}
+                  icon={MapPin}
+                  label="Select Location / Area"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Issue Summary <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder={`e.g. ${selectedAmenity} issue`}
+                  className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#93B733]/50 focus:border-[#93B733] outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Detailed Description
+                </label>
+                <textarea
+                  rows={2}
+                  value={desc}
+                  onChange={e => setDesc(e.target.value)}
+                  placeholder="Add any specific details..."
+                  className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[#93B733]/50 focus:border-[#93B733] outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <span className="text-xs font-bold uppercase text-gray-400">Priority:</span>
+                <div className="flex items-center gap-1.5">
+                  {['Normal', 'Urgent'].map(p => (
+                    <button
+                      type="button"
+                      key={p}
+                      onClick={() => setPriority(p)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                        priority === p
+                          ? p === 'Urgent'
+                            ? 'border-rose-500 bg-rose-500/15 text-rose-600'
+                            : 'border-[#93B733] bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733]'
+                          : 'border-gray-200 dark:border-white/10 text-gray-500'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={handleCloseAmenityModal}
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#93B733] hover:bg-[#82a32d] active:scale-95 text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {submitting ? 'Submitting...' : 'Submit Complaint to Owner'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════
           TICKET DETAILS MODAL WITH VERTICAL STEPPER
           ═══════════════════════════════════════════ */}
       {selectedTicket && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white dark:bg-[#141414] border border-gray-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 max-w-xl w-full my-8 shadow-2xl relative space-y-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-[#141414] border border-gray-200 dark:border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-xl w-full my-6 sm:my-8 shadow-2xl relative space-y-4 sm:space-y-6">
             {/* Close Modal Button */}
             <button
               onClick={() => setSelectedTicket(null)}

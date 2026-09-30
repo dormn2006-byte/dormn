@@ -5,7 +5,8 @@ import { AuthContext } from "../context/AuthContext";
 import { 
   Camera, Pencil, Check, Search, Brain, Clock, CheckCircle, BookOpen, ChevronRight,
   Code, Gamepad2, User, Building2, Lock, Globe, FileText, HeartPulse, Users, Save, Eye, EyeOff, Sparkles, X,
-  Upload, Briefcase, GitBranch, MessageCircle, CheckCircle2, AlertCircle, AlertTriangle
+  Upload, Briefcase, GitBranch, MessageCircle, CheckCircle2, AlertCircle, AlertTriangle,
+  CalendarClock, CalendarCheck, Phone, CalendarRange
 } from "lucide-react";
 
 import ThemeSwitch from "../components/ui/theme-switch-button";
@@ -39,10 +40,16 @@ const INPUT_CLS = "w-full rounded-xl border border-gray-200 dark:border-gray-800
 
 const Field = ({ label, value, onChange, isEditing, type = "text", options, placeholder, span = "" }) => {
   const isPhone = type === "phone" || type === "tel";
+  const formattedValue = typeof value === "string" && value.includes("_")
+    ? value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : value;
+
   return (
     <div className={span}>
-      <div className="flex items-center justify-between mb-1">
-        <label className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400">{label}</label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-[#93B733]">
+          {label}
+        </label>
         {isEditing && isPhone && value && (
           <span className={`text-[10px] font-bold ${value.length === 10 ? "text-emerald-500" : "text-amber-500"}`}>
             {value.length}/10 digits
@@ -73,8 +80,8 @@ const Field = ({ label, value, onChange, isEditing, type = "text", options, plac
           <input type={type} value={value || ""} onChange={e => onChange(e.target.value)} className={INPUT_CLS} placeholder={placeholder} />
         )
       ) : (
-        <p className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 truncate">
-          {value ? (isPhone ? (value.length === 10 ? `+91 ${value}` : value) : value) : <span className="text-gray-400 font-normal italic">Not provided</span>}
+        <p className="text-xs sm:text-base font-medium text-gray-600 dark:text-gray-300 break-words sm:truncate">
+          {value ? (isPhone ? (value.length === 10 ? `+91 ${value}` : value) : formattedValue) : <span className="text-gray-400 font-normal italic">Not provided</span>}
         </p>
       )}
     </div>
@@ -126,6 +133,8 @@ const StudentDashboard = () => {
 
   const userKey = user?.id ? `u_${user.id}` : user?.email ? `e_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}` : null;
 
+  const cleanPassport = (p) => (typeof p === "string" && !/googleusercontent|lh3\.google/i.test(p) ? p : null);
+
   const [profile, setProfile] = useState(() => {
     try {
       const p1 = userKey ? JSON.parse(localStorage.getItem(`dormn_student_profile_${userKey}`) || "{}") : {};
@@ -135,7 +144,8 @@ const StudentDashboard = () => {
         email: user?.email || "",
         phone: user?.phone || "",
         ...p2,
-        ...p1
+        ...p1,
+        passportPhoto: cleanPassport(p1.passportPhoto || p2.passportPhoto)
       };
     } catch {
       return {
@@ -148,6 +158,8 @@ const StudentDashboard = () => {
 
   const [stats, setStats] = useState({ pending: 0, approved: 0, total: 0 });
   const [bookings, setBookings] = useState([]);
+  const [visits, setVisits] = useState([]);
+  const [shortStays, setShortStays] = useState([]);
   const [pgList, setPgList] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -189,10 +201,12 @@ const StudentDashboard = () => {
 
   const fetchProfile = useCallback(async () => {
     try {
-      const [profRes, bookRes, pgRes] = await Promise.all([
+      const [profRes, bookRes, pgRes, visitRes, shortStayRes] = await Promise.all([
         api.get("/student/profile").catch(() => ({ data: { profile: {} } })),
         api.get("/bookings/my-bookings").catch(() => ({ data: { bookings: [] } })),
-        api.get("/pg/all").catch(() => ({ data: { pgs: [] } }))
+        api.get("/pg/all").catch(() => ({ data: { pgs: [] } })),
+        api.get("/visits/my").catch(() => ({ data: { visits: [] } })),
+        api.get("/short-stays/my").catch(() => ({ data: { shortStays: [] } }))
       ]);
 
       if (profRes.data?.profile) {
@@ -200,13 +214,18 @@ const StudentDashboard = () => {
         setProfile(prev => {
           const updated = {
             ...prev, ...f,
+            passportPhoto: cleanPassport(f.passportPhoto !== undefined ? f.passportPhoto : prev.passportPhoto),
             name: f.name || prev.name || user?.full_name || "",
             email: f.email || prev.email || user?.email || "",
             phone: f.phone || prev.phone || user?.phone || "",
             isPublic: f.isPublic !== undefined ? f.isPublic : (prev.isPublic ?? true),
           };
           if (userKey) {
-            try { localStorage.setItem(`dormn_student_profile_${userKey}`, JSON.stringify(updated)); } catch {}
+            try { 
+              localStorage.setItem(`dormn_student_profile_${userKey}`, JSON.stringify(updated)); 
+            } catch {
+              /* ignore storage quota error */
+            }
           }
           return updated;
         });
@@ -215,16 +234,77 @@ const StudentDashboard = () => {
 
       const raw = Array.isArray(bookRes.data?.bookings || bookRes.data) ? (bookRes.data?.bookings || bookRes.data) : [];
       const map = new Map();
+      const bPrio = { approved: 4, pending: 3, paused: 2, rejected: 1, cancelled: 0 };
       raw.forEach(item => {
         const k = item.pg_id || item.id;
-        if (!map.has(k) || item.status === "approved" || new Date(item.booking_date || 0) > new Date(map.get(k).booking_date || 0)) {
+        if (!map.has(k)) {
           map.set(k, item);
+        } else {
+          const ex = map.get(k);
+          const curPrio = bPrio[item.status] || 0;
+          const exPrio = bPrio[ex.status] || 0;
+          if (curPrio > exPrio) {
+            map.set(k, item);
+          } else if (curPrio === exPrio) {
+            const t1 = new Date(item.booking_date || item.created_at || 0).getTime() || Number(item.id) || 0;
+            const t2 = new Date(ex.booking_date || ex.created_at || 0).getTime() || Number(ex.id) || 0;
+            if (t1 > t2) map.set(k, item);
+          }
         }
       });
       const b = Array.from(map.values());
+      b.sort((x, y) => {
+        if (x.status === "approved" && y.status !== "approved") return -1;
+        if (x.status !== "approved" && y.status === "approved") return 1;
+        return new Date(y.booking_date || y.created_at || 0) - new Date(x.booking_date || x.created_at || 0);
+      });
       setBookings(b.slice(0, 5));
       setStats({ total: b.length, pending: b.filter(x => x.status === "pending").length, approved: b.filter(x => x.status === "approved").length });
       setPgList(Array.isArray(pgRes.data?.pgs || pgRes.data) ? (pgRes.data?.pgs || pgRes.data) : []);
+
+      // Deduplicate visits in StudentDashboard
+      const rawVisits = Array.isArray(visitRes.data?.visits || visitRes.data) ? (visitRes.data?.visits || visitRes.data) : [];
+      const vMap = new Map();
+      rawVisits.forEach((v) => {
+        const k = v.id;
+        vMap.set(k, v);
+      });
+      const dedupedVisits = Array.from(vMap.values());
+      dedupedVisits.sort((x, y) => {
+        if (x.status === "confirmed" && y.status !== "confirmed") return -1;
+        if (x.status !== "confirmed" && y.status === "confirmed") return 1;
+        return new Date(y.created_at || y.visit_date || 0) - new Date(x.created_at || x.visit_date || 0);
+      });
+      setVisits(dedupedVisits);
+
+      // Deduplicate short stays in StudentDashboard
+      const rawStays = Array.isArray(shortStayRes.data?.shortStays || shortStayRes.data) ? (shortStayRes.data?.shortStays || shortStayRes.data) : [];
+      const sMap = new Map();
+      const sPrio = { approved: 4, pending: 3, completed: 2, rejected: 1, cancelled: 0 };
+      rawStays.forEach((s) => {
+        const k = s.pg_id || s.id;
+        if (!sMap.has(k)) {
+          sMap.set(k, s);
+        } else {
+          const ex = sMap.get(k);
+          const curP = sPrio[s.status] || 0;
+          const exP = sPrio[ex.status] || 0;
+          if (curP > exP) {
+            sMap.set(k, s);
+          } else if (curP === exP) {
+            const t1 = new Date(s.created_at || s.check_in_date || 0).getTime() || Number(s.id) || 0;
+            const t2 = new Date(ex.created_at || ex.check_in_date || 0).getTime() || Number(ex.id) || 0;
+            if (t1 > t2) sMap.set(k, s);
+          }
+        }
+      });
+      const dedupedStays = Array.from(sMap.values());
+      dedupedStays.sort((x, y) => {
+        if (x.status === "approved" && y.status !== "approved") return -1;
+        if (x.status !== "approved" && y.status === "approved") return 1;
+        return new Date(y.created_at || y.check_in_date || 0) - new Date(x.created_at || x.check_in_date || 0);
+      });
+      setShortStays(dedupedStays);
     } catch (err) { console.error("Fetch Error:", err); }
   }, [user]);
 
@@ -240,10 +320,6 @@ const StudentDashboard = () => {
     const r = new FileReader();
     r.onloadend = () => {
       up(fieldKey, r.result);
-      if (fieldKey === "photo" || fieldKey === "passportPhoto") {
-        up("photo", r.result);
-        up("passportPhoto", r.result);
-      }
     };
     r.readAsDataURL(f);
   };
@@ -344,7 +420,7 @@ const StudentDashboard = () => {
             <ThemeSwitch />
             <div className="relative" ref={menuRef}>
               <button onClick={() => setShowMenu(p => !p)} className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-900 overflow-hidden hover:border-[#93B733] transition-all">
-                {profile.photo || profile.passportPhoto ? <img src={profile.photo || profile.passportPhoto} alt="User" className="h-full w-full object-cover" /> : <span className="text-sm font-bold text-[#0D3A1D] dark:text-gray-200">{initial}</span>}
+                {profile.photo ? <img src={profile.photo} alt="User" className="h-full w-full object-cover" /> : <span className="text-sm font-bold text-[#0D3A1D] dark:text-gray-200">{initial}</span>}
               </button>
               {showMenu && (
                 <div className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-black shadow-lg py-1.5 z-50">
@@ -357,7 +433,7 @@ const StudentDashboard = () => {
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1600px] px-4 sm:px-8 py-8">
+      <div className="mx-auto max-w-[1600px] px-3 sm:px-8 py-4 sm:py-8">
         <div className="flex flex-col lg:flex-row items-start gap-6 w-full">
           
           {/* ── LEFT COLUMN: SOCIAL CONNECT (Desktop) ── */}
@@ -396,14 +472,14 @@ const StudentDashboard = () => {
           <div className="flex-1 min-w-0 space-y-6 order-1 lg:order-2 w-full">
             
             {/* Hero & Privacy Card */}
-            <Card className="p-6 sm:p-10">
+            <Card className="p-4 sm:p-8 md:p-10">
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
                 <div className="relative shrink-0">
                   <button onClick={() => fileRef.current?.click()} className="group relative flex h-28 w-28 sm:h-32 sm:w-32 items-center justify-center rounded-full border-4 border-white dark:border-black bg-gray-100 dark:bg-gray-900 shadow-lg overflow-hidden transition-transform hover:scale-105">
-                    {profile.photo || profile.passportPhoto ? <img src={profile.photo || profile.passportPhoto} alt="Profile" className="h-full w-full object-cover" /> : <span className="text-4xl font-black text-[#0D3A1D]/20 dark:text-gray-200/20">{initial}</span>}
+                    {profile.photo ? <img src={profile.photo} alt="Profile" className="h-full w-full object-cover" /> : <span className="text-4xl font-black text-[#0D3A1D]/20 dark:text-gray-200/20">{initial}</span>}
                     <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full"><Camera size={22} className="text-white" /></div>
                   </button>
-                  <input ref={fileRef} type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "passportPhoto")} className="hidden" />
+                  <input ref={fileRef} type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "photo")} className="hidden" />
                 </div>
 
                 <div className="flex-1 text-center sm:text-left w-full pt-1">
@@ -433,7 +509,15 @@ const StudentDashboard = () => {
                       <>
                         <span className="rounded-full bg-amber-50 dark:bg-amber-900/20 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-400">{profile.userType === "professional" ? "💼 Professional" : "🎓 Student"}</span>
                         <span className="rounded-full bg-blue-50 dark:bg-blue-900/20 px-3 py-1 text-xs font-bold text-blue-600 dark:text-blue-400">🏛️ {profile.userType === "professional" ? (profile.company || profile.workplaceName || "Add Workplace") : (profile.college || profile.collegeName || "Add College")}</span>
-                        <span className="rounded-full bg-[#93B733]/10 dark:bg-[#93B733]/20 px-3 py-1 text-xs font-bold text-[#4E700F] dark:text-[#93B733]">{profile.currentPG || (bookings.find(x => x.status === 'approved') ? `🏠 Staying at: ${bookings.find(x => x.status === 'approved')?.title || bookings.find(x => x.status === 'approved')?.pg_name}` : "🏠 Not in any PG")}</span>
+                        <span className="rounded-full bg-[#93B733]/10 dark:bg-[#93B733]/20 px-3 py-1 text-xs font-bold text-[#4E700F] dark:text-[#93B733]">
+                          {profile.currentPG || (
+                            bookings.find(x => x.payment_status === 'paid' || x.status === 'paid')
+                              ? `🏠 Staying at: ${bookings.find(x => x.payment_status === 'paid' || x.status === 'paid')?.title || bookings.find(x => x.payment_status === 'paid' || x.status === 'paid')?.pg_name}`
+                              : bookings.find(x => x.status === 'approved')
+                              ? `⏳ Approved: ${bookings.find(x => x.status === 'approved')?.title || bookings.find(x => x.status === 'approved')?.pg_name} (Awaiting Payment)`
+                              : "🏠 Not in any PG"
+                          )}
+                        </span>
                       </>
                     )}
                   </div>
@@ -461,8 +545,218 @@ const StudentDashboard = () => {
               </div>
             </Card>
 
+            {/* Scheduled PG Visits Card */}
+            {visits && visits.length > 0 && (
+              <Card className="p-5 sm:p-7 border-[#93B733]/30 bg-white dark:bg-[#0d120a] shadow-sm">
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#93B733]">
+                      <CalendarClock size={16} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-gray-100">
+                        Scheduled PG Visits ({visits.length})
+                      </h3>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Track your scheduled visits and owner confirmations</p>
+                    </div>
+                  </div>
+                  <Link
+                    to="/my-bookings?tab=visits"
+                    className="inline-flex items-center gap-1 text-xs font-black text-[#93B733] hover:underline"
+                  >
+                    View All in Requests <ChevronRight size={13} />
+                  </Link>
+                </div>
+
+                <div className="divide-y divide-gray-100 dark:divide-gray-800/60 mt-1">
+                  {visits.slice(0, 3).map((v) => {
+                    const isConfirmed = v.status === "confirmed";
+                    const isCompleted = v.status === "completed";
+                    const isCancelled = v.status === "cancelled";
+                    const isPending = !isConfirmed && !isCompleted && !isCancelled;
+                    const phoneDigits = (v.owner_phone || "").replace(/\D/g, "");
+                    const cleanPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+
+                    return (
+                      <div key={v.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="text-sm sm:text-base font-black text-[#0D3A1D] dark:text-gray-100">
+                              {v.pg_name || `PG #${v.pg_id}`}
+                            </h4>
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                                isConfirmed
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800"
+                                  : isCompleted
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800"
+                                  : isCancelled
+                                  ? "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800"
+                                  : "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800"
+                              }`}
+                            >
+                              {isConfirmed ? <CalendarCheck size={11} /> : isCompleted ? <CheckCircle size={11} /> : isCancelled ? <X size={11} /> : <Clock size={11} />}
+                              {isConfirmed ? "Confirmed by Owner" : isCompleted ? "Completed" : isCancelled ? "Cancelled" : "Pending Verification"}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1.5">
+                            <span>📅 {new Date(v.visit_date).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>
+                            <span>•</span>
+                            <span>🕒 {v.visit_time_slot || "Anytime"}</span>
+                          </p>
+
+                          {isConfirmed ? (
+                            <p className="text-xs text-blue-700 dark:text-blue-400 font-semibold">
+                              🎉 Owner accepted your visit! {v.owner_phone ? `Call or WhatsApp owner: ${v.owner_phone}` : ""}
+                            </p>
+                          ) : isPending ? (
+                            <p className="text-xs text-amber-700 dark:text-amber-400/90 font-medium">
+                              ⏳ Waiting for owner verification. Check back soon or view details in your requests.
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-auto">
+                          {isConfirmed && v.owner_phone && (
+                            <>
+                              <a
+                                href={`tel:${v.owner_phone}`}
+                                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 hover:border-[#93B733] transition-colors"
+                              >
+                                <Phone size={12} /> Call
+                              </a>
+                              <a
+                                href={`https://wa.me/${cleanPhone}?text=Hi%20${encodeURIComponent(v.owner_name || "Owner")},%20I%20have%20a%20confirmed%20visit%20for%20${encodeURIComponent(v.pg_name || "your PG")}%20on%20${new Date(v.visit_date).toLocaleDateString()}.`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-all"
+                              >
+                                WhatsApp
+                              </a>
+                            </>
+                          )}
+                          <Link
+                            to="/my-bookings?tab=visits"
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-[#0D3A1D] hover:border-[#93B733] transition-colors"
+                          >
+                            View <ChevronRight size={12} />
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
+            {/* Short Stays Card (4-5 Days / Daily Guests) */}
+            {shortStays && shortStays.length > 0 && (
+              <Card className="p-5 sm:p-7 border-indigo-500/30 bg-white dark:bg-[#0d0f14] shadow-sm">
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                      <CalendarRange size={16} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-gray-100">
+                        Short Stays ({shortStays.length})
+                      </h3>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                        4–5 days or daily guest bookings
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    to="/my-short-stays"
+                    className="inline-flex items-center gap-1 text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline"
+                  >
+                    View All in My Short Stays <ChevronRight size={13} />
+                  </Link>
+                </div>
+
+                <div className="divide-y divide-gray-100 dark:divide-gray-800/60 mt-1">
+                  {shortStays.slice(0, 3).map((s) => {
+                    const isApproved = s.status === "approved";
+                    const isPending = s.status === "pending";
+                    const phoneDigits = (s.owner_phone || s.pg_phone || "").replace(/\D/g, "");
+                    const cleanPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+
+                    return (
+                      <div key={s.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="text-sm sm:text-base font-black text-[#0D3A1D] dark:text-gray-100">
+                              {s.pg_title || `PG #${s.pg_id}`}
+                            </h4>
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                                isApproved
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800"
+                                  : isPending
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800"
+                                  : "bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-400"
+                              }`}
+                            >
+                              {isApproved ? <CheckCircle2 size={11} /> : isPending ? <Clock size={11} /> : <X size={11} />}
+                              {isApproved ? "Approved by Owner" : isPending ? "Pending Verification" : s.status}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1.5">
+                            <span>📅 {s.check_in_date} → {s.check_out_date} ({s.total_days} Days)</span>
+                            <span>•</span>
+                            <span>{s.room_type || "Standard Room"}</span>
+                          </p>
+
+                          {isApproved ? (
+                            <p className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
+                              🎉 Owner accepted your stay! {cleanPhone ? `Direct contact available below.` : ""}
+                            </p>
+                          ) : isPending ? (
+                            <p className="text-xs text-amber-700 dark:text-amber-400/90 font-medium">
+                              ⏳ Request sent to PG owner. You will see confirmation once approved.
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-auto">
+                          {isApproved && cleanPhone && (
+                            <>
+                              <a
+                                href={`tel:${cleanPhone}`}
+                                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 hover:border-gray-300 transition-colors"
+                              >
+                                <Phone size={12} /> Call
+                              </a>
+                              <a
+                                href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                                  `Hi ${s.owner_name || "Owner"}, regarding my approved short stay for ${s.pg_title} from ${s.check_in_date} to ${s.check_out_date}...`
+                                )}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-all"
+                              >
+                                WhatsApp
+                              </a>
+                            </>
+                          )}
+                          <Link
+                            to="/my-short-stays"
+                            className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/50 dark:bg-indigo-950/20 px-3 py-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:border-indigo-400 transition-colors"
+                          >
+                            Details <ChevronRight size={12} />
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
             {/* Section 1: Tenant Details */}
-            <Card className="p-6 sm:p-8">
+            <Card className="p-4 sm:p-6 md:p-8">
               <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-gray-200 mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2.5"><User size={15} className="text-[#93B733]" /> 1. Tenant & Permanent Details</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                 <Field label="Full Name" value={profile.name || profile.fullName} onChange={v => { up("name", v); up("fullName", v); }} isEditing={isEditing} placeholder="Full Legal Name" />
@@ -476,20 +770,20 @@ const StudentDashboard = () => {
             </Card>
 
             {/* Section 2: Parents & Emergency Contacts */}
-            <Card className="p-6 sm:p-8">
+            <Card className="p-4 sm:p-6 md:p-8">
               <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-gray-200 mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2.5"><Users size={15} className="text-blue-500" /> 2. Parent & Emergency Contacts</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02] p-3.5 space-y-2.5">
-                  <p className="text-xs font-black uppercase text-gray-700 dark:text-gray-300">Parent / Guardian 1</p>
+                <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02] p-3 sm:p-3.5 space-y-2.5">
+                  <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-[#93B733]">Parent / Guardian 1</p>
                   <Field label="Name" value={profile.parent1Name} onChange={v => up("parent1Name", v)} isEditing={isEditing} placeholder="Parent 1 Name" />
                   <Field label="Phone" value={profile.parent1Phone || profile.parent1Contact} onChange={v => { up("parent1Phone", v); up("parent1Contact", v); }} isEditing={isEditing} type="phone" placeholder="XXXXXXXXXX" />
                 </div>
-                <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02] p-3.5 space-y-2.5">
-                  <p className="text-xs font-black uppercase text-gray-700 dark:text-gray-300">Parent / Guardian 2</p>
+                <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02] p-3 sm:p-3.5 space-y-2.5">
+                  <p className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-[#93B733]">Parent / Guardian 2</p>
                   <Field label="Name" value={profile.parent2Name} onChange={v => up("parent2Name", v)} isEditing={isEditing} placeholder="Parent 2 Name" />
                   <Field label="Phone" value={profile.parent2Phone || profile.parent2Contact} onChange={v => { up("parent2Phone", v); up("parent2Contact", v); }} isEditing={isEditing} type="phone" placeholder="XXXXXXXXXX" />
                 </div>
-                <div className="md:col-span-2 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02] p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="md:col-span-2 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02] p-3 sm:p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <Field label="Local Guardian Name (Optional)" value={profile.guardianName} onChange={v => up("guardianName", v)} isEditing={isEditing} placeholder="Guardian Name" />
                   <Field label="Guardian Phone" value={profile.guardianPhone} onChange={v => up("guardianPhone", v)} isEditing={isEditing} type="phone" placeholder="XXXXXXXXXX" />
                 </div>
@@ -497,7 +791,7 @@ const StudentDashboard = () => {
             </Card>
 
             {/* Section 3: Academic & Career */}
-            <Card className="p-6 sm:p-8">
+            <Card className="p-4 sm:p-6 md:p-8">
               <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-gray-200 mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2.5"><FileText size={15} className="text-purple-500" /> 3. Academic & Career Details</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                 <Field label="Occupation Type" value={profile.userType === "professional" ? "Working Professional" : "Student"} onChange={v => up("userType", v === "Working Professional" ? "professional" : "student")} isEditing={isEditing} type="select" options={["Student", "Working Professional"]} />
@@ -519,7 +813,7 @@ const StudentDashboard = () => {
             </Card>
 
             {/* Section 4: Medical & Dietary */}
-            <Card className="p-6 sm:p-8">
+            <Card className="p-4 sm:p-6 md:p-8">
               <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-gray-200 mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2.5"><HeartPulse size={15} className="text-rose-500" /> 4. Medical & Dietary Preferences</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <Field label="Blood Group" value={profile.bloodGroup} onChange={v => up("bloodGroup", v)} isEditing={isEditing} type="select" options={BLOODS} />
@@ -530,10 +824,10 @@ const StudentDashboard = () => {
             </Card>
 
             {/* Section 5: KYC Documents */}
-            <Card className="p-6 sm:p-8">
+            <Card className="p-4 sm:p-6 md:p-8">
               <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-gray-200 mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2.5"><FileText size={15} className="text-emerald-500" /> 5. KYC Verification Documents</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <DocUpload label="Passport Photo" value={profile.passportPhoto || profile.photo} onUpload={e => handleFileUpload(e, "passportPhoto")} onRemove={() => { up("passportPhoto", null); up("photo", null); }} isEditing={isEditing} />
+                <DocUpload label="Passport Photo" value={profile.passportPhoto} onUpload={e => handleFileUpload(e, "passportPhoto")} onRemove={() => up("passportPhoto", null)} isEditing={isEditing} />
                 <DocUpload label="Aadhaar (Front)" value={profile.aadharFront} onUpload={e => handleFileUpload(e, "aadharFront")} onRemove={() => up("aadharFront", null)} isEditing={isEditing} />
                 <DocUpload label="Aadhaar (Back)" value={profile.aadharBack} onUpload={e => handleFileUpload(e, "aadharBack")} onRemove={() => up("aadharBack", null)} isEditing={isEditing} />
               </div>
@@ -541,7 +835,7 @@ const StudentDashboard = () => {
 
             {/* Section 6: Personality & Vibe */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="p-5 sm:p-6">
+              <Card className="p-4 sm:p-6">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2.5 flex items-center gap-1.5"><Gamepad2 size={14} className="text-[#93B733]" /> Hobbies</h3>
                 {isEditing ? <TagInput tags={profile.hobbies || []} onChange={v => up("hobbies", v)} placeholder="Add hobby..." options={HOBBY_OPTS} color="#93B733" /> : <div className="flex flex-wrap gap-1.5">{(profile.hobbies || []).length > 0 ? profile.hobbies.map(h => <span key={h} className="rounded-full bg-[#93B733]/10 text-[#4E700F] px-2.5 py-1 text-xs font-bold">{h}</span>) : <p className="text-xs text-gray-400 italic">None</p>}</div>}
               </Card>
@@ -614,7 +908,7 @@ const StudentDashboard = () => {
                             <h4 className="text-xs sm:text-sm font-black text-[#0D3A1D] dark:text-gray-200 truncate">{b.pg_name || b.title || `PG #${b.pg_id}`}</h4>
                             <p className="text-[11px] text-gray-400">{b.booking_date ? new Date(b.booking_date).toLocaleDateString() : "Recently"}</p>
                           </div>
-                          <StatusBadge status={b.status} />
+                          <StatusBadge status={b.status} paymentStatus={b.payment_status} />
                         </div>
                       ))}
                     </div>

@@ -1,8 +1,9 @@
-import React, { useState, useCallback, lazy, Suspense } from "react";
+import React, { useState, useCallback, Suspense } from "react";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import AppRoutes from "./routes/AppRoutes";
+import lazyWithRetry from "./utils/lazyRetry";
 
-const IntroAnimation = lazy(() => import("./components/IntroAnimation"));
+const IntroAnimation = lazyWithRetry(() => import("./components/IntroAnimation"), "IntroAnimation");
 
 class ErrorBoundary extends React.Component {
   constructor(props) {

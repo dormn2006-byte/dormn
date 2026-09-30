@@ -6,13 +6,19 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
   const [currentScales, setCurrentScales] = useState(apps.map(() => 1));
   const [currentPositions, setCurrentPositions] = useState([]);
   
+  const [isPhoneView, setIsPhoneView] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768;
+  });
+
   const [isMobileDevice, setIsMobileDevice] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth < 768 || (('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth < 1024);
   });
 
   const isParty = variant === 'party';
-  const isOwner = variant === 'owner' || variant === 'resident';
+  const isOwner = variant === 'owner';
+  const isResident = variant === 'resident';
   const scalesRef = useRef(apps.map(() => 1));
   const positionsRef = useRef([]);
   const dockRef = useRef(null);
@@ -24,7 +30,7 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
 
   const activeApp = apps.find(app => openApps.includes(app.id));
   const activeAppId = activeApp ? activeApp.id : null;
-  const expandedAppId = isParty ? null : (hoveredApp ? hoveredApp.id : activeAppId);
+  const expandedAppId = (isParty || isPhoneView) ? null : (hoveredApp ? hoveredApp.id : activeAppId);
 
   const getResponsiveConfig = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -37,8 +43,7 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
       const idx = w < 380 ? 0 : w < 480 ? 1 : w < 640 ? 2 : 3;
       const szMap = variant === 'resident' ? [34, 38, 42, 46] : variant === 'owner' ? [38, 44, 48, 52] : [36, 40, 44, 48];
       const spMap = variant === 'resident' ? [5, 6, 7, 8] : [6, 8, 9, 10];
-      const lwMap = [62, 70, 78, 88];
-      return { baseIconSize: szMap[idx], maxScale: 1.0, effectWidth: 0, baseSpacing: spMap[idx], isBottom: true, labelWidth: lwMap[idx] };
+      return { baseIconSize: szMap[idx], maxScale: 1.0, effectWidth: 0, baseSpacing: spMap[idx], isBottom: true, labelWidth: 0 };
     }
 
     const isRes = variant === 'resident';
@@ -61,6 +66,7 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
   useEffect(() => {
     const handleResize = () => {
       const w = window.innerWidth;
+      setIsPhoneView(w < 768);
       setIsMobileDevice(w < 768 || (('ontouchstart' in window || navigator.maxTouchPoints > 0) && w < 1024));
       setConfig(getResponsiveConfig());
     };
@@ -80,16 +86,28 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
     });
   }, [apps, baseIconSize, baseSpacing, effectWidth, maxScale, isMobileDevice]);
 
+  const getLabelWidthForApp = useCallback((app) => {
+    if (isPhoneView) return 0;
+    if (!app || !app.name) return currentLabelWidth;
+    if (isParty) {
+      const charCount = app.name.length;
+      const needed = Math.max(90, Math.min(240, Math.round(charCount * 7.5 + 24)));
+      return isMobileDevice ? Math.min(140, needed) : needed;
+    }
+    return currentLabelWidth;
+  }, [currentLabelWidth, isParty, isMobileDevice, isPhoneView]);
+
   const calculatePositions = useCallback((scales, expandedId) => {
     let x = 0;
     return scales.map((scale, i) => {
-      const labelW = apps[i].id === expandedId ? currentLabelWidth : 0;
+      const app = apps[i];
+      const labelW = (!isPhoneView && app.id === expandedId) ? getLabelWidthForApp(app) : 0;
       const sw = baseIconSize * scale;
       const cx = x + sw / 2;
       x += sw + labelW + baseSpacing;
       return cx;
     });
-  }, [apps, baseIconSize, baseSpacing, currentLabelWidth]);
+  }, [apps, baseIconSize, baseSpacing, getLabelWidthForApp, isPhoneView]);
 
   const animateToTargetRef = useRef();
 
@@ -214,7 +232,7 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
 
   const contentWidth = currentPositions.length > 0
     ? Math.max(...currentPositions.map((pos, i) => {
-        const labelW = apps[i].id === expandedAppId ? currentLabelWidth : 0;
+        const labelW = (!isPhoneView && apps[i].id === expandedAppId) ? getLabelWidthForApp(apps[i]) : 0;
         return pos + (baseIconSize * currentScales[i]) / 2 + labelW;
       }))
     : (apps.length * (baseIconSize + baseSpacing)) - baseSpacing;
@@ -226,14 +244,12 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
       border: '1px solid rgba(255, 255, 255, 0.16)',
       boxShadow: '0 16px 40px -6px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
     } : {
-      background: isBottom ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.2)',
-      border: `1px solid rgba(255,255,255,${isBottom ? 0.5 : 0.6})`,
-      boxShadow: isBottom
-        ? `0 ${Math.max(4, baseIconSize * 0.1)}px ${Math.max(16, baseIconSize * 0.4)}px rgba(0,0,0,0.1),0 ${Math.max(2, baseIconSize * 0.05)}px ${Math.max(8, baseIconSize * 0.2)}px rgba(0,0,0,0.05),inset 0 1px 0 rgba(255,255,255,0.6)`
-        : '0 8px 32px rgba(0,0,0,0.1),0 2px 8px rgba(0,0,0,0.05),inset 0 1px 0 rgba(255,255,255,0.7)',
+      background: 'rgba(255, 255, 255, 0.82)',
+      border: '1px solid rgba(255, 255, 255, 0.85)',
+      boxShadow: '0 20px 48px -8px rgba(0, 0, 0, 0.12), 0 4px 16px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
     }),
     borderRadius: `${borderRadius}px`,
-    padding: isOwner ? `${Math.max(7, padding)}px ${Math.max(12, padding + 4)}px` : `${padding}px`,
+    padding: (isOwner || isResident) ? `${Math.max(7, padding)}px ${Math.max(12, padding + 4)}px` : `${padding}px`,
     margin: '0 auto',
     width: 'fit-content',
     WebkitTransform: 'translateZ(0)',
@@ -241,9 +257,9 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
     WebkitBackfaceVisibility: 'hidden',
     backfaceVisibility: 'hidden',
     contain: 'paint layout',
-    WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-    backdropFilter: 'blur(24px) saturate(180%)'
-  }), [isBottom, borderRadius, baseIconSize, padding, isParty, isOwner]);
+    WebkitBackdropFilter: 'blur(28px) saturate(190%)',
+    backdropFilter: 'blur(28px) saturate(190%)'
+  }), [borderRadius, baseIconSize, padding, isParty, isOwner, isResident]);
 
   const dotSize = Math.max(4, baseIconSize * 0.08);
 
@@ -267,8 +283,8 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
           const scale = currentScales[index];
           const position = currentPositions[index] || 0;
           const sz = baseIconSize * scale;
-          const isExp = app.id === expandedAppId;
-          const lw = isExp ? currentLabelWidth : 0;
+          const isExp = !isPhoneView && app.id === expandedAppId;
+          const lw = isExp ? getLabelWidthForApp(app) : 0;
           const isActive = openApps.includes(app.id);
 
           return (
@@ -283,7 +299,7 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
                 left: `${position - sz / 2}px`,
                 bottom: isBottom ? '0px' : 'auto',
                 top: isBottom ? 'auto' : '0px',
-                width: `${sz + lw}px`,
+                width: `${sz + (isPhoneView ? 0 : lw)}px`,
                 height: `${sz}px`,
                 transformOrigin: isBottom ? 'bottom center' : 'top center',
                 zIndex: Math.round(scale * 10),
@@ -292,40 +308,96 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
             >
               {/* Icon Container */}
               <div style={{ width: `${sz}px`, height: `${sz}px` }} className="flex-shrink-0 relative">
-                {typeof app.icon === 'string' ? (
-                  <img src={app.icon} alt={app.name} className="w-full h-full object-contain drop-shadow-md pointer-events-none select-none" />
-                ) : isOwner ? (
-                  <div
-                    className={`w-full h-full flex items-center justify-center rounded-2xl transition-all duration-200 shadow-md ${
-                      isActive
-                        ? "scale-105 ring-2 ring-white/90 shadow-lg"
-                        : "hover:scale-105 opacity-90 hover:opacity-100"
-                    } ${app.bgGradient || "bg-gradient-to-tr from-slate-700 to-slate-800"}`}
-                    style={{ filter: `drop-shadow(0 ${scale > 1.2 ? 5 : 2.5}px ${scale > 1.2 ? 10 : 5}px rgba(0,0,0,0.35))` }}
-                  >
-                    <div className="w-full h-full flex items-center justify-center text-white [&>svg]:w-[60%] [&>svg]:h-[60%] [&>svg]:stroke-[2.4] [&>svg]:text-white [&>svg]:drop-shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
+                {(() => {
+                  const isProfile = app.isProfile || app.id === 'account' || app.id === '/student/dashboard' || app.id === 'profile';
+
+                  if (isProfile) {
+                    return (
+                      <div
+                        className={`w-full h-full rounded-full overflow-hidden border-2 border-white/90 shadow-xs flex items-center justify-center transition-all duration-200 ${
+                          isActive ? 'ring-2 ring-[#93B733] ring-offset-2 scale-105' : 'hover:scale-105'
+                        } ${typeof app.icon !== 'string' ? (app.bgGradient || 'bg-[#7A929E]') : 'bg-gray-100'}`}
+                        style={{ filter: `drop-shadow(0 ${scale > 1.2 ? 3 : 1.5}px ${scale > 1.2 ? 6 : 3}px rgba(0,0,0,0.15))` }}
+                      >
+                        {typeof app.icon === 'string' ? (
+                          <img
+                            src={app.icon}
+                            alt={app.name}
+                            className="w-full h-full object-cover pointer-events-none select-none rounded-full"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.parentElement?.querySelector('.profile-fallback-initial');
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center font-black text-white text-xs sm:text-sm">
+                            {app.icon}
+                          </div>
+                        )}
+                        {typeof app.icon === 'string' && (
+                          <div
+                            className="profile-fallback-initial w-full h-full hidden items-center justify-center font-black text-white text-xs sm:text-sm bg-gradient-to-tr from-[#93B733] to-emerald-600 rounded-full"
+                          >
+                            {app.name ? app.name.charAt(0).toUpperCase() : 'U'}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (typeof app.icon === 'string') {
+                    return (
+                      <img
+                        src={app.icon}
+                        alt={app.name}
+                        className="w-full h-full object-contain drop-shadow-md pointer-events-none select-none"
+                        style={app.iconScale ? { transform: `scale(${app.iconScale})` } : undefined}
+                      />
+                    );
+                  }
+
+                  if (isOwner) {
+                    return (
+                      <div
+                        className={`w-full h-full flex items-center justify-center rounded-2xl transition-all duration-200 shadow-md ${
+                          isActive
+                            ? "scale-105 ring-2 ring-white/90 shadow-lg"
+                            : "hover:scale-105 opacity-90 hover:opacity-100"
+                        } ${app.bgGradient || "bg-gradient-to-tr from-slate-700 to-slate-800"}`}
+                        style={{ filter: `drop-shadow(0 ${scale > 1.2 ? 5 : 2.5}px ${scale > 1.2 ? 10 : 5}px rgba(0,0,0,0.35))` }}
+                      >
+                        <div className="w-full h-full flex items-center justify-center text-white [&>svg]:w-[60%] [&>svg]:h-[60%] [&>svg]:stroke-[2.4] [&>svg]:text-white [&>svg]:drop-shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
+                          {app.icon}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (isParty) {
+                    return (
+                      <div
+                        className={`w-full h-full flex items-center justify-center rounded-xl sm:rounded-2xl transition-colors duration-150 [&>svg]:w-[68%] [&>svg]:h-[68%] ${
+                          isActive
+                            ? "bg-gradient-to-tr from-purple-600 via-pink-600 to-rose-500 text-white shadow-lg shadow-pink-500/40 border border-pink-300/60 ring-2 ring-pink-400/40"
+                            : "bg-white/95 dark:bg-[#15112B]/95 text-purple-900 dark:text-purple-200 border border-purple-200/80 dark:border-purple-500/30 group-hover:bg-gradient-to-tr group-hover:from-purple-600 group-hover:to-pink-600 group-hover:text-white group-hover:border-pink-400"
+                        }`}
+                        style={{ filter: `drop-shadow(0 ${scale > 1.2 ? 3 : 1.5}px ${scale > 1.2 ? 6 : 3}px rgba(0,0,0,0.15))` }}
+                      >
+                        {app.icon}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      className="w-full h-full flex items-center justify-center rounded-xl sm:rounded-2xl bg-white dark:bg-[#1a1a1a] shadow-xs sm:shadow-sm border border-gray-100 dark:border-white/10 text-[#0D3A1D] dark:text-[#93B733] transition-colors duration-150 group-hover:bg-[#93B733] dark:group-hover:bg-[#93B733] group-hover:text-white dark:group-hover:text-black group-hover:border-[#93B733] [&>svg]:w-[68%] [&>svg]:h-[68%] [&>svg]:transition-colors"
+                      style={{ filter: `drop-shadow(0 ${scale > 1.2 ? 3 : 1.5}px ${scale > 1.2 ? 6 : 3}px rgba(0,0,0,0.1))` }}
+                    >
                       {app.icon}
                     </div>
-                  </div>
-                ) : isParty ? (
-                  <div
-                    className={`w-full h-full flex items-center justify-center rounded-xl sm:rounded-2xl transition-colors duration-150 [&>svg]:w-[68%] [&>svg]:h-[68%] ${
-                      isActive
-                        ? "bg-gradient-to-tr from-purple-600 via-pink-600 to-rose-500 text-white shadow-lg shadow-pink-500/40 border border-pink-300/60 ring-2 ring-pink-400/40"
-                        : "bg-white/95 dark:bg-[#15112B]/95 text-purple-900 dark:text-purple-200 border border-purple-200/80 dark:border-purple-500/30 group-hover:bg-gradient-to-tr group-hover:from-purple-600 group-hover:to-pink-600 group-hover:text-white group-hover:border-pink-400"
-                    }`}
-                    style={{ filter: `drop-shadow(0 ${scale > 1.2 ? 3 : 1.5}px ${scale > 1.2 ? 6 : 3}px rgba(0,0,0,0.15))` }}
-                  >
-                    {app.icon}
-                  </div>
-                ) : (
-                  <div
-                    className="w-full h-full flex items-center justify-center rounded-xl sm:rounded-2xl bg-white shadow-xs sm:shadow-sm border border-gray-100 text-[#0D3A1D] transition-colors duration-150 group-hover:bg-[#93B733] group-hover:text-white group-hover:border-[#93B733] [&>svg]:w-[68%] [&>svg]:h-[68%] [&>svg]:transition-colors"
-                    style={{ filter: `drop-shadow(0 ${scale > 1.2 ? 3 : 1.5}px ${scale > 1.2 ? 6 : 3}px rgba(0,0,0,0.1))` }}
-                  >
-                    {app.icon}
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Badge Notification */}
                 {app.badge !== undefined && app.badge !== null && app.badge > 0 && (
@@ -337,14 +409,15 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
 
               {/* Side Expanding Label Pill */}
               <div
-                className={`dock-label-pill ml-1 sm:ml-2 text-[10px] sm:text-xs md:text-sm font-black rounded-lg sm:rounded-xl shadow-xs sm:shadow-md border flex items-center justify-center px-1.5 sm:px-3 ${
+                className={`dock-label-pill hidden md:flex ml-1 sm:ml-2 text-[10px] sm:text-xs md:text-sm font-black rounded-lg sm:rounded-xl shadow-xs sm:shadow-md border items-center justify-center px-1.5 sm:px-3 ${
                   isParty
                     ? "bg-purple-950/95 dark:bg-[#120D26]/95 text-pink-300 dark:text-pink-300 border-purple-400/40 shadow-pink-500/20 backdrop-blur-md"
                     : isOwner
                     ? "bg-white/95 dark:bg-[#161c2c]/95 text-[#0D3A1D] dark:text-white border-white/50 dark:border-white/20 shadow-lg shadow-black/30 backdrop-blur-xl"
-                    : "bg-white text-[#0D3A1D] dark:text-white dark:bg-white/20 border-gray-200/80 dark:border-white/20 backdrop-blur-md"
+                    : "bg-white/95 text-[#0D3A1D] border-gray-200/90 shadow-md backdrop-blur-md"
                 }`}
                 style={{
+                  display: isPhoneView ? 'none' : undefined,
                   height: `${Math.max(24, sz * 0.76)}px`,
                   width: isExp ? Math.max(0, lw - 8) : 0,
                   opacity: isExp ? 1 : 0,
@@ -368,7 +441,7 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
                     height: `${dotSize}px`,
                     borderRadius: '50%',
                     backgroundColor: isOwner ? '#38BDF8' : (isParty ? '#EC4899' : '#93B733'),
-                    boxShadow: isOwner ? '0 0 10px #38BDF8, 0 0 2px #fff' : (isParty ? '0 0 8px rgba(236,72,153,0.9)' : '0 0 6px rgba(147,183,51,0.4)'),
+                    boxShadow: isOwner ? '0 0 10px #38BDF8, 0 0 2px #fff' : (isParty ? '0 0 8px rgba(236,72,153,0.9)' : '0 0 8px rgba(147,183,51,0.6)'),
                   }}
                 />
               )}

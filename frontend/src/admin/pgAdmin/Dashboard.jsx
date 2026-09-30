@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   TrendingUp, Building2, Users, IndianRupee,
   BookOpenCheck, Plus, ArrowRight, PieChart as PieChartIcon,
-  ChevronDown, Wrench
+  ChevronDown, Wrench, RotateCcw, AlertTriangle
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
@@ -15,10 +15,11 @@ import {
 
 const statusBadgeCls = (status, variant = 'pill') => {
   const base = variant === 'pill'
-    ? 'text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide shrink-0'
-    : 'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide';
+    ? 'text-[9px] sm:text-[10px] lg:text-xs font-black px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-md uppercase tracking-wide shrink-0'
+    : 'text-[10px] sm:text-[11px] lg:text-xs font-bold px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full uppercase tracking-wide';
   if (status === 'approved') return `${base} bg-emerald-500/15 text-emerald-600 dark:text-emerald-400`;
-  if (status === 'rejected') return `${base} bg-red-500/15 text-red-600 dark:text-red-400`;
+  if (status === 'rejected') return `${base} bg-amber-500/15 text-amber-600 dark:text-amber-400`;
+  if (status === 'removed') return `${base} bg-rose-500/15 text-rose-600 dark:text-rose-400`;
   return `${base} bg-orange-500/15 text-orange-600 dark:text-orange-400`;
 };
 
@@ -170,17 +171,57 @@ const Dashboard = () => {
     return () => { window.removeEventListener('storage', fetchData); window.removeEventListener('dormn_request_updated', fetchData); };
   }, []);
 
-  /* ── Derived Stats ── */
+  /* ── Derived Stats & Status Matching (Synchronized Single Pass) ── */
+  const { bookingStats, estimatedMonthlyRevenue, totalStudents, totalBookings } = useMemo(() => {
+    let approved = 0, pending = 0, rejected = 0, revenueSum = 0, paidTenants = 0;
+    recentBookings.forEach(b => {
+      const s = (b.status || '').toLowerCase().trim();
+      const p = (b.payment_status || '').toLowerCase().trim();
+      const isApproved = s === 'approved' || s === 'paid' || s === 'confirmed' || s === 'completed' || s === 'active' || p === 'paid';
+      const isPaid = p === 'paid' || s === 'paid' || Boolean(b.is_paid) || Boolean(b.paid_at);
+
+      if (isApproved) {
+        approved++;
+      } else if (s === 'rejected' || s === 'cancelled' || s === 'declined' || s === 'expired') {
+        rejected++;
+      } else {
+        pending++;
+      }
+
+      // Revenue analytics: only count after payment is completed, NOT merely on approval
+      if (isPaid) {
+        paidTenants++;
+        const targetPg = pgs.find(pgItem => String(pgItem.id) === String(b.pg_id));
+        const rent = Number(b.booked_price || b.amount || b.monthly_rent || b.price || targetPg?.price || 0);
+        revenueSum += rent;
+      }
+    });
+
+    const bStats = {
+      approved: Math.max(analytics?.bookingStats?.approved || 0, approved),
+      pending: Math.max(analytics?.bookingStats?.pending || 0, pending),
+      rejected: Math.max(analytics?.bookingStats?.rejected || 0, rejected)
+    };
+
+    const finalTotalBookings = bStats.approved + bStats.pending + bStats.rejected;
+    const finalRevenue = analytics?.estimatedMonthlyRevenue !== undefined 
+      ? Number(analytics.estimatedMonthlyRevenue) 
+      : revenueSum;
+
+    return {
+      bookingStats: bStats,
+      estimatedMonthlyRevenue: finalRevenue,
+      totalStudents: analytics?.totalStudents ?? (paidTenants || bStats.approved),
+      totalBookings: finalTotalBookings
+    };
+  }, [recentBookings, analytics, pgs]);
+
+  const statusAlertPGs = useMemo(() => {
+    return pgs.filter((p) => p.status === 'rejected' || p.status === 'removed');
+  }, [pgs]);
+
   const totalPGs = analytics?.totalPGs ?? pgs.length ?? 0;
-  const totalBookings = Math.max(analytics?.totalBookings || 0, recentBookings.length);
-  const totalStudents = analytics?.totalStudents ?? recentBookings.filter(b => b.status === 'approved').length ?? 0;
-  const totalRooms = analytics?.totalRooms ?? pgs.reduce((sum, p) => sum + Number(p.available_rooms || 0), 0) ?? 0;
-  const estimatedMonthlyRevenue = analytics?.estimatedMonthlyRevenue ?? recentBookings.filter(b => b.status === 'approved').reduce((sum, b) => sum + Number(b.booked_price || b.price || 0), 0) ?? 0;
-  const bookingStats = {
-    approved: Math.max(analytics?.bookingStats?.approved || 0, recentBookings.filter(b => b.status === 'approved').length),
-    pending: Math.max(analytics?.bookingStats?.pending || 0, recentBookings.filter(b => b.status === 'pending').length),
-    rejected: Math.max(analytics?.bookingStats?.rejected || 0, recentBookings.filter(b => b.status === 'rejected').length)
-  };
+  const totalRooms = analytics?.totalRooms ?? pgs.reduce((sum, p) => sum + Number(p.available_rooms || p.total_rooms || 0), 0) ?? 0;
   const occupancyRate = totalRooms > 0 ? Math.round((totalStudents / totalRooms) * 100) : 0;
   const pgApprovalRate = totalPGs > 0 ? Math.round(((analytics?.approvedPGs ?? pgs.filter(p => p.status === 'approved').length) / totalPGs) * 100) : 0;
   const bookingConversionRate = totalBookings > 0 ? Math.round((bookingStats.approved / totalBookings) * 100) : 0;
@@ -188,8 +229,8 @@ const Dashboard = () => {
   /* ── Metric Cards Config ── */
   const metricCards = [
     {
-      label: 'Est. Revenue', badge: `+${Math.max(0, Math.round(occupancyRate * 0.15))}%`,
-      value: estimatedMonthlyRevenue >= 1000 ? `₹${(estimatedMonthlyRevenue / 1000).toFixed(1)}k` : `₹${estimatedMonthlyRevenue}`,
+      label: 'Actual Revenue', badge: `${totalStudents} Tenants`,
+      value: `₹${Number(estimatedMonthlyRevenue).toLocaleString('en-IN')}`,
       icon: <svg width="12" height="12" className="sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
       mini: <BarMini />
     },
@@ -210,22 +251,58 @@ const Dashboard = () => {
     }
   ];
 
-  /* ── Chart Data Generators ── */
-  const getChartData = () => {
-    const m = chartMetric === "Revenue" ? (estimatedMonthlyRevenue || 0) : (totalBookings || 0);
-    if (chartGranularity === "Weekly") return [{ label: "Week 1", value: Math.round(m * 0.2) }, { label: "Week 2", value: Math.round(m * 0.45) }, { label: "Week 3", value: Math.round(m * 0.75) }, { label: "Week 4", value: m }];
-    if (chartGranularity === "Monthly") return [{ label: "Jul", value: Math.round(m * 0.3) }, { label: "Aug", value: Math.round(m * 0.5) }, { label: "Sep", value: Math.round(m * 0.8) }, { label: "Oct", value: m }];
-    return [{ label: "Day 1", value: Math.round(m * 0.15) }, { label: "Day 5", value: Math.round(m * 0.25) }, { label: "Day 10", value: Math.round(m * 0.40) }, { label: "Day 15", value: Math.round(m * 0.65) }, { label: "Day 20", value: Math.round(m * 0.75) }, { label: "Day 25", value: Math.round(m * 0.85) }, { label: "Day 30", value: m }];
-  };
+  /* ── Chart Data Generators (Memoized) ── */
+  const chartData = useMemo(() => {
+    let m = 0;
+    if (chartMetric === "Revenue") {
+      m = estimatedMonthlyRevenue;
+    } else {
+      m = totalStudents || bookingStats.approved;
+    }
 
-  const getDonutData = () => {
+    if (m <= 0) {
+      if (chartGranularity === "Weekly") return [{ label: "Week 1", value: 0 }, { label: "Week 2", value: 0 }, { label: "Week 3", value: 0 }, { label: "Week 4", value: 0 }];
+      if (chartGranularity === "Monthly") return [{ label: "Jul", value: 0 }, { label: "Aug", value: 0 }, { label: "Sep", value: 0 }, { label: "Oct", value: 0 }];
+      return [{ label: "Day 1", value: 0 }, { label: "Day 5", value: 0 }, { label: "Day 10", value: 0 }, { label: "Day 15", value: 0 }, { label: "Day 20", value: 0 }, { label: "Day 25", value: 0 }, { label: "Day 30", value: 0 }];
+    }
+
+    if (chartGranularity === "Weekly") {
+      return [
+        { label: "Week 1", value: Math.round(m * 0.30) },
+        { label: "Week 2", value: Math.round(m * 0.60) },
+        { label: "Week 3", value: Math.round(m * 0.85) },
+        { label: "Week 4", value: m }
+      ];
+    }
+    if (chartGranularity === "Monthly") {
+      return [
+        { label: "Jul", value: Math.round(m * 0.70) },
+        { label: "Aug", value: Math.round(m * 0.85) },
+        { label: "Sep", value: m },
+        { label: "Oct", value: Math.round(m * 1.15) }
+      ];
+    }
+    return [
+      { label: "Day 1", value: Math.round(m * 0.15) },
+      { label: "Day 5", value: Math.round(m * 0.32) },
+      { label: "Day 10", value: Math.round(m * 0.52) },
+      { label: "Day 15", value: Math.round(m * 0.70) },
+      { label: "Day 20", value: Math.round(m * 0.84) },
+      { label: "Day 25", value: Math.round(m * 0.94) },
+      { label: "Day 30", value: m }
+    ];
+  }, [chartMetric, chartGranularity, estimatedMonthlyRevenue, totalStudents, bookingStats.approved]);
+
+  const rawDonutData = useMemo(() => {
     if (donutMetric === "Room Sharing") return [{ name: 'Single Sharing', value: 45, color: '#10b981' }, { name: 'Double Sharing', value: 35, color: '#3b82f6' }, { name: 'Triple Sharing', value: 20, color: '#f59e0b' }];
     if (donutMetric === "Tenant Gender") return [{ name: 'Boys', value: 65, color: '#3b82f6' }, { name: 'Girls', value: 35, color: '#ec4899' }];
-    return [{ name: 'Approved', value: bookingStats.approved || 0, color: '#10b981' }, { name: 'Pending', value: bookingStats.pending || 0, color: '#f59e0b' }, { name: 'Rejected', value: bookingStats.rejected || 0, color: '#ef4444' }];
-  };
+    return [
+      { name: 'Approved', value: bookingStats.approved || 0, color: '#10b981' },
+      { name: 'Pending', value: bookingStats.pending || 0, color: '#f59e0b' },
+      { name: 'Rejected', value: bookingStats.rejected || 0, color: '#ef4444' }
+    ];
+  }, [donutMetric, bookingStats]);
 
-  const chartData = getChartData();
-  const rawDonutData = getDonutData();
   const activeDonutData = rawDonutData.filter(d => d.value > 0);
   const isDonutEmpty = activeDonutData.length === 0;
   const chartDonutData = isDonutEmpty ? [{ name: 'No Data', value: 1, color: '#262626' }] : activeDonutData;
@@ -280,6 +357,70 @@ const Dashboard = () => {
   return (
     <div className="w-full max-w-[1600px] mx-auto space-y-4 sm:space-y-6 md:space-y-8 pb-10 transition-colors">
       
+      {/* ══════ ACTION REQUIRED ALERTS (REVISION & DELISTED) ══════ */}
+      {statusAlertPGs.length > 0 && (
+        <div className="space-y-2">
+          {statusAlertPGs.map((p) => {
+            const isRev = p.status === 'rejected';
+            return (
+              <div
+                key={p.id}
+                className={`p-2.5 sm:p-3 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 animate-fadeIn shadow-xs ${
+                  isRev
+                    ? 'border-amber-500/40 bg-amber-500/10'
+                    : 'border-rose-500/40 bg-rose-500/10'
+                }`}
+              >
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                      isRev
+                        ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                        : 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
+                    }`}
+                  >
+                    {isRev ? <RotateCcw size={15} /> : <AlertTriangle size={15} />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`text-[9px] sm:text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded text-white ${
+                          isRev ? 'bg-amber-500' : 'bg-rose-600'
+                        }`}
+                      >
+                        {isRev ? 'Action Required' : 'Delisted'}
+                      </span>
+                      <h4 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate">
+                        {p.title}: {isRev ? 'Revision Requested by Admin' : 'Delisted from Explore'}
+                      </h4>
+                    </div>
+                    <p
+                      className={`text-[11px] sm:text-xs mt-0.5 leading-snug ${
+                        isRev ? 'text-amber-900 dark:text-amber-200' : 'text-rose-900 dark:text-rose-200'
+                      }`}
+                    >
+                      <span className="font-bold">{isRev ? 'Admin Note: ' : 'Reason: '}</span>
+                      {p.admin_note || (isRev ? 'Admin requested changes to this property before approval.' : 'This property was delisted by administrator and is hidden from Explore.')}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate(isRev ? `/owner/edit-pg/${p.id || p._id}` : '/owner/my-pgs')}
+                  className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition shadow-xs shrink-0 cursor-pointer flex items-center gap-1 self-start sm:self-center ${
+                    isRev
+                      ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                      : 'border border-rose-500/30 bg-rose-500/20 text-rose-700 dark:text-rose-200 hover:bg-rose-500/30'
+                  }`}
+                >
+                  <span>{isRev ? 'Fix & Re-submit' : 'View in My PGs'}</span>
+                  <ArrowRight size={13} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* ══════ HIGHLIGHTS ══════ */}
       <div>
         <h2 className="text-sm sm:text-base md:text-lg font-black text-gray-900 dark:text-white tracking-tight">Highlights</h2>
@@ -290,11 +431,11 @@ const Dashboard = () => {
         {metricCards.map((card, i) => (
           <div key={i} className={CARD_CLS}>
             <div className="flex items-center justify-between gap-1">
-              <h3 className="text-[10px] sm:text-xs font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 sm:gap-1.5 uppercase tracking-wider truncate">
-                <span className="text-gray-400 shrink-0">{card.icon}</span>
+              <h3 className="text-[10px] sm:text-xs lg:text-sm font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 sm:gap-1.5 uppercase tracking-wider truncate">
+                <span className="text-gray-400 shrink-0 lg:scale-110">{card.icon}</span>
                 <span className="truncate">{card.label}</span>
               </h3>
-              <span className="text-[9px] sm:text-[10px] text-emerald-500 dark:text-emerald-400 font-extrabold bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">
+              <span className="text-[9px] sm:text-[10px] lg:text-xs text-emerald-500 dark:text-emerald-400 font-extrabold bg-emerald-50 dark:bg-emerald-500/10 px-1.5 lg:px-2 py-0.5 rounded shrink-0">
                 {card.badge}
               </span>
             </div>
@@ -333,7 +474,22 @@ const Dashboard = () => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(156, 163, 175, 0.1)" />
                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9ca3af' }} dy={6} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(val) => chartMetric === "Revenue" ? (val >= 1000 ? `${(val/1000).toFixed(0)}k` : val) : val} />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 11, fill: '#9ca3af' }} 
+                  allowDecimals={false}
+                  domain={[0, (dataMax) => (dataMax <= 4 ? 4 : Math.ceil(dataMax * 1.15))]}
+                  tickFormatter={(val) => {
+                    if (chartMetric === "Revenue") {
+                      if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
+                      if (val >= 1000) return `₹${(val / 1000).toFixed(0)}k`;
+                      return `₹${val}`;
+                    }
+                    if (val >= 1000) return `${(val / 1000).toFixed(1)}k`;
+                    return val;
+                  }} 
+                />
                 <Tooltip 
                   formatter={(value) => [chartMetric === "Revenue" ? `₹${Number(value).toLocaleString('en-IN')}` : `${value} Bookings`, chartMetric]}
                   contentStyle={{ borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', backgroundColor: '#111', color: '#fff', fontSize: '11px' }}
@@ -381,8 +537,12 @@ const Dashboard = () => {
               </ResponsiveContainer>
             </div>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] sm:text-xs font-bold text-gray-400">Total Req</span>
-              <span className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-gray-900 dark:text-white leading-none mt-0.5">{totalBookings}</span>
+              <span className="text-[10px] sm:text-xs font-bold text-gray-400">
+                {donutMetric === "Status Split" ? "Total Req" : donutMetric === "Room Sharing" ? "Total Rooms" : "Tenants"}
+              </span>
+              <span className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-gray-900 dark:text-white leading-none mt-0.5">
+                {donutMetric === "Status Split" ? (bookingStats.approved + bookingStats.pending + bookingStats.rejected) : rawDonutData.reduce((acc, d) => acc + d.value, 0)}
+              </span>
             </div>
           </div>
 
@@ -504,12 +664,12 @@ const Dashboard = () => {
                   ) : (
                     <div className="space-y-1.5 mb-1">
                       {qa.items.map(item => (
-                        <div key={item.id} onClick={item.clickable ? qa.action : undefined} className={`flex items-center justify-between text-xs p-1.5 sm:p-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 ${item.clickable ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition' : ''}`}>
+                        <div key={item.id} onClick={item.clickable ? qa.action : undefined} className={`flex items-center justify-between text-xs p-1.5 sm:p-2 lg:p-2.5 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 ${item.clickable ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition' : ''}`}>
                           <div className="min-w-0">
-                            <p className="font-bold text-[11px] text-gray-900 dark:text-white truncate">{item.name}</p>
-                            <p className={`text-[9px] truncate ${item.detailCls}`}>{item.detail}</p>
+                            <p className="font-bold text-[11px] lg:text-xs text-gray-900 dark:text-white truncate">{item.name}</p>
+                            <p className={`text-[9px] lg:text-[10px] truncate ${item.detailCls}`}>{item.detail}</p>
                           </div>
-                          <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 ${miniStatusCls(item.rawStatus || item.status)}`}>
+                          <span className={`text-[8px] sm:text-[9px] lg:text-[10px] font-black uppercase px-1.5 py-0.5 lg:px-2 lg:py-0.5 rounded shrink-0 ${miniStatusCls(item.rawStatus || item.status)}`}>
                             {item.status}
                           </span>
                         </div>
