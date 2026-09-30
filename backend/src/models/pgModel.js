@@ -163,8 +163,10 @@ export const createPG = async (pgData) => {
     amenities,
     rules,
     google_map_link,
-    profile_image,
     sharing_options,
+    food_type,
+    connected_bank_account_id,
+    connected_bank_account,
   } = pgData;
 
   const pg = await PG.create({
@@ -184,6 +186,9 @@ export const createPG = async (pgData) => {
     google_map_link,
     status: "pending",
     sharing_options,
+    food_type: food_type || "Veg",
+    connected_bank_account_id: connected_bank_account_id || null,
+    connected_bank_account: connected_bank_account || null,
   });
 
   return { insertId: pg._id, affectedRows: 1 };
@@ -236,44 +241,7 @@ export const getPGsByOwner = async (ownerId) => {
 
 // Update PG
 export const updatePG = async (id, pgData) => {
-  const {
-    title,
-    description,
-    pg_type,
-    price,
-    address,
-    city,
-    area,
-    nearby_college,
-    available_rooms,
-    amenities,
-    rules,
-    google_map_link,
-    profile_image,
-    sharing_options,
-  } = pgData;
-
-  const result = await PG.updateOne(
-    { _id: Number(id) },
-    {
-      title,
-      description,
-      pg_type,
-      price,
-      address,
-      city,
-      area,
-      nearby_college,
-      available_rooms,
-      amenities,
-      rules,
-      google_map_link,
-      profile_image,
-      sharing_options,
-    }
-  );
-
-  return result;
+  return PG.updateOne({ _id: Number(id) }, { $set: pgData });
 };
 
 // Delete PG
@@ -400,6 +368,7 @@ export const searchPGs = async (filters) => {
     max_price,
     amenity,
     keyword,
+    food_type,
   } = filters;
 
   const match = { status: "approved" };
@@ -417,6 +386,15 @@ export const searchPGs = async (filters) => {
   if (city) match.city = caseInsensitive(city);
   if (area) match.area = caseInsensitive(area);
   if (nearby_college) match.nearby_college = caseInsensitive(nearby_college);
+
+  if (food_type) {
+    const ft = String(food_type).toLowerCase().trim();
+    if (ft.includes("veg") && !ft.includes("non")) {
+      match.food_type = { $in: ["Veg", "veg", "Pure Veg", "pure veg", "Both", "both", "Veg & Non-Veg", null] };
+    } else if (ft.includes("non")) {
+      match.food_type = { $in: ["Non-Veg", "non-veg", "Both", "both", "Veg & Non-Veg"] };
+    }
+  }
 
   if (amenity) {
     expressions.push({

@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import api from "../../services/api";
 import CollegeCombobox from "../../components/ui/CollegeCombobox";
+import BankAccountsSelectorModal from "./components/BankAccountsSelectorModal";
+import BankAccountCard from "./components/BankAccountCard";
 import {
   formatDuration,
   VIDEO_ACCEPT,
@@ -135,6 +137,16 @@ export default function AddPG() {
   const [hasExistingPgs, setHasExistingPgs] = useState(false);
   const [payoutStatus, setPayoutStatus] = useState({ loading: true, isConfigured: true });
   const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeModalInfo, setUpgradeModalInfo] = useState({ title: "", message: "" });
+  const [connectedBank, setConnectedBank] = useState(null);
+  const [showBankSelectorModal, setShowBankSelectorModal] = useState(false);
+  const [planLimit, setPlanLimit] = useState({
+    tier: "free",
+    maxListings: 1,
+    currentCount: 0,
+    isLimitReached: false,
+  });
 
   // Form Data State
   const [formData, setFormData] = useState({
@@ -147,6 +159,7 @@ export default function AddPG() {
     google_map_link: "",
     nearby_college: "",
     pg_type: "",
+    food_type: "Both",
     city: "",
     area: "",
     available_rooms: "",
@@ -169,11 +182,25 @@ export default function AddPG() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const [pgsRes, payoutRes] = await Promise.all([
+        const [pgsRes, payoutRes, banksRes, profileRes] = await Promise.all([
           api.get("/pg/owner/my-pgs").catch(() => ({ data: {} })),
           api.get("/auth/payout-status").catch(() => ({ data: {} })),
+          api.get("/auth/bank-accounts").catch(() => ({ data: {} })),
+          api.get("/auth/profile").catch(() => ({ data: {} })),
         ]);
         const pgs = pgsRes.data?.pgs || [];
+        const user = profileRes.data?.user || {};
+        const maxListings = Number(user.max_pg_listings) || 1;
+        const tier = user.subscription_tier || "free";
+        const isLimitReached = pgs.length >= maxListings;
+
+        setPlanLimit({
+          tier,
+          maxListings,
+          currentCount: pgs.length,
+          isLimitReached,
+        });
+
         setHasExistingPgs(pgs.length > 0);
 
         const isConfigured = Boolean(payoutRes.data?.is_configured);
@@ -181,6 +208,12 @@ export default function AddPG() {
           loading: false,
           isConfigured,
         });
+
+        const bankAccounts = banksRes.data?.bank_accounts || [];
+        if (bankAccounts.length > 0) {
+          const primary = bankAccounts.find((b) => b.is_primary) || bankAccounts[0];
+          setConnectedBank(primary);
+        }
 
         if (!isConfigured) {
           // Keep on step 0 if not configured
@@ -206,22 +239,15 @@ export default function AddPG() {
   };
 
   const handleSharingCheckboxChange = (roomType) => {
-    setSharingOptions((prev) => {
-      const willBeAvailable = !prev[roomType].available;
-      const base = Math.max(1000, Number(formData.price) || 6000);
-      const fallbackNonAc = roomType === "single" ? base : roomType === "double" ? Math.round(base * 0.85) : Math.round(base * 0.72);
-      const fallbackAc = fallbackNonAc + (roomType === "single" ? 1500 : 1200);
-
-      return {
-        ...prev,
-        [roomType]: {
-          ...prev[roomType],
-          available: willBeAvailable,
-          ac_price: willBeAvailable && !prev[roomType].ac_price ? String(fallbackAc) : prev[roomType].ac_price,
-          non_ac_price: willBeAvailable && !prev[roomType].non_ac_price ? String(fallbackNonAc) : prev[roomType].non_ac_price,
-        },
-      };
-    });
+    setSharingOptions((prev) => ({
+      ...prev,
+      [roomType]: {
+        ...prev[roomType],
+        available: !prev[roomType].available,
+        ac_price: !prev[roomType].available ? (prev[roomType].ac_price || "") : "",
+        non_ac_price: !prev[roomType].available ? (prev[roomType].non_ac_price || "") : "",
+      },
+    }));
   };
 
   const handleSharingPriceChange = (roomType, field, value) => {
@@ -466,6 +492,15 @@ export default function AddPG() {
       return;
     }
 
+    if (planLimit.isLimitReached) {
+      setUpgradeModalInfo({
+        title: "Subscription Required to List Property",
+        message: `You've completed all 5 steps for ${formData.title || "your property"}! However, your ${planLimit.tier.toUpperCase()} tier allows a maximum of ${planLimit.maxListings} active PG listing (${planLimit.currentCount}/${planLimit.maxListings} properties in use). To submit and list this property, please choose an Owner Plan.`,
+      });
+      setShowUpgradeModal(true);
+      return;
+    }
+
     try {
       setLoading(true);
       const data = new FormData();
@@ -480,25 +515,17 @@ export default function AddPG() {
       data.append("nearby_college", formData.nearby_college);
       data.append("available_rooms", formData.available_rooms || "1");
       data.append("rules", formData.rules);
+      data.append("food_type", formData.food_type || "Both");
       // Ensure sharing_options is populated even if owner skipped Step 3 toggles
-      const hasAnySharingConfigured = Object.values(sharingOptions).some(
-        (opt) => opt.available && (opt.ac_price || opt.non_ac_price)
-      );
-
-      let finalSharing = sharingOptions;
-      if (!hasAnySharingConfigured) {
-        const base = Math.max(1000, Number(formData.price) || 6000);
-        finalSharing = {
-          single: { available: true, ac_price: String(Math.round(base * 1.25)), non_ac_price: String(base) },
-          double: { available: true, ac_price: String(Math.round(base * 1.05)), non_ac_price: String(Math.round(base * 0.85)) },
-          triple: { available: true, ac_price: String(Math.round(base * 0.95)), non_ac_price: String(Math.round(base * 0.72)) },
-        };
-      }
-
-      data.append("sharing_options", JSON.stringify(finalSharing));
+      data.append("sharing_options", JSON.stringify(sharingOptions));
 
       const finalAmenities = Array.from(new Set([...selectedAmenities, ...customAmenities]));
       data.append("amenities", JSON.stringify(finalAmenities));
+
+      if (connectedBank?.id) {
+        data.append("connected_bank_account_id", connectedBank.id);
+        data.append("connected_bank_account", JSON.stringify(connectedBank));
+      }
 
       if (selectedImages.length > 0) {
         selectedImages.forEach((img) => {
@@ -533,7 +560,27 @@ export default function AddPG() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       console.error("PG Submit Error:", error?.response?.data || error);
-      alert(error?.response?.data?.message || "Failed to submit PG for verification.");
+      const errData = error?.response?.data;
+      const errCode = errData?.code;
+      const errMessage = errData?.message || "Failed to submit PG for verification.";
+
+      if (errCode === "PAYOUT_DETAILS_REQUIRED") {
+        setShowPayoutModal(true);
+      } else if (errCode === "LISTING_LIMIT_REACHED") {
+        setUpgradeModalInfo({
+          title: "Listing Limit Reached",
+          message: errMessage || "You've reached the maximum number of PGs for your current plan. Upgrade your plan to add more properties.",
+        });
+        setShowUpgradeModal(true);
+      } else if (errCode === "SUBSCRIPTION_EXPIRED") {
+        setUpgradeModalInfo({
+          title: "Subscription Expired",
+          message: errMessage || "Your subscription plan has expired. Please renew your plan to list new properties.",
+        });
+        setShowUpgradeModal(true);
+      } else {
+        alert(errMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -612,6 +659,47 @@ export default function AddPG() {
             )}
           </div>
         </div>
+
+        {/* Payout Details Modal */}
+        {showPayoutModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fadeIn">
+            <div className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-2xl text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-500 border border-amber-500/25 flex items-center justify-center mx-auto shadow-sm">
+                <CreditCard size={28} />
+              </div>
+              <div>
+                <h3 className="text-lg sm:text-xl font-black text-gray-900 dark:text-white">
+                  Add Bank Account First
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 leading-relaxed">
+                  Before onboarding a PG property, you must configure your settlement bank account so student booking tokens and monthly rent payouts can reach you directly.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowPayoutModal(false)}
+                  className="flex-1 rounded-xl border border-gray-300 dark:border-white/15 px-4 py-3 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
+                >
+                  Later
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPayoutModal(false);
+                    navigate("/owner/profile?tab=payouts");
+                  }}
+                  className="flex-1 rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] dark:bg-[#93B733] dark:hover:bg-[#82a32d] text-white dark:text-[#0D3A1D] px-4 py-3 text-xs font-black transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
+                >
+                  <span>Fill Details Now</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     );
   }
@@ -801,7 +889,7 @@ export default function AddPG() {
                     type="text"
                     name="title"
                     required
-                    placeholder="e.g. Royal Palace Luxury PG"
+                    placeholder="e.g. Your PG Name"
                     value={formData.title}
                     onChange={handleChange}
                     className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:border-[#93B733] focus:bg-white dark:focus:bg-[#1c1c1c] transition"
@@ -815,7 +903,7 @@ export default function AddPG() {
                   <input
                     type="text"
                     name="owner_name"
-                    placeholder="e.g. Ramesh Kumar"
+                    placeholder="e.g. Your Name"
                     value={formData.owner_name}
                     onChange={handleChange}
                     className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:border-[#93B733] focus:bg-white dark:focus:bg-[#1c1c1c] transition"
@@ -887,6 +975,91 @@ export default function AddPG() {
                 </div>
               </div>
 
+              {/* Food & Diet Policy */}
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                  <Utensils size={14} className="text-[#93B733]" />
+                  <span>Food Preference <span className="text-red-500">*</span></span>
+                </label>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  {[
+                    { id: "Veg", label: "Veg", tag: "Pure Veg 🟢" },
+                    { id: "Non-Veg", label: "Non-Veg", tag: "Non-Veg Allowed 🟤" },
+                  ].map((diet) => {
+                    const isSelected = (formData.food_type || "Veg") === diet.id;
+                    return (
+                      <button
+                        key={diet.id}
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, food_type: diet.id }))}
+                        className={`group relative flex flex-col items-center justify-center rounded-xl border-2 p-3 sm:p-4 transition-all duration-200 active:scale-[0.98] cursor-pointer text-center ${
+                          isSelected
+                            ? "border-[#0D3A1D] dark:border-[#93B733] bg-[#0D3A1D] text-white shadow-sm ring-1 ring-[#93B733]/40"
+                            : "border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] text-gray-900 dark:text-gray-100 hover:border-[#93B733]/50"
+                        }`}
+                      >
+                        <div className="font-bold text-xs sm:text-sm leading-tight flex items-center gap-1.5">
+                          {diet.id === "Veg" ? (
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
+                          ) : (
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></span>
+                          )}
+                          <span>{diet.label}</span>
+                        </div>
+                        <div className={`text-[10px] sm:text-xs font-medium mt-1 truncate w-full ${isSelected ? "text-gray-300" : "text-gray-500 dark:text-gray-400"}`}>
+                          {diet.tag}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Settlement Bank Account */}
+              <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] p-4 sm:p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-[#93B733]/15 text-[#5e771e] dark:text-[#93B733]">
+                      <CreditCard size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
+                        Connected Bank Account (Payouts)
+                      </h4>
+                      <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                        Monthly rents and student bookings for this PG will be deposited here.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBankSelectorModal(true)}
+                    className="text-xs font-black text-[#0D3A1D] dark:text-[#93B733] hover:underline cursor-pointer"
+                  >
+                    {connectedBank ? "Change Bank" : "+ Select Bank"}
+                  </button>
+                </div>
+
+                {connectedBank ? (
+                  <div className="max-w-md pt-1">
+                    <BankAccountCard
+                      account={connectedBank}
+                      isPrimary={Boolean(connectedBank.is_primary)}
+                      selectable={false}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowBankSelectorModal(true)}
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-[#93B733]/40 bg-[#93B733]/5 text-[#0D3A1D] dark:text-[#93B733] text-xs sm:text-sm font-bold hover:bg-[#93B733]/10 transition cursor-pointer"
+                  >
+                    <Plus size={16} />
+                    <span>Connect Payout Bank Account</span>
+                  </button>
+                )}
+              </div>
+
               {/* Description */}
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
@@ -926,7 +1099,7 @@ export default function AddPG() {
                     type="text"
                     name="city"
                     required
-                    placeholder="e.g. Noida, Delhi, Bangalore"
+                    placeholder="e.g. Your City"
                     value={formData.city}
                     onChange={handleChange}
                     className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:border-[#93B733]"
@@ -941,7 +1114,7 @@ export default function AddPG() {
                     type="text"
                     name="area"
                     required
-                    placeholder="e.g. Sector 62, Koramangala"
+                    placeholder="e.g. Your Area / Locality"
                     value={formData.area}
                     onChange={handleChange}
                     className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50/50 dark:bg-[#181818] px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:border-[#93B733]"
@@ -1521,6 +1694,55 @@ export default function AddPG() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Subscription / Plan Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-500 border border-amber-500/25 flex items-center justify-center mx-auto shadow-sm">
+              <Sparkles size={28} />
+            </div>
+            <div>
+              <h3 className="text-lg sm:text-xl font-black text-gray-900 dark:text-white">
+                {upgradeModalInfo.title || "Upgrade Your Plan"}
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 leading-relaxed">
+                {upgradeModalInfo.message}
+              </p>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowUpgradeModal(false)}
+                className="flex-1 rounded-xl border border-gray-300 dark:border-white/15 px-4 py-3 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.open("/owner/pricing", "_blank");
+                }}
+                className="flex-1 rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] dark:bg-[#93B733] dark:hover:bg-[#82a32d] text-white dark:text-[#0D3A1D] px-4 py-3 text-xs font-black transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
+              >
+                <span>View Plans & Subscribe</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bank Account Selection Modal */}
+      {showBankSelectorModal && (
+        <BankAccountsSelectorModal
+          isOpen={showBankSelectorModal}
+          onClose={() => setShowBankSelectorModal(false)}
+          selectedAccountId={connectedBank?.id}
+          onAccountSelect={(account) => setConnectedBank(account)}
+        />
       )}
     </div>
   );

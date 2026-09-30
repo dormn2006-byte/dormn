@@ -14,11 +14,13 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ChevronUp,
-  Sparkles
+  Sparkles,
+  X
 } from "lucide-react";
-import { AMENITY_OPTIONS, hasAmenityMatch } from "../utils/amenities";
+import ExploreFilterModal from "../components/ExploreFilterModal";
+import { AMENITY_OPTIONS, hasAmenityMatch, matchesFoodPreference } from "../utils/amenities";
 
-const quickFilters = ["All", "Boys", "Girls", "COED", "AC Room", "Non AC", "WiFi", "Food Included", "Power Backup", "Attached Bath"];
+const quickFilters = ["All", "Boys", "Girls", "COED", "Veg", "Non-Veg", "Short Stay", "AC Room", "Non AC", "WiFi", "Food Included", "Power Backup", "Attached Bath"];
 
 const SectionSlider = ({ title, subtitle, pgs }) => {
   if (!pgs || pgs.length === 0) return null;
@@ -31,9 +33,9 @@ const SectionSlider = ({ title, subtitle, pgs }) => {
       
       <div className="overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth [-webkit-overflow-scrolling:touch]">
         <div className="inline-flex gap-4 sm:gap-5 pl-5 pr-8 sm:pl-6 sm:pr-10 lg:pl-10 lg:pr-12 pb-6 snap-x snap-mandatory after:content-[''] after:flex-none after:w-4 sm:after:w-6 lg:after:w-8">
-          {pgs.map((pg) => (
+          {pgs.filter(Boolean).map((pg, idx) => (
             <div 
-              key={pg.id} 
+              key={pg.id || pg._id || idx} 
               className="w-[44vw] min-w-[44vw] sm:w-[260px] sm:min-w-[260px] md:w-[300px] md:min-w-[300px] lg:w-[320px] lg:min-w-[320px] snap-start flex-shrink-0 transition-transform hover:-translate-y-1"
             >
               <PGCard pg={pg} />
@@ -55,7 +57,7 @@ const SectionSlider = ({ title, subtitle, pgs }) => {
 
 const SkeletonCard = () => (
   <div className="flex flex-col gap-3.5 w-full">
-    <div className="w-full aspect-[20/19] rounded-2xl bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 animate-pulse" />
+    <div className="w-full aspect-[4/3] sm:aspect-[20/19] rounded-2xl bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 animate-pulse" />
     <div className="flex flex-col gap-2 px-1">
       <div className="h-4 w-3/4 rounded-md bg-gray-200 dark:bg-gray-800 animate-pulse" />
       <div className="h-3 w-1/2 rounded-md bg-gray-200 dark:bg-gray-800 animate-pulse" />
@@ -79,8 +81,11 @@ const CustomSelect = ({ value, onChange, options, placeholder, icon: Icon }) => 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const selectedOption = options.find(opt => opt.value === value);
-  const displayValue = selectedOption ? selectedOption.label : placeholder;
+  const selectedOption = options.find(
+    (opt) => String(opt.value).toLowerCase() === String(value || "").toLowerCase()
+  );
+  const displayValue = selectedOption ? selectedOption.label : (value || placeholder);
+  const isSelected = Boolean(value);
 
   return (
     <div 
@@ -89,14 +94,31 @@ const CustomSelect = ({ value, onChange, options, placeholder, icon: Icon }) => 
     >
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex h-full w-full cursor-pointer items-center gap-3 rounded-2xl border bg-gray-50 px-4 shadow-sm transition-all ${
-          isOpen ? "border-[#93B733] bg-white ring-1 ring-[#93B733]" : "border-gray-200 hover:border-gray-300"
+        className={`flex h-full w-full cursor-pointer items-center gap-2.5 sm:gap-3 rounded-2xl border px-3.5 sm:px-4 shadow-2xs transition-all ${
+          isOpen 
+            ? "border-[#93B733] bg-white ring-2 ring-[#93B733]/30" 
+            : isSelected 
+              ? "border-[#93B733] bg-[#93B733]/5 ring-1 ring-[#93B733]/30" 
+              : "border-gray-200 bg-gray-50 hover:border-gray-300"
         }`}
       >
-        <Icon size={18} className={`${isOpen ? "text-[#93B733]" : "text-gray-400"} flex-shrink-0 transition-colors`} />
-        <span className={`flex-1 text-sm font-medium ${value ? "text-[#3A2935]" : "text-gray-500"}`}>
+        <Icon size={18} className={`${isOpen || isSelected ? "text-[#93B733]" : "text-gray-400"} flex-shrink-0 transition-colors`} />
+        <span className={`flex-1 text-xs sm:text-sm truncate ${isSelected ? "font-bold text-gray-900" : "font-medium text-gray-500"}`}>
           {displayValue}
         </span>
+        {isSelected && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange("");
+            }}
+            className="p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-gray-100 transition-colors"
+            title="Clear filter"
+          >
+            <X size={14} />
+          </button>
+        )}
         <ChevronDown size={16} className={`text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </div>
 
@@ -105,23 +127,27 @@ const CustomSelect = ({ value, onChange, options, placeholder, icon: Icon }) => 
           <div className="max-h-[240px] overflow-y-auto p-1.5 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-200">
             <div 
               onClick={() => { onChange(""); setIsOpen(false); }}
-              className={`cursor-pointer rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                !value ? "bg-[#93B733]/10 text-[#93B733]" : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+              className={`cursor-pointer rounded-lg px-3 py-2.5 text-xs sm:text-sm font-medium transition-colors ${
+                !value ? "bg-[#93B733]/15 text-[#4E700F] font-bold" : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
               }`}
             >
               {placeholder}
             </div>
-            {options.map((opt) => (
-              <div
-                key={opt.value}
-                onClick={() => { onChange(opt.value); setIsOpen(false); }}
-                className={`cursor-pointer rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  value === opt.value ? "bg-[#93B733]/10 text-[#93B733]" : "text-[#3A2935] hover:bg-gray-50"
-                }`}
-              >
-                {opt.label}
-              </div>
-            ))}
+            {options.map((opt) => {
+              const isOptionSelected = String(value || "").toLowerCase() === String(opt.value).toLowerCase();
+              return (
+                <div
+                  key={opt.value}
+                  onClick={() => { onChange(opt.value); setIsOpen(false); }}
+                  className={`cursor-pointer rounded-lg px-3 py-2.5 text-xs sm:text-sm transition-colors flex items-center justify-between ${
+                    isOptionSelected ? "bg-[#93B733]/15 text-[#4E700F] font-bold" : "text-[#3A2935] hover:bg-gray-50 font-medium"
+                  }`}
+                >
+                  <span>{opt.label}</span>
+                  {isOptionSelected && <span className="text-[#93B733] text-xs font-black">✓</span>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -135,17 +161,23 @@ const ExplorePGs = () => {
   const [search, setSearch] = useState(searchParams.get("search") || searchParams.get("location") || "");
   
   // Advanced Filter States
-  const [filters, setFilters] = useState({
-    pgType: searchParams.get("type") || "",
-    city: searchParams.get("city") || searchParams.get("location") || "",
-    area: "",
-    landmark: "",
-    amenity: searchParams.get("amenity") || "",
-    minPrice: "0",
-    maxPrice: "50000",
+  const [filters, setFilters] = useState(() => {
+    const rawAmenity = searchParams.get("amenities") || searchParams.get("amenity") || "";
+    const parsedAmenities = rawAmenity
+      ? rawAmenity.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
+      : [];
+    return {
+      pgType: searchParams.get("type") || "",
+      foodType: searchParams.get("food") || searchParams.get("foodType") || "",
+      city: searchParams.get("city") || searchParams.get("location") || "",
+      area: "",
+      landmark: "",
+      amenities: parsedAmenities,
+      minPrice: "0",
+      maxPrice: "50000",
+    };
   });
 
-  const [isExpanded, setIsExpanded] = useState(false);
   const [pgListings, setPgListings] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -153,6 +185,31 @@ const ExplorePGs = () => {
   const maxSliderLimit = 50000;
   const currentMin = filters.minPrice !== "" ? Number(filters.minPrice) : minSliderLimit;
   const currentMax = filters.maxPrice !== "" ? Number(filters.maxPrice) : maxSliderLimit;
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [isSearchExpandedOnMobile, setIsSearchExpandedOnMobile] = useState(false);
+  const searchContainerRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setIsSearchExpandedOnMobile(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, []);
+
+  const activeFilterCount = useMemo(() => 
+    [filters.pgType, filters.foodType, filters.city, filters.area, filters.landmark, ...(filters.amenities || []), filters.amenity].filter(Boolean).length +
+    (Number(filters.minPrice || 0) > minSliderLimit || Number(filters.maxPrice || maxSliderLimit) < maxSliderLimit ? 1 : 0) +
+    (activeFilter !== "All" ? 1 : 0),
+    [filters, activeFilter, minSliderLimit, maxSliderLimit]
+  );
+  const hasActiveFilters = activeFilterCount > 0;
 
   useEffect(() => {
     const fetchPGs = async () => {
@@ -240,8 +297,13 @@ const ExplorePGs = () => {
       // Landmark match
       const matchesLandmark = !filters.landmark || String(pg.nearby_college || "").toLowerCase().includes(filters.landmark.toLowerCase());
 
-      // Amenity Filter match
-      const matchesAmenity = !filters.amenity || hasAmenityMatch(pg, filters.amenity);
+      // Amenity Filter match (Check array or single)
+      let matchesAmenity = true;
+      if (filters.amenities && filters.amenities.length > 0) {
+        matchesAmenity = filters.amenities.every(amen => hasAmenityMatch(pg, amen));
+      } else if (filters.amenity) {
+        matchesAmenity = hasAmenityMatch(pg, filters.amenity);
+      }
 
       // Price Range match
       const price = Number(pg.price || 0);
@@ -249,11 +311,17 @@ const ExplorePGs = () => {
       const matchesMax = currentMax >= maxSliderLimit || price <= currentMax;
       const matchesPrice = matchesMin && matchesMax;
 
+      // Food Diet Filter match
+      const matchesFood = !filters.foodType || matchesFoodPreference(pg, filters.foodType);
+
       // Quick Pill Filters match
       let matchesPill = true;
       if (activeFilter === "Boys") matchesPill = pgType.includes("boys");
       else if (activeFilter === "Girls") matchesPill = pgType.includes("girls");
       else if (activeFilter === "COED") matchesPill = pgType.includes("coed") || pgType.includes("both");
+      else if (activeFilter === "Veg") matchesPill = matchesFoodPreference(pg, "veg");
+      else if (activeFilter === "Non-Veg") matchesPill = matchesFoodPreference(pg, "non-veg");
+      else if (activeFilter === "Short Stay") matchesPill = pg.allow_short_stay === 1 || pg.allow_short_stay === true || String(pg.allow_short_stay) === "true";
       else if (activeFilter === "AC Room") matchesPill = hasAmenityMatch(pg, "ac");
       else if (activeFilter === "Non AC") matchesPill = !hasAmenityMatch(pg, "ac");
       else if (activeFilter === "WiFi") matchesPill = hasAmenityMatch(pg, "wifi");
@@ -261,17 +329,25 @@ const ExplorePGs = () => {
       else if (activeFilter === "Power Backup") matchesPill = hasAmenityMatch(pg, "power");
       else if (activeFilter === "Attached Bath") matchesPill = hasAmenityMatch(pg, "bath");
 
-      return matchesSearch && matchesType && matchesCity && matchesArea && matchesLandmark && matchesAmenity && matchesPrice && matchesPill;
+      return matchesSearch && matchesType && matchesFood && matchesCity && matchesArea && matchesLandmark && matchesAmenity && matchesPrice && matchesPill;
     });
 
     return sortPGsByAvailability(matches);
   }, [pgListings, search, filters, activeFilter, currentMin, currentMax]);
 
-  const jodhpurPGs = useMemo(() => sortPGsByAvailability(pgListings.filter(pg => String(pg.city).toLowerCase().includes("jodhpur"))), [pgListings]);
-  const jaipurPGs = useMemo(() => sortPGsByAvailability(pgListings.filter(pg => String(pg.city).toLowerCase().includes("jaipur"))), [pgListings]);
-  const premiumPGs = useMemo(() => sortPGsByAvailability(pgListings.filter(pg => String(pg.amenities).toLowerCase().includes("ac"))), [pgListings]);
+  const pgsByCity = useMemo(() => {
+    const map = {};
+    pgListings.filter(Boolean).forEach((pg) => {
+      if (!pg.id && !pg._id) return; // skip entries without an id
+      const city = (pg.city || "Featured").trim();
+      const capCity = city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
+      if (!map[capCity]) map[capCity] = [];
+      map[capCity].push(pg);
+    });
+    return map;
+  }, [pgListings]);
 
-  const isDiscoverMode = !search.trim() && !filters.pgType && !filters.city && !filters.area && !filters.landmark && !filters.amenity && activeFilter === "All" && currentMin <= minSliderLimit && currentMax >= maxSliderLimit;
+  const isDiscoverMode = !search.trim() && !filters.pgType && !filters.city && !filters.area && !filters.landmark && activeFilter === "All" && currentMin <= minSliderLimit && currentMax >= maxSliderLimit;
 
   return (
     <PublicLayout>
@@ -286,31 +362,222 @@ const ExplorePGs = () => {
           
           <Container className="max-w-[1440px] 2xl:max-w-[1600px] mb-4">
             
-            {/* Search Input Bar */}
-            <div className="max-w-4xl mx-auto mb-4">
-              <div className="flex items-center bg-white border border-gray-300 rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.04)] py-1.5 px-1.5 pl-4 sm:pl-6 transition-all focus-within:border-gray-400 focus-within:shadow-md">
-                <input
-                  type="text"
-                  placeholder="Search by city, area, PG name, or amenities (WiFi, AC, Food...)..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="flex-grow min-h-[40px] text-[14px] sm:text-base font-medium text-gray-800 outline-none placeholder:text-gray-500 bg-transparent"
-                />
-                <button className="h-10 w-10 shrink-0 flex items-center justify-center rounded-full bg-[#93B733] text-white shadow-sm hover:bg-[#82a32d] transition-colors">
-                  <Search size={18} />
+            {/* Search Input Bar with Filter Button */}
+            <div ref={searchContainerRef} className="max-w-4xl mx-auto mb-3 sm:mb-4 px-1">
+              <div className="flex items-center gap-2">
+                <div 
+                  onClick={() => setIsSearchExpandedOnMobile(true)}
+                  className="flex-1 flex items-center bg-white border border-gray-300 rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.04)] py-1 px-1.5 pl-3.5 sm:pl-6 transition-all focus-within:border-gray-400 focus-within:shadow-md cursor-pointer"
+                >
+                  <Search size={16} className="text-gray-400 shrink-0 mr-1.5 sm:hidden" />
+                  <input
+                    type="text"
+                    placeholder="Search by city, area, PG name, or amenities..."
+                    value={search}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSearch(val);
+                      if (!val.trim()) {
+                        setIsSearchExpandedOnMobile(false);
+                      } else {
+                        setIsSearchExpandedOnMobile(true);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (search.trim()) {
+                        setIsSearchExpandedOnMobile(true);
+                      }
+                    }}
+                    className="flex-grow min-h-[38px] sm:min-h-[42px] text-xs sm:text-base font-medium text-gray-800 outline-none placeholder:text-gray-400 bg-transparent"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSearch("");
+                        setIsSearchExpandedOnMobile(false);
+                      }}
+                      className="p-1 rounded-full text-gray-400 hover:text-gray-600 mr-1 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                  <button 
+                    type="button"
+                    aria-label="Search"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsSearchExpandedOnMobile(prev => !prev);
+                    }}
+                    className="h-8 w-8 sm:h-10 sm:w-10 shrink-0 flex items-center justify-center rounded-full bg-[#93B733] text-white shadow-sm hover:bg-[#82a32d] transition-colors cursor-pointer"
+                  >
+                    <Search size={16} />
+                  </button>
+                </div>
+
+                {/* Filter Modal Trigger Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsFilterModalOpen(true)}
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 h-[42px] sm:h-[48px] rounded-full border shadow-sm transition-all active:scale-95 cursor-pointer shrink-0 ${
+                    hasActiveFilters
+                      ? "border-[#93B733] bg-[#93B733] text-white font-bold"
+                      : "border-gray-300 bg-white hover:border-gray-400 text-gray-700 font-semibold"
+                  }`}
+                  aria-label="Open Filters"
+                >
+                  <SlidersHorizontal size={15} />
+                  <span className="text-xs sm:text-sm font-bold">Filters</span>
+                  {activeFilterCount > 0 && (
+                    <span className={`h-4.5 w-4.5 rounded-full text-[10px] font-black flex items-center justify-center ${
+                      hasActiveFilters ? "bg-white text-[#93B733]" : "bg-[#93B733] text-white"
+                    }`}>
+                      {activeFilterCount}
+                    </span>
+                  )}
                 </button>
               </div>
+
+              {/* Show these in the search bar for the phone view ONLY when search bar is clicked/focused */}
+              {isSearchExpandedOnMobile && (
+                <div className="md:hidden mt-2.5 rounded-2xl border border-gray-200/90 bg-white p-3.5 shadow-lg space-y-2.5 animate-[fadeIn_0.2s_ease-out]">
+                  <div className="flex items-center justify-between pb-1 border-b border-gray-100">
+                    <span className="text-xs font-black text-gray-800 tracking-tight">Search & Filters</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsSearchExpandedOnMobile(false)}
+                      className="text-xs font-bold text-gray-500 hover:text-gray-800 flex items-center gap-0.5 p-1 cursor-pointer"
+                    >
+                      <ChevronUp size={14} />
+                      <span>Hide</span>
+                    </button>
+                  </div>
+
+                  <CustomSelect 
+                    icon={Home}
+                    value={filters.pgType}
+                    onChange={(val) => {
+                      setFilters(prev => ({ ...prev, pgType: val }));
+                      const t = String(val || "").toLowerCase();
+                      if (t === "boys") setActiveFilter("Boys");
+                      else if (t === "girls") setActiveFilter("Girls");
+                      else if (t === "coed") setActiveFilter("COED");
+                      else if (!t && ["Boys", "Girls", "COED"].includes(activeFilter)) setActiveFilter("All");
+                    }}
+                    placeholder="All PG Types"
+                    options={[
+                      { value: "boys", label: "Boys PG" },
+                      { value: "girls", label: "Girls PG" },
+                      { value: "coed", label: "COED PG" }
+                    ]}
+                  />
+
+                  <CustomSelect 
+                    icon={MapPin}
+                    value={filters.city}
+                    onChange={(val) => setFilters(prev => ({ ...prev, city: val, area: "", landmark: "" }))}
+                    placeholder="All Cities"
+                    options={availableCities.map(c => ({ value: c, label: c }))}
+                  />
+
+                  <CustomSelect 
+                    icon={Map}
+                    value={filters.area}
+                    onChange={(val) => setFilters(prev => ({ ...prev, area: val }))}
+                    placeholder="All Areas / Sectors"
+                    options={availableAreas.map(a => ({ value: a, label: a }))}
+                  />
+
+                  {/* Price Slider for Mobile */}
+                  <div className="flex flex-col justify-center px-3.5 py-2.5 w-full rounded-2xl border border-gray-200 bg-gray-50 shadow-2xs">
+                    <div className="flex justify-between items-center w-full mb-1.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                        <IndianRupee size={12} /> Budget Range
+                      </span>
+                      <span className="text-[#93B733] text-xs font-black">
+                        ₹{currentMin.toLocaleString()} - ₹{currentMax.toLocaleString()}{currentMax === maxSliderLimit ? '+' : ''}
+                      </span>
+                    </div>
+                    
+                    <div className="relative w-full h-1.5 bg-gray-200 rounded-lg flex items-center my-1">
+                      <div 
+                        className="absolute h-full bg-[#93B733] rounded-lg opacity-80"
+                        style={{ left: `${minPercent}%`, right: `${100 - maxPercent}%` }}
+                      ></div>
+
+                      <input
+                        type="range"
+                        min={minSliderLimit}
+                        max={maxSliderLimit}
+                        step="500"
+                        value={currentMin}
+                        onChange={handleMinChange}
+                        className="dual-range absolute w-full h-1.5 appearance-none bg-transparent pointer-events-none z-20"
+                      />
+
+                      <input
+                        type="range"
+                        min={minSliderLimit}
+                        max={maxSliderLimit}
+                        step="500"
+                        value={currentMax}
+                        onChange={handleMaxChange}
+                        className="dual-range absolute w-full h-1.5 appearance-none bg-transparent pointer-events-none z-30"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                    <button
+                      type="button" 
+                      onClick={() => setIsFilterModalOpen(true)}
+                      className="flex items-center gap-1.5 text-xs font-bold text-gray-700 hover:text-[#93B733] cursor-pointer"
+                    >
+                      <SlidersHorizontal size={14} className="text-[#93B733]" />
+                      <span>All Filters & Amenities (Popup)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilters({ pgType: "", city: "", area: "", landmark: "", amenity: "", amenities: [], minPrice: "0", maxPrice: "50000" });
+                        setActiveFilter("All");
+                        setSearch("");
+                        setIsSearchExpandedOnMobile(false);
+                      }}
+                      className="text-xs font-bold text-[#93B733] hover:underline cursor-pointer"
+                    >
+                      Reset All Filters
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsSearchExpandedOnMobile(false)}
+                    className="w-full py-2.5 rounded-xl bg-[#93B733] hover:bg-[#82a32d] text-white font-bold text-xs shadow-sm transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    Apply & Close ({filteredPGs.length} PGs)
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Filter Grid Container */}
-            <div className="rounded-[2rem] border border-gray-100 bg-white p-4 sm:p-5 shadow-sm">
+            {/* Desktop Filter Grid Container - Hidden on mobile because it's shown in the search bar for the phone view */}
+            <div className="hidden md:block rounded-[2rem] border border-gray-100 bg-white p-4 sm:p-5 shadow-sm">
               <div className="grid gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
                 
                 {/* PG Type */}
                 <CustomSelect 
                   icon={Home}
                   value={filters.pgType}
-                  onChange={(val) => setFilters(prev => ({ ...prev, pgType: val }))}
+                  onChange={(val) => {
+                    setFilters(prev => ({ ...prev, pgType: val }));
+                    const t = String(val || "").toLowerCase();
+                    if (t === "boys") setActiveFilter("Boys");
+                    else if (t === "girls") setActiveFilter("Girls");
+                    else if (t === "coed") setActiveFilter("COED");
+                    else if (!t && ["Boys", "Girls", "COED"].includes(activeFilter)) setActiveFilter("All");
+                  }}
                   placeholder="All PG Types"
                   options={[
                     { value: "boys", label: "Boys PG" },
@@ -337,17 +604,19 @@ const ExplorePGs = () => {
                   options={availableAreas.map(a => ({ value: a, label: a }))}
                 />
 
-                {/* Amenities Filter */}
-                <CustomSelect 
-                  icon={Sparkles}
-                  value={filters.amenity}
-                  onChange={(val) => setFilters(prev => ({ ...prev, amenity: val }))}
-                  placeholder="All Amenities"
-                  options={AMENITY_OPTIONS}
-                />
+                {/* Amenities Filter - Hidden on Phone View as requested */}
+                <div className="hidden md:block">
+                  <CustomSelect 
+                    icon={Sparkles}
+                    value={filters.amenity}
+                    onChange={(val) => setFilters(prev => ({ ...prev, amenity: val }))}
+                    placeholder="All Amenities"
+                    options={AMENITY_OPTIONS}
+                  />
+                </div>
 
                 {/* Landmark */}
-                <div className={`${isExpanded ? 'block' : 'hidden'} md:block col-span-1 lg:col-span-1`}>
+                <div className="col-span-1 lg:col-span-1">
                   <CustomSelect 
                     icon={GraduationCap}
                     value={filters.landmark}
@@ -358,7 +627,7 @@ const ExplorePGs = () => {
                 </div>
 
                 {/* Dual-Range Budget Slider */}
-                <div className={`${isExpanded ? 'flex' : 'hidden'} md:flex flex-col justify-center px-5 h-[52px] w-full rounded-2xl border border-gray-200 bg-gray-50 shadow-sm col-span-1 md:col-span-2 lg:col-span-3`}>
+                <div className="flex flex-col justify-center px-5 h-[52px] w-full rounded-2xl border border-gray-200 bg-gray-50 shadow-sm col-span-1 md:col-span-2 lg:col-span-3">
                   <div className="flex justify-between items-center w-full mb-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1">
                       <IndianRupee size={12} /> Budget Range
@@ -398,28 +667,19 @@ const ExplorePGs = () => {
 
               </div>
 
-              {/* Toggle More Filters on Mobile */}
+              {/* Desktop Filter Footer */}
               <div className="mt-4 flex items-center justify-between pt-3 border-t border-gray-100">
-                <button
-                  type="button" 
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#93B733] md:hidden"
-                >
-                  <SlidersHorizontal size={14} />
-                  {isExpanded ? "Show Fewer Filters" : "More Filters (Landmark, Budget)"}
-                  {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-                <span className="text-xs text-gray-400 hidden md:block font-medium">
+                <span className="text-xs text-gray-400 font-medium">
                   Refine your search with precise location, amenities, and budget limits.
                 </span>
                 <button
                   type="button"
                   onClick={() => {
-                    setFilters({ pgType: "", city: "", area: "", landmark: "", amenity: "", minPrice: "0", maxPrice: "50000" });
+                    setFilters({ pgType: "", city: "", area: "", landmark: "", amenity: "", amenities: [], minPrice: "0", maxPrice: "50000" });
                     setActiveFilter("All");
                     setSearch("");
                   }}
-                  className="text-xs font-bold text-[#93B733] hover:underline ml-auto"
+                  className="text-xs font-bold text-[#93B733] hover:underline ml-auto cursor-pointer"
                 >
                   Reset All Filters
                 </button>
@@ -436,7 +696,16 @@ const ExplorePGs = () => {
                 return (
                   <button
                     key={filter}
-                    onClick={() => setActiveFilter(filter)}
+                    onClick={() => {
+                      setActiveFilter(filter);
+                      if (filter === "Boys") setFilters((prev) => ({ ...prev, pgType: "boys", foodType: "" }));
+                      else if (filter === "Girls") setFilters((prev) => ({ ...prev, pgType: "girls", foodType: "" }));
+                      else if (filter === "COED") setFilters((prev) => ({ ...prev, pgType: "coed", foodType: "" }));
+                      else if (filter === "Veg") setFilters((prev) => ({ ...prev, foodType: "veg" }));
+                      else if (filter === "Non-Veg") setFilters((prev) => ({ ...prev, foodType: "non-veg" }));
+                      else if (filter === "Short Stay") setFilters((prev) => ({ ...prev, pgType: "short stay" }));
+                      else if (filter === "All") setFilters((prev) => ({ ...prev, pgType: "", foodType: "" }));
+                    }}
                     className={`flex-shrink-0 px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-[13px] sm:text-sm transition-all border ${
                       isActive 
                         ? "border-[#93B733] bg-[#93B733] text-white font-bold shadow-sm" 
@@ -453,52 +722,62 @@ const ExplorePGs = () => {
 
         <div className="pt-8">
           {loading ? (
-             <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+             <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-6">
                {[...Array(8)].map((_, i) => <SkeletonCard key={i} />)}
              </div>
-          ) : isDiscoverMode ? (
-            <>
-              <SectionSlider title="Trending in Jodhpur" subtitle="The most booked PGs in the Blue City this week." pgs={jodhpurPGs.length > 0 ? jodhpurPGs : pgListings.slice(0, 4)} />
+          ) : (
+            <section className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 animate-[fadeIn_0.3s_ease-out_forwards]">
               
-              {/* Premium Promo Banner */}
-              <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 mb-14 animate-[fadeIn_0.5s_ease-out_0.2s_forwards]">
-                <div className="relative overflow-hidden rounded-[2rem] bg-[#0D3A1D] px-6 py-10 sm:px-12 sm:py-16 md:rounded-[3rem]">
-                  <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#93B733]/30 blur-3xl"></div>
-                  <div className="relative z-10 md:w-2/3 lg:w-1/2">
-                    <p className="text-xs font-bold uppercase tracking-widest text-[#93B733]">Partner with Dormn</p>
-                    <h3 className="mt-3 text-2xl font-black text-white sm:text-4xl md:text-5xl">Have a property? <br/>List it in minutes.</h3>
-                    <p className="mt-4 text-sm font-medium text-gray-300 sm:text-base hidden sm:block">Join hundreds of verified owners. Get instant bookings, verified students, and secure payouts.</p>
-                    <Link to="/auth?role=owner&mode=signup" className="mt-6 sm:mt-8 inline-block rounded-xl bg-[#93B733] px-6 sm:px-8 py-3.5 sm:py-4 text-sm font-bold text-white shadow-lg transition-transform hover:scale-105">
-                      Become an Owner
-                    </Link>
+              {/* Dynamic City Sliders (Shown in default view) */}
+              {isDiscoverMode && Object.keys(pgsByCity).length > 0 && (
+                <div className="mb-10 space-y-4">
+                  {Object.entries(pgsByCity).map(([cityName, cityPgs]) => (
+                    <SectionSlider
+                      key={cityName}
+                      title={`Featured PGs in ${cityName}`}
+                      subtitle={`Top verified student accommodations available in ${cityName}.`}
+                      pgs={cityPgs}
+                    />
+                  ))}
+
+                  {/* Partner / Become Owner Promo Banner */}
+                  <div className="my-10 animate-[fadeIn_0.5s_ease-out_0.2s_forwards]">
+                    <div className="relative overflow-hidden rounded-[2rem] bg-[#0D3A1D] px-6 py-10 sm:px-12 sm:py-14 md:rounded-[2.5rem]">
+                      <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#93B733]/30 blur-3xl"></div>
+                      <div className="relative z-10 md:w-2/3 lg:w-1/2">
+                        <p className="text-xs font-bold uppercase tracking-widest text-[#93B733]">Partner with Dormn</p>
+                        <h3 className="mt-3 text-2xl font-black text-white sm:text-4xl md:text-5xl">Have a property? <br/>List it in minutes.</h3>
+                        <p className="mt-4 text-sm font-medium text-gray-300 sm:text-base hidden sm:block">Join verified owners. Get instant bookings, verified students, and secure payouts.</p>
+                        <Link to="/auth?role=owner&mode=signup" className="mt-6 inline-block rounded-xl bg-[#93B733] px-6 sm:px-8 py-3.5 text-sm font-bold text-white shadow-lg transition-transform hover:scale-105">
+                          Become an Owner
+                        </Link>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <SectionSlider title="Premium AC Stays" subtitle="Comfortable, air-conditioned rooms for the summer." pgs={premiumPGs.length > 0 ? premiumPGs : pgListings.slice(4, 8)} />
-              <SectionSlider title="Popular in Jaipur" subtitle="Top-rated accommodations in the Pink City." pgs={jaipurPGs.length > 0 ? jaipurPGs : pgListings.slice(0, 4)} />
-            </>
-          ) : (
-            
-            /* ACTIVE SEARCH MODE (Grid View) */
-            <section className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 animate-[fadeIn_0.3s_ease-out_forwards]">
+              {/* Main Grid Header */}
               <div className="mb-6 sm:mb-8 flex items-center justify-between border-b border-gray-200 pb-4">
                 <h2 className="text-xl sm:text-2xl font-black text-[#3A2935]">
-                  {filteredPGs.length > 0 ? `${filteredPGs.length} Stays found` : "No exact matches"}
+                  {isDiscoverMode ? `All Verified PGs (${pgListings.length})` : (filteredPGs.length > 0 ? `${filteredPGs.length} Stays found` : "No exact matches")}
                 </h2>
-                <button 
-                  onClick={() => {
-                    setSearch("");
-                    setFilters({ pgType: "", city: "", area: "", landmark: "", minPrice: "3000", maxPrice: "50000" });
-                    setActiveFilter("All");
-                  }}
-                  className="text-xs sm:text-sm font-bold text-[#93B733] hover:underline"
-                >
-                  Clear Filters
-                </button>
+                {(!isDiscoverMode || search || activeFilter !== "All") && (
+                  <button 
+                    onClick={() => {
+                      setSearch("");
+                      setFilters({ pgType: "", city: "", area: "", landmark: "", amenity: "", amenities: [], minPrice: "0", maxPrice: "50000" });
+                      setActiveFilter("All");
+                    }}
+                    className="text-xs sm:text-sm font-bold text-[#93B733] hover:underline"
+                  >
+                    Clear Filters
+                  </button>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6">
+              {/* Grid Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-6">
                 {filteredPGs.length === 0 ? (
                   <div className="col-span-full py-20 text-center flex flex-col items-center bg-white rounded-3xl border border-gray-100 shadow-sm">
                     <div className="h-16 w-16 rounded-full bg-gray-50 flex items-center justify-center mb-4">
@@ -508,8 +787,8 @@ const ExplorePGs = () => {
                     <p className="mt-2 text-sm text-gray-500">We couldn't find any stays matching your current filters. Try exploring other areas or adjusting your budget.</p>
                   </div>
                 ) : (
-                  filteredPGs.map((pg) => (
-                    <div key={pg.id} className="transition-all duration-300 hover:scale-[1.02] hover:shadow-xl rounded-2xl">
+                  filteredPGs.filter(Boolean).map((pg, idx) => (
+                    <div key={pg.id || pg._id || idx} className="transition-all duration-300 hover:scale-[1.02] hover:shadow-xl rounded-2xl">
                       <PGCard pg={pg} />
                     </div>
                   ))
@@ -519,6 +798,42 @@ const ExplorePGs = () => {
           )}
         </div>
       </div>
+
+      {/* Airbnb-style Explore Filter Modal Popup */}
+      <ExploreFilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        currentFilters={filters}
+        currentSearch={search}
+        currentActiveFilter={activeFilter}
+        pgListings={pgListings}
+        availableCities={availableCities}
+        availableAreas={availableAreas}
+        onApply={(newDraft) => {
+          setFilters((prev) => ({
+            ...prev,
+            pgType: newDraft.pgType,
+            foodType: newDraft.foodType || "",
+            city: newDraft.city,
+            area: newDraft.area,
+            landmark: newDraft.landmark,
+            amenities: newDraft.amenities,
+            minPrice: newDraft.minPrice,
+            maxPrice: newDraft.maxPrice,
+          }));
+          if (newDraft.foodType) {
+            if (newDraft.foodType === "veg") setActiveFilter("Veg");
+            else if (newDraft.foodType === "non-veg") setActiveFilter("Non-Veg");
+          } else if (newDraft.pgType) {
+            if (newDraft.pgType === "boys") setActiveFilter("Boys");
+            else if (newDraft.pgType === "girls") setActiveFilter("Girls");
+            else if (newDraft.pgType === "coed") setActiveFilter("COED");
+            else if (newDraft.pgType === "short stay") setActiveFilter("Short Stay");
+          } else {
+            setActiveFilter("All");
+          }
+        }}
+      />
     </PublicLayout>
   );
 };

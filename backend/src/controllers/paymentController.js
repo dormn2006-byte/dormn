@@ -129,39 +129,42 @@ export const createOrder = async (req, res) => {
     let finalBookingId = booking_id ? Number(booking_id) : null;
 
     if (finalBookingId) {
-      // Validate booking belongs to user
+      // Validate booking belongs to user and is approved
       const existingBooking = await Booking.findOne({
         _id: finalBookingId,
         student_id: Number(user_id),
       })
-        .select("_id pg_id owner_id")
+        .select("_id pg_id owner_id status payment_status")
         .lean();
 
       if (!existingBooking) {
         return res.status(404).json({ success: false, message: "Booking record not found or unauthorized." });
       }
+
+      if (existingBooking.status !== "approved" && existingBooking.payment_status !== "paid") {
+        return res.status(400).json({
+          success: false,
+          message: "You can only pay for this PG once the owner has approved your booking request.",
+        });
+      }
     } else {
-      // Check if there is an existing pending or approved booking for this user and PG
+      // Find an approved booking for this user and PG
       const existingBooking = await Booking.findOne({
         student_id: Number(user_id),
         pg_id: Number(pg_id),
-        status: { $ne: "cancelled" },
+        status: "approved",
       })
         .sort({ _id: -1 })
-        .select("_id")
+        .select("_id status payment_status")
         .lean();
 
       if (existingBooking) {
         finalBookingId = existingBooking._id;
       } else {
-        const booking = await Booking.create({
-          student_id: Number(user_id),
-          pg_id: Number(pg_id),
-          owner_id: Number(owner_id),
-          status: "pending",
-          payment_status: "pending",
+        return res.status(400).json({
+          success: false,
+          message: "You can only pay for this accommodation after the owner approves your booking request.",
         });
-        finalBookingId = booking._id;
       }
     }
 

@@ -7,6 +7,8 @@ import {
   rejectPG,
   blockPG,
   deletePG,
+  removePG,
+  requestRevisionPG,
   getAllUsers,
   deleteUser,
   getAllBookings,
@@ -37,6 +39,8 @@ router.put(["/approve-pg/:id", "/pg/:id/approve"], approvePG);
 router.put(["/reject-pg/:id", "/pg/:id/reject"], rejectPG);
 router.put("/block-pg/:id", blockPG);
 router.delete(["/delete-pg/:id", "/pg/:id"], deletePG);
+router.put(["/remove-pg/:id", "/pg/:id/remove"], removePG);
+router.put(["/request-revision/:id", "/revision-pg/:id", "/pg/:id/revision"], requestRevisionPG);
 
 // User & Entity Management
 router.get("/all-users", getAllUsers);

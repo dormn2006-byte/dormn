@@ -16,13 +16,14 @@ const EmailVerificationModal = ({
   const targetEmail = propEmail || user?.email || "";
 
   const [otpDigits, setOtpDigits] = useState(Array(6).fill(""));
+  const [codeSent, setCodeSent] = useState(false);
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
   const [resendCooldown, setResendCooldown] = useState(0);
   const [status, setStatus] = useState({ loading: false, sending: false, success: false, error: "", info: "" });
   const inputRefs = useRef([]);
 
   const sendOtp = useCallback(async (isInitial = false) => {
-    if (!targetEmail) return;
+    if (!targetEmail) return false;
     setStatus((p) => ({ ...p, sending: true, error: isInitial ? p.error : "", info: "" }));
     try {
       const res = await API.post("/auth/send-verification-otp", { email: targetEmail });
@@ -30,15 +31,18 @@ const EmailVerificationModal = ({
         setTimeLeft(600);
         setResendCooldown(30);
         setStatus((p) => ({ ...p, sending: false, info: isInitial ? "Code sent to your email!" : "New code sent (valid for 10 mins)." }));
+        return true;
       } else {
         setStatus((p) => ({ ...p, sending: false, error: res.data?.message || "Failed to send code." }));
+        return false;
       }
     } catch (err) {
       setStatus((p) => ({ ...p, sending: false, error: err?.response?.data?.message || "Failed to send verification code." }));
+      return false;
     }
   }, [targetEmail]);
 
-  // Open reset, keyboard listeners, & auto-send
+  // Open reset, keyboard listeners (DO NOT auto-send email on open)
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e) => e.key === "Escape" && onClose?.();
@@ -47,12 +51,19 @@ const EmailVerificationModal = ({
     if (targetEmail) {
       setOtpDigits(Array(6).fill(""));
       setStatus({ loading: false, sending: false, success: false, error: "", info: "" });
+      setCodeSent(false);
       setTimeLeft(600);
-      sendOtp(true);
-      setTimeout(() => inputRefs.current[0]?.focus(), 150);
     }
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, targetEmail, sendOtp, onClose]);
+  }, [isOpen, targetEmail, onClose]);
+
+  const handleSendInitialCode = async () => {
+    const ok = await sendOtp(true);
+    if (ok) {
+      setCodeSent(true);
+      setTimeout(() => inputRefs.current[0]?.focus(), 150);
+    }
+  };
 
   // Combined countdown timer
   useEffect(() => {
@@ -110,11 +121,14 @@ const EmailVerificationModal = ({
     try {
       const res = await API.post("/auth/verify-email-otp", { otp, email: targetEmail });
       if (res.data?.success) {
-        setStatus((p) => ({ ...p, loading: false, success: true, info: "Email verified! Unlocking booking..." }));
-        updateUser?.({ is_email_verified: 1, isEmailVerified: true });
+        setStatus((p) => ({ ...p, loading: false, success: true, info: "Email verified!" }));
+        if (res.data?.token) {
+          localStorage.setItem("token", res.data.token);
+        }
+        updateUser?.({ ...(res.data?.user || {}), is_email_verified: 1, isEmailVerified: true });
         clearVerificationSnooze(user);
         setTimeout(() => {
-          onSuccess?.();
+          onSuccess?.(res.data);
           onClose?.();
         }, 1100);
       } else {
@@ -152,7 +166,11 @@ const EmailVerificationModal = ({
             {status.success ? "Email Verified!" : title}
           </h2>
           <p className="mt-1.5 text-xs sm:text-sm text-gray-500 dark:text-gray-400 leading-relaxed max-w-sm mx-auto">
-            {status.success ? "Your account is now authorized to book PGs and Events." : description}
+            {status.success
+              ? "Your account is now authorized to book PGs and Events."
+              : codeSent
+              ? "Please enter the 6-digit verification code sent to your email."
+              : "Click the button below to send a 6-digit verification code to your email."}
           </p>
           <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 dark:bg-neutral-800 text-xs font-semibold text-gray-700 dark:text-gray-300">
             <Mail size={13} className="text-[#0D3A1D] dark:text-[#93B733]" />
@@ -174,67 +192,98 @@ const EmailVerificationModal = ({
           </div>
         )}
 
-        <form onSubmit={handleVerify} className="space-y-6">
-          <div className="flex justify-center gap-2 sm:gap-2.5" onPaste={handlePaste}>
-            {otpDigits.map((digit, idx) => (
-              <input
-                key={idx}
-                ref={(el) => (inputRefs.current[idx] = el)}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={digit}
-                disabled={status.success || status.loading}
-                onChange={(e) => handleDigitChange(idx, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(idx, e)}
-                className={`w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black rounded-xl border-2 transition outline-none ${
-                  digit
-                    ? "border-[#0D3A1D] dark:border-[#93B733] bg-[#0D3A1D]/5 dark:bg-[#93B733]/10 text-gray-900 dark:text-white"
-                    : isExpired
-                    ? "border-red-300 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20 text-gray-400"
-                    : "border-gray-200 dark:border-neutral-700 bg-transparent text-gray-900 dark:text-white focus:border-[#0D3A1D] dark:focus:border-[#93B733]"
-                }`}
-              />
-            ))}
+        {!codeSent ? (
+          <div className="space-y-3 pt-2">
+            <button
+              type="button"
+              onClick={handleSendInitialCode}
+              disabled={status.sending || !targetEmail}
+              className="w-full py-3.5 rounded-2xl font-black text-sm transition shadow-lg flex items-center justify-center gap-2 cursor-pointer bg-[#0D3A1D] hover:bg-[#092814] text-white shadow-[#0D3A1D]/30 active:scale-[0.99] disabled:opacity-50"
+            >
+              {status.sending ? (
+                <>
+                  <RefreshCw size={16} className="animate-spin" />
+                  <span>Sending Verification Code...</span>
+                </>
+              ) : (
+                <>
+                  <Mail size={16} />
+                  <span>Send Verification Code</span>
+                  <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full py-2.5 rounded-xl border border-gray-200 dark:border-neutral-800 text-xs font-bold text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition cursor-pointer"
+            >
+              Cancel
+            </button>
           </div>
+        ) : (
+          <form onSubmit={handleVerify} className="space-y-6">
+            <div className="flex justify-center gap-2 sm:gap-2.5" onPaste={handlePaste}>
+              {otpDigits.map((digit, idx) => (
+                <input
+                  key={idx}
+                  ref={(el) => (inputRefs.current[idx] = el)}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  disabled={status.success || status.loading}
+                  onChange={(e) => handleDigitChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(idx, e)}
+                  className={`w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black rounded-xl border-2 transition outline-none ${
+                    digit
+                      ? "border-[#0D3A1D] dark:border-[#93B733] bg-[#0D3A1D]/5 dark:bg-[#93B733]/10 text-gray-900 dark:text-white"
+                      : isExpired
+                      ? "border-red-300 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20 text-gray-400"
+                      : "border-gray-200 dark:border-neutral-700 bg-transparent text-gray-900 dark:text-white focus:border-[#0D3A1D] dark:focus:border-[#93B733]"
+                  }`}
+                />
+              ))}
+            </div>
 
-          <div className="flex items-center justify-between text-xs font-semibold px-1">
-            <div className={`flex items-center gap-1.5 ${isExpired ? "text-red-500" : timeLeft <= 120 ? "text-amber-500 animate-pulse" : "text-gray-600 dark:text-gray-300"}`}>
-              <Clock size={14} className={isExpired || timeLeft <= 120 ? "animate-pulse" : "text-[#0D3A1D] dark:text-[#93B733]"} />
-              <span>{isExpired ? "Code Expired (10 mins passed)" : `Valid for: ${mm}:${ss}`}</span>
+            <div className="flex items-center justify-between text-xs font-semibold px-1">
+              <div className={`flex items-center gap-1.5 ${isExpired ? "text-red-500" : timeLeft <= 120 ? "text-amber-500 animate-pulse" : "text-gray-600 dark:text-gray-300"}`}>
+                <Clock size={14} className={isExpired || timeLeft <= 120 ? "animate-pulse" : "text-[#0D3A1D] dark:text-[#93B733]"} />
+                <span>{isExpired ? "Code Expired (10 mins passed)" : `Valid for: ${mm}:${ss}`}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => sendOtp(false)}
+                disabled={status.sending || resendCooldown > 0 || status.success}
+                className="inline-flex items-center gap-1 text-xs font-bold text-[#0D3A1D] dark:text-[#93B733] hover:underline disabled:opacity-50 cursor-pointer"
+              >
+                <RefreshCw size={12} className={status.sending ? "animate-spin" : ""} />
+                <span>{status.sending ? "Sending..." : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}</span>
+              </button>
             </div>
 
             <button
-              type="button"
-              onClick={() => sendOtp(false)}
-              disabled={status.sending || resendCooldown > 0 || status.success}
-              className="inline-flex items-center gap-1 text-xs font-bold text-[#0D3A1D] dark:text-[#93B733] hover:underline disabled:opacity-50 cursor-pointer"
+              type="submit"
+              disabled={status.loading || !isComplete || isExpired || status.success}
+              className={`w-full py-3.5 rounded-2xl font-black text-sm transition shadow-lg flex items-center justify-center gap-2 cursor-pointer ${
+                status.success
+                  ? "bg-emerald-600 text-white"
+                  : isComplete && !isExpired
+                  ? "bg-[#0D3A1D] hover:bg-[#092814] text-white shadow-[#0D3A1D]/30 active:scale-[0.99]"
+                  : "bg-gray-200 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500 cursor-not-allowed shadow-none"
+              }`}
             >
-              <RefreshCw size={12} className={status.sending ? "animate-spin" : ""} />
-              <span>{status.sending ? "Sending..." : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}</span>
+              {status.loading ? (
+                <><RefreshCw size={16} className="animate-spin" /><span>Verifying Code...</span></>
+              ) : status.success ? (
+                <><CheckCircle2 size={18} /><span>Verified! Proceeding...</span></>
+              ) : (
+                <><span>Verify & Unlock Bookings</span><ArrowRight size={16} /></>
+              )}
             </button>
-          </div>
-
-          <button
-            type="submit"
-            disabled={status.loading || !isComplete || isExpired || status.success}
-            className={`w-full py-3.5 rounded-2xl font-black text-sm transition shadow-lg flex items-center justify-center gap-2 cursor-pointer ${
-              status.success
-                ? "bg-emerald-600 text-white"
-                : isComplete && !isExpired
-                ? "bg-[#0D3A1D] hover:bg-[#092814] text-white shadow-[#0D3A1D]/30 active:scale-[0.99]"
-                : "bg-gray-200 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500 cursor-not-allowed shadow-none"
-            }`}
-          >
-            {status.loading ? (
-              <><RefreshCw size={16} className="animate-spin" /><span>Verifying Code...</span></>
-            ) : status.success ? (
-              <><CheckCircle2 size={18} /><span>Verified! Proceeding...</span></>
-            ) : (
-              <><span>Verify & Unlock Bookings</span><ArrowRight size={16} /></>
-            )}
-          </button>
-        </form>
+          </form>
+        )}
 
         <p className="mt-5 text-center text-[11px] text-gray-400 dark:text-gray-500 font-medium">
           Dormn OTPs are valid for 10 minutes. Never share your verification codes.

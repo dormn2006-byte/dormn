@@ -23,6 +23,8 @@ const parseJSON = (v, fallback) => {
   try { return JSON.parse(v); } catch { return fallback; }
 };
 
+const cleanPassport = (p) => (typeof p === "string" && !/googleusercontent|lh3\.google/i.test(p) ? p : null);
+
 // @route   GET /api/student/profile
 // @desc    Get the current student's full profile (with registration data sync)
 export const getStudentProfile = async (req, res) => {
@@ -77,7 +79,7 @@ export const getStudentProfile = async (req, res) => {
       company: p.workplace_name || e.workplace_name || "",
       designation: p.designation || e.designation || "",
       
-      passportPhoto: p.passport_photo || e.passport_photo || user.profile_image || null,
+      passportPhoto: cleanPassport(p.passport_photo) || cleanPassport(e.passport_photo) || null,
       aadharFront: p.aadhar_front || e.aadhar_front || null,
       aadharBack: p.aadhar_back || e.aadhar_back || null,
       collegeIdImage: p.college_id_image || e.college_id_image || null,
@@ -132,7 +134,7 @@ export const saveStudentProfile = async (req, res) => {
     const medicalDetails = encrypt(b.medicalDetails || "");
     const collegeIdNumber = encrypt(b.collegeIdNumber || "");
 
-    const passportPhoto = b.passportPhoto || b.photo || null;
+    const passportPhoto = cleanPassport(b.passportPhoto || b.photo);
     const aadharFront = b.aadharFront || null;
     const aadharBack = b.aadharBack || null;
     const collegeIdImage = b.collegeIdImage || null;

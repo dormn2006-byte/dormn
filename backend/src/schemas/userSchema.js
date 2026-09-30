@@ -45,6 +45,24 @@ const userSchema = new mongoose.Schema(
     account_number: { type: String, default: null },
     ifsc_code: { type: String, default: null },
     upi_id: { type: String, default: null },
+    bank_accounts: {
+      type: [
+        new mongoose.Schema(
+          {
+            id: { type: String, default: () => new mongoose.Types.ObjectId().toString() },
+            account_holder: { type: String, required: true },
+            bank_name: { type: String, required: true },
+            account_number: { type: String, required: true },
+            ifsc_code: { type: String, required: true },
+            upi_id: { type: String, default: null },
+            is_primary: { type: Boolean, default: false },
+            created_at: { type: Date, default: Date.now },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
     pan_number: { type: String, default: null },
     gstin: { type: String, default: null },
     aadhaar_masked: { type: String, default: null },

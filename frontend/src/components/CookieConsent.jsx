@@ -5,31 +5,41 @@ import { Cookie, ShieldCheck, Sliders, X, Check, Lock, BarChart3, Settings, Spar
 const STORAGE_KEY = "dormn_cookie_consent";
 const DEFAULT_PREFS = { essential: true, functional: true, analytics: true, marketing: false };
 
-// Checks if the current pathname is a marketing / public page
-const isMarketingPage = (pathname) => {
-  if (!pathname) return false;
-  const nonMarketingPrefixes = [
-    "/owner",
-    "/student",
-    "/superadmin",
-    "/super-admin",
-    "/event-admin",
-    "/events-admin",
-    "/admin",
-    "/my-pg",
-    "/my-pgs",
-    "/my-bookings",
-    "/saved-pgs",
-    "/my-account",
-    "/cancellations",
-    "/pay-rent",
-    "/tenant-registration",
-    "/register-tenant",
-    "/auth",
-    "/404"
-  ];
-  return !nonMarketingPrefixes.some((prefix) => pathname.startsWith(prefix));
+// Helper to read cookie by name
+const getCookie = (name) => {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(^|;\\s*)(${name})=([^;]*)`));
+  return match ? decodeURIComponent(match[3]) : null;
 };
+
+// Helper to set cookie with 1 year expiration
+const setCookie = (name, value, days = 365) => {
+  if (typeof document === "undefined") return;
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+};
+
+// Check if user has already made any consent decision (Accepted, Rejected, or Customized)
+const hasExistingConsent = () => {
+  try {
+    const fromStorage = localStorage.getItem(STORAGE_KEY);
+    if (fromStorage) return JSON.parse(fromStorage);
+  } catch {}
+
+  const fromCookie = getCookie(STORAGE_KEY);
+  if (fromCookie) {
+    try {
+      return JSON.parse(fromCookie);
+    } catch {
+      return { essential: true, status: fromCookie };
+    }
+  }
+  return null;
+};
+
+// Optimized high-speed regex check for marketing pages (excludes all dashboards/portals/auth)
+const NON_MARKETING_REGEX = /^\/(dashboard|owner|student|super-?admin|event-?admin|admin|my-(?:pg|pgs|bookings|short-stays|account)|saved-pgs|cancellations|pay-rent|(?:tenant-)?registration|auth|login|signup|register|dr-dormn|invoice|404)/i;
+const isMarketingPage = (pathname) => Boolean(pathname && !NON_MARKETING_REGEX.test(pathname));
 
 const CATEGORIES = [
   {
@@ -72,11 +82,18 @@ export default function CookieConsent() {
   const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
-    if (!onMarketingPage) return;
+    // Never auto-show on dashboards or non-marketing pages
+    if (!onMarketingPage) {
+      setIsVisible(false);
+      return;
+    }
+
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setPreferences(JSON.parse(saved));
+      const existingConsent = hasExistingConsent();
+      // If user has already saved or rejected cookies, do not ask them again
+      if (existingConsent) {
+        setPreferences(existingConsent);
+        setIsVisible(false);
         return;
       }
 
@@ -88,30 +105,36 @@ export default function CookieConsent() {
         !sessionStorage.getItem("dormn_intro");
 
       if (isIntroActive) {
-        // Wait until intro animation has completely finished
         const handleIntroDone = () => {
-          setTimeout(() => setIsVisible(true), 1200);
+          setTimeout(() => {
+            if (!hasExistingConsent()) setIsVisible(true);
+          }, 1200);
         };
         window.addEventListener("dormn_intro_finished", handleIntroDone, { once: true });
-        const fallback = setTimeout(() => setIsVisible(true), 6000);
+        const fallback = setTimeout(() => {
+          if (!hasExistingConsent()) setIsVisible(true);
+        }, 6000);
         return () => {
           window.removeEventListener("dormn_intro_finished", handleIntroDone);
           clearTimeout(fallback);
         };
       }
 
-      const timer = setTimeout(() => setIsVisible(true), 1200);
+      const timer = setTimeout(() => {
+        if (!hasExistingConsent()) setIsVisible(true);
+      }, 1200);
       return () => clearTimeout(timer);
     } catch {
-      setIsVisible(true);
+      setIsVisible(false);
     }
   }, [onMarketingPage, location.pathname]);
 
+  // Listener for manual triggers (e.g. from footer "Cookie Settings" link)
   useEffect(() => {
     const handleOpen = () => {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) setPreferences(JSON.parse(saved));
+        const existingConsent = hasExistingConsent();
+        if (existingConsent) setPreferences(existingConsent);
       } catch {}
       setViewMode("manage");
       setIsVisible(true);
@@ -120,25 +143,55 @@ export default function CookieConsent() {
     return () => window.removeEventListener("dormn_open_cookie_preferences", handleOpen);
   }, []);
 
-  const saveConsent = useCallback((newPrefs) => {
+  const saveConsent = useCallback((newPrefs, status = "custom") => {
     try {
-      const consentData = { ...newPrefs, essential: true, updatedAt: new Date().toISOString() };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(consentData));
+      const consentData = {
+        ...newPrefs,
+        essential: true,
+        status,
+        updatedAt: new Date().toISOString()
+      };
+      const serialized = JSON.stringify(consentData);
+      localStorage.setItem(STORAGE_KEY, serialized);
+      setCookie(STORAGE_KEY, serialized, 365);
       setPreferences(consentData);
       window.dispatchEvent(new CustomEvent("dormn_cookie_consent_saved", { detail: consentData }));
     } catch (e) {
-      console.error(e);
+      console.error("Failed to save cookie preferences:", e);
     }
     setIsVisible(false);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2800);
   }, []);
 
+  const handleRejectAll = useCallback(() => {
+    saveConsent(
+      { essential: true, functional: false, analytics: false, marketing: false },
+      "rejected"
+    );
+  }, [saveConsent]);
+
+  const handleAcceptAll = useCallback(() => {
+    saveConsent(
+      { essential: true, functional: true, analytics: true, marketing: true },
+      "accepted"
+    );
+  }, [saveConsent]);
+
+  const handleDismiss = useCallback(() => {
+    // Treat dismiss as rejecting non-essential cookies to never prompt again until storage is cleared
+    saveConsent(
+      { essential: true, functional: false, analytics: false, marketing: false },
+      "dismissed"
+    );
+  }, [saveConsent]);
+
   const toggleCategory = (id) => {
     if (id === "essential") return;
     setPreferences((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  // Do not render anything on dashboard/portal pages unless user manually opened preferences dialog
   if (!onMarketingPage && viewMode !== "manage") return null;
   if (!isVisible && !showToast) return null;
 
@@ -166,7 +219,7 @@ export default function CookieConsent() {
             />
           )}
 
-          {/* ──────── BANNER SLIDE VIEW (Positioned in Bottom-Left Corner & Above Mobile Dock) ──────── */}
+          {/* ──────── BANNER SLIDE VIEW (Only on Marketing Pages, Bottom-Left) ──────── */}
           {viewMode === "banner" ? (
             <div className="pointer-events-auto w-full max-w-md sm:max-w-lg rounded-3xl bg-[#07130B]/95 dark:bg-[#07130B]/95 backdrop-blur-xl border border-white/15 text-white shadow-2xl p-4 sm:p-5 transition-all animate-in slide-in-from-bottom-6 duration-500 relative overflow-hidden mb-20 sm:mb-0">
               <div className="absolute -left-10 -top-10 h-32 w-32 rounded-full bg-[#93B733]/20 blur-[2.5rem] pointer-events-none" />
@@ -188,7 +241,7 @@ export default function CookieConsent() {
                     </div>
                   </div>
                   <button 
-                    onClick={() => setIsVisible(false)}
+                    onClick={handleDismiss}
                     className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
                     aria-label="Dismiss banner"
                   >
@@ -204,7 +257,7 @@ export default function CookieConsent() {
 
                 <div className="flex items-center gap-2 pt-1">
                   <button
-                    onClick={() => saveConsent({ essential: true, functional: false, analytics: false, marketing: false })}
+                    onClick={handleRejectAll}
                     className="flex-1 py-2 px-2.5 rounded-xl border border-white/20 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-bold transition cursor-pointer text-center"
                   >
                     Reject All
@@ -217,7 +270,7 @@ export default function CookieConsent() {
                     <span>Manage</span>
                   </button>
                   <button
-                    onClick={() => saveConsent({ essential: true, functional: true, analytics: true, marketing: true })}
+                    onClick={handleAcceptAll}
                     className="flex-1 py-2 px-2.5 rounded-xl bg-[#93B733] hover:bg-[#82a32d] text-white text-xs font-black uppercase tracking-wider shadow-md transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-center"
                   >
                     Accept All
@@ -290,13 +343,13 @@ export default function CookieConsent() {
                 </Link>
                 <div className="flex items-center gap-2.5 w-full sm:w-auto">
                   <button
-                    onClick={() => saveConsent({ essential: true, functional: false, analytics: false, marketing: false })}
+                    onClick={handleRejectAll}
                     className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl border border-white/20 bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-bold transition cursor-pointer"
                   >
                     Reject All
                   </button>
                   <button
-                    onClick={() => saveConsent(preferences)}
+                    onClick={() => saveConsent(preferences, "custom")}
                     className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-[#93B733] hover:bg-[#82a32d] text-white text-xs font-black uppercase tracking-wider shadow-lg transition cursor-pointer"
                   >
                     Save Preferences

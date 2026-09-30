@@ -134,26 +134,26 @@ export default function MyAccount({ onBack, pgInfo: initialPgInfo }) {
         </div>
       )}
 
-      <div className='space-y-6'>
+      <div className='space-y-3.5 sm:space-y-6'>
         {/* CURRENT STAY & CANCELLATION REQUEST CARD */}
         {pgInfo && (
-          <div className='rounded-3xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-white/[0.03] p-6 sm:p-8 shadow-sm'>
-            <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-gray-100 dark:border-white/5'>
-              <div className='flex items-center gap-4 min-w-0'>
-                <div className='w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#0D3A1D] to-[#164e29] text-[#93B733] flex items-center justify-center text-xl font-black shrink-0 shadow-md'>
-                  <Building2 className='w-7 h-7 text-[#93B733]' />
+          <div className='rounded-2xl sm:rounded-3xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3.5 sm:p-8 shadow-xs sm:shadow-sm'>
+            <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 mb-3.5 sm:mb-6 pb-3.5 sm:pb-6 border-b border-gray-100 dark:border-white/5'>
+              <div className='flex items-center gap-2.5 sm:gap-4 min-w-0'>
+                <div className='w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-[#0D3A1D] to-[#164e29] text-[#93B733] flex items-center justify-center text-lg sm:text-xl font-black shrink-0 shadow-md'>
+                  <Building2 className='w-5 h-5 sm:w-7 sm:h-7 text-[#93B733]' />
                 </div>
                 <div className='min-w-0'>
-                  <div className='flex items-center gap-2 flex-wrap'>
-                    <h3 className='text-lg sm:text-xl font-black text-gray-900 dark:text-white tracking-tight truncate'>
+                  <div className='flex items-center gap-1.5 sm:gap-2 flex-wrap'>
+                    <h3 className='text-sm sm:text-xl font-black text-gray-900 dark:text-white tracking-tight truncate'>
                       {pgInfo.title || pgInfo.pg_name || 'Enrolled PG Stay'}
                     </h3>
-                    <span className='inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'>
-                      <CheckCircle className='w-3 h-3' /> Active Stay
+                    <span className='inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'>
+                      <CheckCircle className='w-2.5 h-2.5 sm:w-3 sm:h-3' /> Active Stay
                     </span>
                   </div>
-                  <p className='text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1 truncate'>
-                    <MapPin size={12} className='text-[#93B733] shrink-0' />
+                  <p className='text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5 sm:mt-1 truncate'>
+                    <MapPin size={11} className='text-[#93B733] shrink-0' />
                     <span className='truncate'>{pgInfo.address || pgInfo.area || 'Campus Sector'}</span>
                   </p>
                 </div>
@@ -162,82 +162,82 @@ export default function MyAccount({ onBack, pgInfo: initialPgInfo }) {
               {/* Status Badge */}
               <div className='self-start sm:self-center'>
                 {cancellationStatus === 'pending' ? (
-                  <span className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs font-black uppercase tracking-wide animate-pulse'>
-                    <Clock size={14} /> Cancellation Pending
+                  <span className='inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-[10px] sm:text-xs font-black uppercase tracking-wide animate-pulse'>
+                    <Clock size={13} /> Cancellation Pending
                   </span>
                 ) : cancellationStatus === 'approved' ? (
-                  <span className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-500/15 border border-gray-500/30 text-gray-700 dark:text-gray-400 text-xs font-black uppercase tracking-wide'>
-                    <CheckCircle2 size={14} /> Cancelled
+                  <span className='inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl bg-gray-500/15 border border-gray-500/30 text-gray-700 dark:text-gray-400 text-[10px] sm:text-xs font-black uppercase tracking-wide'>
+                    <CheckCircle2 size={13} /> Cancelled
                   </span>
                 ) : cancellationStatus === 'rejected' ? (
-                  <span className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-400 text-xs font-black uppercase tracking-wide'>
-                    <AlertTriangle size={14} /> Request Rejected
+                  <span className='inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-400 text-[10px] sm:text-xs font-black uppercase tracking-wide'>
+                    <AlertTriangle size={13} /> Request Rejected
                   </span>
                 ) : (
-                  <span className='inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-bold'>
-                    <Shield size={14} /> Enrolled
+                  <span className='inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] sm:text-xs font-bold'>
+                    <Shield size={13} /> Enrolled
                   </span>
                 )}
               </div>
             </div>
 
             {/* Room & Rent Summary Specs */}
-            <div className='grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-6'>
-              <div className='rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-4'>
-                <span className='text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1'>Allocated Room</span>
-                <p className='text-sm font-black text-gray-900 dark:text-white'>{pgInfo.selected_room_type || pgInfo.sharing_type || 'Standard Room'}</p>
+            <div className='grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3.5 mb-3.5 sm:mb-6'>
+              <div className='rounded-xl sm:rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-2.5 sm:p-4'>
+                <span className='text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-0.5 sm:mb-1'>Allocated Room</span>
+                <p className='text-xs sm:text-sm font-black text-gray-900 dark:text-white'>{pgInfo.selected_room_type || pgInfo.sharing_type || 'Standard Room'}</p>
               </div>
-              <div className='rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-4'>
-                <span className='text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1'>Monthly Rent</span>
-                <p className='text-sm font-black text-[#0D3A1D] dark:text-[#93B733]'>₹{(Number(pgInfo.booked_price || pgInfo.price || 0)).toLocaleString()} / month</p>
+              <div className='rounded-xl sm:rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-2.5 sm:p-4'>
+                <span className='text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-0.5 sm:mb-1'>Monthly Rent</span>
+                <p className='text-xs sm:text-sm font-black text-[#0D3A1D] dark:text-[#93B733]'>₹{(Number(pgInfo.booked_price || pgInfo.price || 0)).toLocaleString()} / month</p>
               </div>
-              <div className='rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-4'>
-                <span className='text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1'>Dormn Data Retention</span>
-                <p className='text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1'>
-                  <Sparkles size={14} className='text-emerald-500' /> KYC & Events Saved
+              <div className='rounded-xl sm:rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-2.5 sm:p-4'>
+                <span className='text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-0.5 sm:mb-1'>Dormn Data Retention</span>
+                <p className='text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1'>
+                  <Sparkles size={12} className='text-emerald-500' /> KYC & Events Saved
                 </p>
               </div>
             </div>
 
             {/* Cancellation Status & Action Banner */}
             {cancellationStatus === 'pending' ? (
-              <div className='p-4 sm:p-5 rounded-2xl bg-amber-500/[0.08] border border-amber-500/20 space-y-2'>
-                <div className='flex items-center gap-2 text-amber-800 dark:text-amber-300 font-black text-sm'>
-                  <Clock size={16} className='text-amber-500 animate-spin' style={{ animationDuration: '3s' }} />
+              <div className='p-3 sm:p-5 rounded-xl sm:rounded-2xl bg-amber-500/[0.08] border border-amber-500/20 space-y-1.5 sm:space-y-2'>
+                <div className='flex items-center gap-1.5 sm:gap-2 text-amber-800 dark:text-amber-300 font-black text-xs sm:text-sm'>
+                  <Clock size={14} className='text-amber-500 animate-spin' style={{ animationDuration: '3s' }} />
                   <span>Cancellation Request is Under Review by PG Owner</span>
                 </div>
-                <p className='text-xs text-gray-600 dark:text-gray-300'>
+                <p className='text-[11px] sm:text-xs text-gray-600 dark:text-gray-300'>
                   Requested on <strong>{pgInfo.cancellation_requested_at ? new Date(pgInfo.cancellation_requested_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'recently'}</strong>.
                   Reason: <em className='text-gray-800 dark:text-gray-200 font-medium'>"{pgInfo.cancellation_reason || 'Moving out'}"</em>
                 </p>
-                <div className='pt-2 flex items-center gap-2 text-[11px] text-amber-700 dark:text-amber-400/90'>
-                  <Info size={13} />
+                <div className='pt-1 sm:pt-2 flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-amber-700 dark:text-amber-400/90'>
+                  <Info size={12} />
                   <span>Once approved, your spot is freed and you can book another PG immediately. Profile & tickets stay intact.</span>
                 </div>
               </div>
             ) : cancellationStatus === 'rejected' ? (
-              <div className='p-4 sm:p-5 rounded-2xl bg-rose-500/[0.08] border border-rose-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3'>
-                <div className='space-y-1'>
-                  <div className='flex items-center gap-2 text-rose-800 dark:text-rose-300 font-black text-sm'>
-                    <AlertTriangle size={16} className='text-rose-500' />
+              <div className='p-3 sm:p-5 rounded-xl sm:rounded-2xl bg-rose-500/[0.08] border border-rose-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3'>
+                <div className='space-y-0.5 sm:space-y-1'>
+                  <div className='flex items-center gap-1.5 sm:gap-2 text-rose-800 dark:text-rose-300 font-black text-xs sm:text-sm'>
+                    <AlertTriangle size={14} className='text-rose-500' />
                     <span>Your Previous Cancellation Request Was Not Approved</span>
                   </div>
-                  <p className='text-xs text-gray-600 dark:text-gray-300'>Please contact your property caretaker or submit an updated request.</p>
+                  <p className='text-[11px] sm:text-xs text-gray-600 dark:text-gray-300'>Please contact your property caretaker or submit an updated request.</p>
                 </div>
-                <button onClick={() => setIsCancelModalOpen(true)} className='px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-sm cursor-pointer shrink-0'>
+                <button onClick={() => setIsCancelModalOpen(true)} className='px-3.5 py-1.5 sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] sm:text-xs font-bold transition shadow-xs cursor-pointer shrink-0'>
                   Resubmit Request
                 </button>
               </div>
             ) : (
-              <div className='p-4 sm:p-5 rounded-2xl bg-gray-50/80 dark:bg-white/[0.02] border border-gray-200/60 dark:border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
-                <div className='space-y-1'>
-                  <h4 className='text-sm font-black text-gray-900 dark:text-white'>Need to Move Out or Change Accommodation?</h4>
-                  <p className='text-xs text-gray-500 dark:text-gray-400 max-w-lg'>
+              <div className='p-3 sm:p-5 rounded-xl sm:rounded-2xl bg-gray-50/80 dark:bg-white/[0.02] border border-gray-200/60 dark:border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4'>
+                <div className='space-y-0.5 sm:space-y-1'>
+                  <h4 className='text-xs sm:text-sm font-black text-gray-900 dark:text-white'>Need to Move Out or Change Accommodation?</h4>
+                  <p className='text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 max-w-lg'>
                     Submit a cancellation request to your PG owner. When accepted, your booking is released so you can book another PG without having to refill KYC forms.
                   </p>
                 </div>
-                <button onClick={() => setIsCancelModalOpen(true)} className='inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 text-xs font-black transition active:scale-95 cursor-pointer shrink-0'>
-                  <DoorOpen size={15} />
+                <button onClick={() => setIsCancelModalOpen(true)} className='inline-flex items-center gap-1.5 px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 text-[11px] sm:text-xs font-black transition active:scale-95 cursor-pointer shrink-0'>
+                  <DoorOpen size={13} />
                   <span>Request Cancellation</span>
                 </button>
               </div>
@@ -246,73 +246,73 @@ export default function MyAccount({ onBack, pgInfo: initialPgInfo }) {
         )}
 
         {/* Profile Details Card */}
-        <div className='rounded-3xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-white/[0.03] p-6 sm:p-8'>
-          <div className='flex items-center gap-4 mb-6 pb-6 border-b border-gray-100 dark:border-white/5'>
-            <div className='w-16 h-16 rounded-2xl bg-[#93B733]/15 text-[#93B733] flex items-center justify-center text-2xl font-black shrink-0'>
-              {user?.name ? user.name.charAt(0).toUpperCase() : <User className='w-8 h-8' />}
+        <div className='rounded-2xl sm:rounded-3xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3.5 sm:p-8'>
+          <div className='flex items-center gap-2.5 sm:gap-4 mb-3 sm:mb-6 pb-3 sm:pb-6 border-b border-gray-100 dark:border-white/5'>
+            <div className='w-10 h-10 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-[#93B733]/15 text-[#93B733] flex items-center justify-center text-lg sm:text-2xl font-black shrink-0'>
+              {user?.name ? user.name.charAt(0).toUpperCase() : <User className='w-5 h-5 sm:w-8 sm:h-8' />}
             </div>
             <div className='min-w-0'>
-              <div className='flex items-center gap-2'>
-                <h3 className='text-xl font-black text-gray-900 dark:text-white tracking-tight truncate'>
+              <div className='flex items-center gap-1.5 sm:gap-2'>
+                <h3 className='text-sm sm:text-xl font-black text-gray-900 dark:text-white tracking-tight truncate'>
                   {user?.name || user?.full_name || 'Resident'}
                 </h3>
-                <span className='inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733]'>
-                  <CheckCircle className='w-3 h-3' /> Verified
+                <span className='inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733]'>
+                  <CheckCircle className='w-2.5 h-2.5 sm:w-3 sm:h-3' /> Verified
                 </span>
               </div>
-              <p className='text-xs font-semibold text-gray-400 mt-0.5 capitalize'>Role: {user?.role || 'Resident Student'}</p>
+              <p className='text-[10px] sm:text-xs font-semibold text-gray-400 mt-0.5 capitalize'>Role: {user?.role || 'Resident Student'}</p>
             </div>
           </div>
 
-          <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
-            <div className='rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-4'>
-              <span className='text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5 mb-1.5'><User className='w-3.5 h-3.5 text-[#93B733]' /> Full Name</span>
-              <p className='text-sm font-bold text-gray-900 dark:text-white truncate'>{user?.name || user?.full_name || 'Not provided'}</p>
+          <div className='grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4'>
+            <div className='rounded-xl sm:rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-2.5 sm:p-4'>
+              <span className='text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5 mb-1'><User className='w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#93B733]' /> Full Name</span>
+              <p className='text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate'>{user?.name || user?.full_name || 'Not provided'}</p>
             </div>
-            <div className='rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-4'>
-              <div className='flex items-center justify-between gap-1 mb-1.5'>
-                <span className='text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5'><Mail className='w-3.5 h-3.5 text-[#93B733]' /> Email Address</span>
+            <div className='rounded-xl sm:rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-2.5 sm:p-4'>
+              <div className='flex items-center justify-between gap-1 mb-1'>
+                <span className='text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5'><Mail className='w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#93B733]' /> Email Address</span>
                 {isVerified ? (
-                  <span className='inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'>
-                    <CheckCircle2 size={10} /> Verified
+                  <span className='inline-flex items-center gap-1 text-[8px] sm:text-[9px] font-black px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'>
+                    <CheckCircle2 size={9} /> Verified
                   </span>
                 ) : (
                   <button
                     type='button'
                     onClick={handleOpenVerify}
-                    className='inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition cursor-pointer'
+                    className='inline-flex items-center gap-1 text-[8px] sm:text-[9px] font-black px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition cursor-pointer'
                   >
-                    <Clock size={10} /> Verify
+                    <Clock size={9} /> Verify
                   </button>
                 )}
               </div>
-              <p className='text-sm font-bold text-gray-900 dark:text-white truncate'>{user?.email || 'Not provided'}</p>
+              <p className='text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate'>{user?.email || 'Not provided'}</p>
             </div>
-            <div className='rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-4'>
-              <span className='text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5 mb-1.5'><Phone className='w-3.5 h-3.5 text-[#93B733]' /> Mobile Number</span>
-              <p className='text-sm font-bold text-gray-900 dark:text-white truncate'>{user?.phone || user?.mobile || 'Not provided'}</p>
+            <div className='rounded-xl sm:rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50/70 dark:bg-white/[0.02] p-2.5 sm:p-4'>
+              <span className='text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5 mb-1'><Phone className='w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#93B733]' /> Mobile Number</span>
+              <p className='text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate'>{user?.phone || user?.mobile || 'Not provided'}</p>
             </div>
           </div>
         </div>
 
         {/* Legal & Policies Section */}
-        <div className='rounded-3xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-white/[0.03] p-6 sm:p-8'>
-          <h3 className='text-lg font-black text-[#0D3A1D] dark:text-white tracking-tight mb-4'>Legal & Platform Policies</h3>
+        <div className='rounded-2xl sm:rounded-3xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3.5 sm:p-8'>
+          <h3 className='text-xs sm:text-lg font-black text-[#0D3A1D] dark:text-white tracking-tight mb-2 sm:mb-4'>Legal & Platform Policies</h3>
           <div className='divide-y divide-gray-100 dark:divide-white/5'>
             {POLICY_LINKS.map((item, idx) => {
               const Icon = item.icon;
               return (
-                <Link key={idx} to={item.path} className='group flex items-center justify-between py-4 hover:px-2 rounded-xl transition-all'>
-                  <div className='flex items-center gap-3.5 min-w-0'>
-                    <div className='w-10 h-10 rounded-xl bg-gray-100 dark:bg-white/[0.05] group-hover:bg-[#93B733]/15 text-gray-600 dark:text-gray-400 group-hover:text-[#93B733] flex items-center justify-center shrink-0 transition-colors'>
-                      <Icon className='w-5 h-5' />
+                <Link key={idx} to={item.path} className='group flex items-center justify-between py-2.5 sm:py-4 hover:px-2 rounded-xl transition-all'>
+                  <div className='flex items-center gap-2.5 sm:gap-3.5 min-w-0'>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gray-100 dark:bg-white/[0.05] group-hover:bg-[#93B733]/15 text-gray-600 dark:text-gray-400 group-hover:text-[#93B733] flex items-center justify-center shrink-0 transition-colors'>
+                      <Icon className='w-4 h-4 sm:w-5 sm:h-5' />
                     </div>
                     <div>
-                      <h4 className='text-sm font-bold text-gray-900 dark:text-white group-hover:text-[#93B733] transition-colors'>{item.title}</h4>
-                      <p className='text-xs text-gray-500 dark:text-gray-400'>{item.desc}</p>
+                      <h4 className='text-xs sm:text-sm font-bold text-gray-900 dark:text-white group-hover:text-[#93B733] transition-colors'>{item.title}</h4>
+                      <p className='text-[10px] sm:text-xs text-gray-500 dark:text-gray-400'>{item.desc}</p>
                     </div>
                   </div>
-                  <ChevronRight className='w-5 h-5 text-gray-400 group-hover:translate-x-1 transition-transform shrink-0' />
+                  <ChevronRight className='w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:translate-x-1 transition-transform shrink-0' />
                 </Link>
               );
             })}
@@ -320,13 +320,13 @@ export default function MyAccount({ onBack, pgInfo: initialPgInfo }) {
         </div>
 
         {/* Logout Action Card */}
-        <div className='rounded-3xl border border-red-500/20 bg-red-500/[0.03] p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
+        <div className='rounded-2xl sm:rounded-3xl border border-red-500/20 bg-red-500/[0.03] p-3.5 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4'>
           <div>
-            <h4 className='text-base font-black text-red-600 dark:text-red-400'>Account Session</h4>
-            <p className='text-xs text-gray-500 dark:text-gray-400 mt-0.5'>Securely sign out of your resident portal session across this device</p>
+            <h4 className='text-xs sm:text-base font-black text-red-600 dark:text-red-400'>Account Session</h4>
+            <p className='text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5'>Securely sign out of your resident portal session across this device</p>
           </div>
-          <button onClick={handleLogout} className='inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-red-600 hover:bg-red-700 active:scale-95 text-white text-sm font-bold shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0'>
-            <LogOut className='w-4 h-4' /> Log Out
+          <button onClick={handleLogout} className='inline-flex items-center gap-1.5 px-4 py-2 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl bg-red-600 hover:bg-red-700 active:scale-95 text-white text-xs sm:text-sm font-bold shadow-xs sm:shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0'>
+            <LogOut className='w-3.5 h-3.5 sm:w-4 sm:h-4' /> Log Out
           </button>
         </div>
       </div>

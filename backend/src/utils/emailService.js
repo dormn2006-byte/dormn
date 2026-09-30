@@ -286,6 +286,22 @@ export const sendEmailVerificationOTP = async (to, otp, name) => {
   return sendEmail(to, `${otp} is your Dormn Email Verification Code`, html);
 };
 
+/** 1c. Account Deletion OTP (Valid for 10 minutes) */
+export const sendAccountDeletionOTP = async (to, otp, name) => {
+  console.log(`[AUTH-DEV] ⚠️ Account Deletion OTP for ${to}: ${otp} (Valid for 10 minutes)`);
+  const html = wrapEmail(
+    "Permanent Account Deletion",
+    `<p style="font-size:14px;color:#b91c1c;font-weight:bold;">⚠️ Permanent Account Deletion Request</p>
+     <p style="font-size:14px;color:#374151;">Hi <strong>${name || "there"}</strong>,</p>
+     <p style="font-size:14px;color:#4b5563;">We received a request to permanently delete your Dormn account associated with <strong>${to}</strong>.</p>
+     <p style="font-size:14px;color:#4b5563;">All your profile information, activity history, and settings will be permanently erased from our database. This action <strong>cannot be undone</strong>.</p>
+     ${buildOtpCard(otp, "10 minutes")}
+     <p style="font-size:13px;color:#6b7280;">This verification code is valid for <strong>10 minutes</strong>. If you did NOT request to delete your account, please ignore this email and change your password immediately.</p>`,
+    "ACCOUNT SECURITY"
+  );
+  return sendEmail(to, `${otp} is your Dormn Account Deletion Code (Expires in 10 mins)`, html);
+};
+
 /** 2. Password Reset Code Email */
 export const sendPasswordResetEmail = async (to, otp, name) => {
   console.log(`[AUTH-DEV] 🔐 Password Reset OTP for ${to}: ${otp}`);
@@ -539,4 +555,49 @@ export const sendMaintenanceUpdateToStudentEmail = async (to, studentName, { req
     isResolved ? "ISSUE RESOLVED" : "TICKET UPDATE"
   );
   return sendEmail(to, `🔧 Maintenance Update: Ticket #MT-${requestId} (${label})`, html);
+};
+
+/** 15. PG Visit Request Alert to Owner */
+export const sendVisitRequestToOwnerEmail = async (to, ownerName, { visitId, studentName, studentPhone, pgTitle, visitDate, visitTimeSlot, notes }) => {
+  const html = wrapEmail(
+    "New PG Visit Scheduled! 📅",
+    `<p style="font-size:14px;color:#374151;">Hi <strong>${ownerName || "PG Owner"}</strong>,</p>
+     <p style="font-size:14px;color:#4b5563;">A prospective resident has scheduled a physical tour to visit <strong>${pgTitle || "your property"}</strong>:</p>
+     <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:16px 0;font-size:13px;color:#374151;line-height:1.7;">
+       <p style="margin:0 0 6px 0;"><strong>Visit ID:</strong> #VS-${visitId}</p>
+       <p style="margin:0 0 6px 0;"><strong>PG Property:</strong> ${pgTitle || "N/A"}</p>
+       <p style="margin:0 0 6px 0;"><strong>Visitor:</strong> ${studentName || "Student"} (${studentPhone || "N/A"})</p>
+       <p style="margin:0 0 6px 0;"><strong>Scheduled Date:</strong> <strong style="color:#0D3A1D;">${visitDate}</strong></p>
+       <p style="margin:0 0 6px 0;"><strong>Time Slot:</strong> <strong style="color:#0D3A1D;">${visitTimeSlot}</strong></p>
+       ${notes ? `<p style="margin:0;"><strong>Notes:</strong> ${notes}</p>` : ""}
+     </div>
+     <p style="font-size:13px;color:#6b7280;">Log in to your Dormn owner dashboard to confirm or manage this visit.</p>`,
+    "VISIT REQUEST"
+  );
+  return sendEmail(to, `📅 New PG Visit: ${studentName || "Student"} for ${pgTitle || "Your PG"} (#VS-${visitId})`, html);
+};
+
+/** 16. PG Visit Status Update to Student */
+export const sendVisitStatusToStudentEmail = async (to, studentName, { visitId, status, pgTitle, ownerName, visitDate, visitTimeSlot }) => {
+  const isConfirmed = status === "confirmed", isCancelled = status === "cancelled";
+  const label = isConfirmed ? "Confirmed by Owner" : isCancelled ? "Cancelled" : status === "completed" ? "Completed" : status;
+
+  const html = wrapEmail(
+    `PG Visit ${isConfirmed ? "Confirmed! 🎉" : label}`,
+    `<p style="font-size:14px;color:#374151;">Hi <strong>${studentName || "Student"}</strong>,</p>
+     <p style="font-size:14px;color:#4b5563;">
+       ${isConfirmed ? `Great news! The owner of <strong>${pgTitle || "your selected PG"}</strong> has confirmed your scheduled visit.` : isCancelled ? `Your scheduled visit for <strong>${pgTitle || "your selected PG"}</strong> has been cancelled.` : `Your visit request for <strong>${pgTitle || "your selected PG"}</strong> is now ${status}.`}
+     </p>
+     <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:16px 0;font-size:13px;color:#374151;line-height:1.7;">
+       <p style="margin:0 0 6px 0;"><strong>Visit ID:</strong> #VS-${visitId}</p>
+       <p style="margin:0 0 6px 0;"><strong>PG Property:</strong> ${pgTitle || "N/A"}</p>
+       <p style="margin:0 0 6px 0;"><strong>Owner:</strong> ${ownerName || "PG Owner"}</p>
+       <p style="margin:0 0 6px 0;"><strong>Visit Date:</strong> ${visitDate || "N/A"}</p>
+       <p style="margin:0 0 6px 0;"><strong>Time Slot:</strong> ${visitTimeSlot || "N/A"}</p>
+       <p style="margin:0;"><strong>Status:</strong> <span style="font-weight:bold;color:${isConfirmed ? '#0D3A1D' : isCancelled ? '#dc2626' : '#d97706'};">${label.toUpperCase()}</span></p>
+     </div>
+     <p style="font-size:13px;color:#6b7280;">${isConfirmed ? "The owner is expecting you at the property during your scheduled slot." : "You can check your My Requests portal anytime on Dormn."}</p>`,
+    isConfirmed ? "VISIT CONFIRMED" : isCancelled ? "VISIT CANCELLED" : "VISIT UPDATE"
+  );
+  return sendEmail(to, `${isConfirmed ? "✅ Confirmed" : "📋 Update"}: PG Visit for ${pgTitle || "Dormn"} (#VS-${visitId})`, html);
 };

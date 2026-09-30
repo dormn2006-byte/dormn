@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import MacOSDock from "./ui/mac-os-dock";
 import EmailVerificationModal from "./auth/EmailVerificationModal";
+import { isEmailVerified } from "../utils/verificationStorage";
 
 const NAV_TABS = [
   { id: "dormn", label: "Dormn", icon: Building2, path: "/" },
@@ -25,6 +26,12 @@ const DOCK_APPS = [
   { id: "/about", name: "About Us", icon: "/icons/aboutus.webp" },
   { id: "/faqs", name: "FAQs", icon: "/icons/faq.webp" },
   { id: "/contact", name: "Contact", icon: "/icons/contact.webp" }
+];
+
+const MOBILE_DOCK_MORE_APPS = [
+  { path: "/blogs", name: "Blogs", subtitle: "Stories, tips & housing guides", icon: "/icons/blog.webp" },
+  { path: "/about", name: "About Us", subtitle: "Our mission & journey", icon: "/icons/aboutus.webp" },
+  { path: "/faqs", name: "FAQs", subtitle: "Common questions & policies", icon: "/icons/faq.webp" }
 ];
 
 const DRAWER_LINKS = [
@@ -46,6 +53,16 @@ const Navbar = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, logout } = useContext(AuthContext);
   const audioContext = useContext(AudioContext);
+  
+  const isPgDetailPage = useMemo(() => {
+    const p = location.pathname;
+    return (
+      p.startsWith("/pg/") ||
+      p.startsWith("/property/") ||
+      (/^\/pgs\/.+/.test(p) && p !== "/pgs")
+    );
+  }, [location.pathname]);
+
   const isMyPg = location.pathname.startsWith("/my-pg");
   const isDashboard = useMemo(() => (
     isMyPg || 
@@ -130,15 +147,69 @@ const Navbar = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [audioContext]);
 
+  const [showMoreDockMenu, setShowMoreDockMenu] = useState(false);
+  const [isMobileScreen, setIsMobileScreen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth < 640;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 640);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    setShowMoreDockMenu(false);
+  }, [location.pathname]);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === "Escape") setIsDrawerOpen(false);
+      if (e.key === "Escape") {
+        setIsDrawerOpen(false);
+        setShowMoreDockMenu(false);
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const handleAppClick = useCallback((appId) => navigate(appId), [navigate]);
+  const handleAppClick = useCallback((appId) => {
+    if (appId === "more_menu") {
+      setShowMoreDockMenu(prev => !prev);
+      return;
+    }
+    setShowMoreDockMenu(false);
+    navigate(appId);
+  }, [navigate]);
+
+  const currentDockApps = useMemo(() => {
+    if (isMobileScreen) {
+      return [
+        { id: "/", name: "Home", icon: "/icons/home.webp" },
+        { id: "/pgs", name: "Explore", icon: "/icons/explore.webp" },
+        { id: "/contact", name: "Contact", icon: "/icons/contact.webp" },
+        {
+          id: "more_menu",
+          name: "More",
+          icon: <Menu size={20} className="text-[#0D3A1D] dark:text-[#93B733]" strokeWidth={2.4} />
+        }
+      ];
+    }
+    return DOCK_APPS;
+  }, [isMobileScreen]);
+
+  const effectiveOpenApps = useMemo(() => {
+    if (isMobileScreen) {
+      if (["/blogs", "/about", "/faqs"].includes(activeDockAppId) || showMoreDockMenu) {
+        return ["more_menu"];
+      }
+      return [activeDockAppId];
+    }
+    return [activeDockAppId];
+  }, [isMobileScreen, activeDockAppId, showMoreDockMenu]);
 
   const getDashboardPath = useCallback(() => {
     if (!user) return "/";
@@ -147,12 +218,16 @@ const Navbar = () => {
 
   const isEventsPage = location.pathname.startsWith("/events");
 
+  if (isPgDetailPage) {
+    return null;
+  }
+
   return (
     <>
-      <header className={`sticky top-0 z-50 w-full border-none border-b-0 sm:border-b backdrop-blur-xl ${
+      <header className={`sticky top-0 z-50 w-full border-b backdrop-blur-xl transition-colors duration-200 ${
         isEventsPage
           ? "events-header border-purple-200/70 dark:border-purple-500/20 bg-white/95 dark:bg-[#06080F]/90 shadow-xs"
-          : "sm:border-gray-200/50 sm:dark:border-white/10 bg-white/90 dark:bg-black sm:dark:bg-[#0d0d0d]"
+          : "border-gray-200/70 dark:border-white/10 bg-white/95 dark:bg-black sm:dark:bg-[#0d0d0d] shadow-xs"
       }`}>
         <div className="mx-auto flex max-w-[1440px] 2xl:max-w-[1600px] h-12 sm:h-20 items-center justify-between px-3 sm:px-6 md:px-8 lg:px-10 border-none sm:border-b-0">
           
@@ -187,11 +262,15 @@ const Navbar = () => {
                     onClick={() => handleTabClick(tab)}
                     className={`relative flex items-center justify-center px-4 sm:px-5 lg:px-6 py-2 sm:py-2.5 rounded-full text-sm sm:text-base lg:text-lg font-black tracking-tight transition-all duration-200 whitespace-nowrap select-none ${
                       isActive
-                        ? "bg-[#93B733] text-gray-950 border border-[#7d9e26] shadow-[inset_0_3px_6px_rgba(0,0,0,0.65),inset_0_1px_2px_rgba(0,0,0,0.5)] translate-y-[0.5px]"
-                        : "bg-white dark:bg-black text-gray-800 dark:text-white border border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700 hover:text-gray-950 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-neutral-900 active:scale-95"
+                        ? isEventsPage
+                          ? "bg-gradient-to-r from-pink-500 via-pink-400 to-rose-400 text-white border border-pink-400/80 shadow-[0_4px_14px_rgba(236,72,153,0.35)] translate-y-[0.5px]"
+                          : "bg-[#93B733] text-[#0D3A1D] border border-[#82a32d] shadow-sm translate-y-[0.5px]"
+                        : isEventsPage
+                        ? "bg-white dark:bg-[#0D0B1C]/90 text-purple-950 dark:text-purple-200 border border-purple-200/80 dark:border-purple-500/30 hover:border-pink-500/50"
+                        : "bg-white dark:bg-black text-gray-800 dark:text-white border border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700 hover:text-gray-950 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-neutral-900 active:scale-95 cursor-pointer"
                     }`}
                   >
-                    <span>{tab.label}</span>
+                    <span>{tab.id === "dormn" && user ? "Explore" : tab.label}</span>
                   </button>
                 );
               })}
@@ -307,7 +386,7 @@ const Navbar = () => {
                         </button>
                       )}
 
-                      {user && !user.is_email_verified && user.auth_provider !== "google" && (
+                      {user && !isEmailVerified(user) && user.auth_provider !== "google" && (
                         <button
                           onClick={() => {
                             setIsProfileMenuOpen(false);
@@ -380,7 +459,11 @@ const Navbar = () => {
         </div>
 
         {/* Mobile Sub-Header: The Navigation Tabs (Big Capsule / Pill Style) */}
-        <nav className="mobile-subnav sm:hidden px-2 py-2 bg-black dark:bg-black border-none border-b-0 shadow-none">
+        <nav className={`mobile-subnav sm:hidden px-2 py-2 transition-colors duration-200 border-t ${
+          isEventsPage
+            ? "events-mobile-nav bg-white/95 dark:bg-[#06080F]/95 border-b border-purple-200/70 dark:border-purple-500/20"
+            : "bg-white/95 dark:bg-black border-gray-100 dark:border-white/5"
+        }`}>
           <div className="flex items-center justify-between gap-1.5 overflow-x-auto no-scrollbar py-0.5">
             {NAV_TABS.map((tab) => {
               const isActive = currentActiveTab === tab.id;
@@ -388,13 +471,17 @@ const Navbar = () => {
                 <button
                   key={tab.id}
                   onClick={() => handleTabClick(tab)}
-                  className={`flex-1 min-w-0 flex items-center justify-center py-2 px-2.5 rounded-full text-[11px] font-black tracking-tight transition-all select-none whitespace-nowrap ${
+                  className={`flex-1 min-w-0 flex items-center justify-center py-2 px-2.5 rounded-full text-[11px] font-black tracking-tight transition-all select-none whitespace-nowrap cursor-pointer ${
                     isActive
-                      ? "bg-[#93B733] text-gray-950 border border-[#7d9e26] shadow-[inset_0_3px_6px_rgba(0,0,0,0.65),inset_0_1px_2px_rgba(0,0,0,0.5)] translate-y-[0.5px]"
-                      : "bg-black dark:bg-black text-gray-200 dark:text-gray-200 border border-neutral-800 hover:border-neutral-700"
+                      ? isEventsPage
+                        ? "bg-gradient-to-r from-pink-500 via-pink-400 to-rose-400 text-white border border-pink-400/80 shadow-[0_4px_12px_rgba(236,72,153,0.35)] translate-y-[0.5px]"
+                        : "bg-[#93B733] text-gray-950 border border-[#7d9e26] shadow-xs translate-y-[0.5px]"
+                      : isEventsPage
+                      ? "bg-purple-50/90 dark:bg-[#120D26] text-purple-950 dark:text-purple-200 border border-purple-200/80 dark:border-purple-500/30"
+                      : "bg-gray-100/90 dark:bg-neutral-900 text-gray-700 dark:text-gray-200 border border-gray-200/80 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700"
                   }`}
                 >
-                  <span className="truncate">{tab.label}</span>
+                  <span className="truncate">{tab.id === "dormn" && user ? "Explore" : tab.label}</span>
                 </button>
               );
             })}
@@ -404,15 +491,64 @@ const Navbar = () => {
 
       {/* Floating Bottom MacOS Dock: Visible on both mobile and laptop */}
       {!isMyPg && currentActiveTab === "dormn" && (
-        <div className={`flex fixed bottom-3 sm:bottom-4 left-0 right-0 z-50 justify-center px-2 pointer-events-none transition-transform transition-opacity duration-300 ease-out will-change-transform ${hideMobileDock ? 'translate-y-32 opacity-0' : 'translate-y-0 opacity-100'}`}>
-          <div className="pointer-events-auto">
-            <MacOSDock
-              apps={DOCK_APPS}
-              onAppClick={handleAppClick}
-              openApps={[activeDockAppId]}
-            />
+        <>
+          {/* Mobile More Popover Menu (Phone users only) */}
+          {isMobileScreen && showMoreDockMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
+                onClick={() => setShowMoreDockMenu(false)}
+              />
+              <div className="fixed bottom-18 left-1/2 -translate-x-1/2 z-50 w-[88vw] max-w-[300px] rounded-2xl bg-white/95 dark:bg-[#121622]/95 backdrop-blur-2xl border border-gray-200/90 dark:border-white/10 shadow-2xl p-3 animate-in fade-in zoom-in-95 slide-in-from-bottom-3 duration-200">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100 dark:border-white/10">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">More Pages</span>
+                  <button
+                    onClick={() => setShowMoreDockMenu(false)}
+                    className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:hover:text-white transition cursor-pointer"
+                    aria-label="Close menu"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {MOBILE_DOCK_MORE_APPS.map((item) => (
+                    <button
+                      key={item.path}
+                      onClick={() => {
+                        setShowMoreDockMenu(false);
+                        navigate(item.path);
+                      }}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-all cursor-pointer ${
+                        activeDockAppId === item.path
+                          ? 'bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733]'
+                          : 'hover:bg-gray-100/70 dark:hover:bg-white/[0.05] text-gray-800 dark:text-gray-200'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-white dark:bg-black/30 p-1 flex items-center justify-center shrink-0 border border-gray-100 dark:border-white/5 shadow-xs">
+                        <img src={item.icon} alt={item.name} className="w-full h-full object-contain" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-black truncate">{item.name}</p>
+                        <p className="text-[10px] text-gray-400 truncate">{item.subtitle}</p>
+                      </div>
+                      <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className={`flex fixed bottom-3 sm:bottom-4 left-0 right-0 z-50 justify-center px-2 pointer-events-none transition-transform transition-opacity duration-300 ease-out will-change-transform ${hideMobileDock ? 'translate-y-32 opacity-0' : 'translate-y-0 opacity-100'}`}>
+            <div className="pointer-events-auto">
+              <MacOSDock
+                apps={currentDockApps}
+                onAppClick={handleAppClick}
+                openApps={effectiveOpenApps}
+              />
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Slide-out Sidebar Slider Drawer for /my-pg */}

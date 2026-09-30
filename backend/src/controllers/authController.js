@@ -16,6 +16,7 @@ import User from "../schemas/userSchema.js";
 import {
   sendOTPEmail,
   sendEmailVerificationOTP,
+  sendAccountDeletionOTP,
   sendLoginAlert,
   sendWelcomeEmail,
   sendPasswordResetEmail,
@@ -23,6 +24,19 @@ import {
 } from "../utils/emailService.js";
 import { validatePasswordStrength, logSecurityAudit } from "../utils/securityAuditService.js";
 import { encrypt } from "../utils/encryptionService.js";
+
+export const formatBankAccountsList = (accounts = []) =>
+  (accounts || []).map((acc) => ({
+    id: acc.id,
+    account_holder: acc.account_holder,
+    bank_name: acc.bank_name,
+    account_number: acc.account_number,
+    account_number_masked: acc.account_number ? `•••• •••• •••• ${String(acc.account_number).slice(-4)}` : "",
+    ifsc_code: acc.ifsc_code,
+    upi_id: acc.upi_id || "",
+    is_primary: Boolean(acc.is_primary),
+    created_at: acc.created_at,
+  }));
 
 /** Helper to format user response safely */
 export const formatAuthUser = (user) => ({
@@ -53,7 +67,8 @@ export const formatAuthUser = (user) => ({
   pan_number: user.pan_number || null,
   gstin: user.gstin || null,
   aadhaar_masked: user.aadhaar_masked || null,
-  is_payout_configured: Boolean(user.account_number && user.ifsc_code && user.account_holder),
+  bank_accounts: formatBankAccountsList(user.bank_accounts),
+  is_payout_configured: Boolean(user.account_number && user.ifsc_code),
 });
 
 /** Helper to resolve user from request session or email */
@@ -85,9 +100,11 @@ export const registerUser = async (req, res) => {
   try {
     const { full_name, email, password, role = "student", phone, profile_image, gender } = req.body;
 
-    if (!full_name || !email || !password) {
-      await logSecurityAudit({ req, eventType: "REGISTER_FAILED", email, status: "FAILED", details: "Missing required registration fields" });
-      return res.status(400).json({ success: false, message: "Please provide all required fields" });
+    const cleanedEmail = email ? String(email).trim().toLowerCase() : "";
+    const cleanedPhone = phone ? String(phone).trim().replace(/\D/g, "") : "";
+    if (!full_name || !cleanedEmail || !password || !cleanedPhone || cleanedPhone.length < 10) {
+      await logSecurityAudit({ req, eventType: "REGISTER_FAILED", email: cleanedEmail, status: "FAILED", details: "Missing required registration fields (including valid 10-digit phone)" });
+      return res.status(400).json({ success: false, message: "Please provide all required fields including a valid 10-digit phone number" });
     }
 
     // Password Security Audit Validation: > 8 chars, 1 uppercase, 1 lowercase, 1 number
@@ -96,7 +113,7 @@ export const registerUser = async (req, res) => {
       await logSecurityAudit({
         req,
         eventType: "REGISTER_FAILED",
-        email,
+        email: cleanedEmail,
         status: "FAILED",
         details: `Password rejected by security audit: ${passwordCheck.message}`,
       });
@@ -124,25 +141,29 @@ export const registerUser = async (req, res) => {
       }
     }
 
-    const existingUser = await findUserByEmail(email);
+    const existingUser = await findUserByEmail(cleanedEmail);
     if (existingUser) {
       await logSecurityAudit({
         req,
         eventType: "REGISTER_FAILED",
-        email,
+        email: cleanedEmail,
         status: "FAILED",
-        details: "Attempted to register existing email address",
+        details: `Attempted to register existing email (provider: ${existingUser.auth_provider})`,
       });
-      return res.status(409).json({ success: false, message: "User already exists with this email" });
+      return res.status(409).json({
+        success: false,
+        alreadyExists: true,
+        message: "This email is already in use. Please log in.",
+      });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await createUser({
       full_name,
-      email,
+      email: cleanedEmail,
       password: hashedPassword,
       role: targetRole,
-      phone,
+      phone: cleanedPhone,
       profile_image,
       gender: cleanGender,
       is_email_verified: 0,
@@ -194,7 +215,7 @@ export const requestOTP = async (req, res) => {
     if (!email) return res.status(400).json({ success: false, message: "Email required" });
 
     const user = await findUserByEmail(email);
-    if (!user) return res.status(404).json({ success: false, message: "Account not found" });
+    if (!user || user.auth_provider === "google") return res.status(404).json({ success: false, message: "User not found, try another way" });
 
     const otp = await generateAndSaveOTP(user.id, 5);
     await sendOTPEmail(email, otp);
@@ -217,9 +238,17 @@ export const loginUser = async (req, res) => {
     }
 
     const user = await findUserByEmail(email);
-    if (!user) {
-      logSecurityAudit({ req, eventType: "LOGIN_FAILED", email, status: "FAILED", details: "User not found" });
-      return res.status(404).json({ success: false, message: "User not found" });
+    if (!user || user.auth_provider === "google") {
+      logSecurityAudit({ req, eventType: "LOGIN_FAILED", email, status: "FAILED", details: "User not found or Google provider mismatch" });
+      return res.status(404).json({ success: false, message: "User not found, try another way" });
+    }
+
+    if (user.auth_provider === "google") {
+      logSecurityAudit({ req, eventType: "LOGIN_FAILED", userId: user.id, email, status: "FAILED", details: "Attempted password/OTP login on Google account" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found, try another way",
+      });
     }
 
     if (otp) {
@@ -372,7 +401,7 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export const googleAuth = async (req, res) => {
   try {
-    const { token, role = "student", gender } = req.body;
+    const { token, role = "student", gender, phone, mode = "any" } = req.body;
     if (!token) return res.status(400).json({ success: false, message: "Google token is required" });
 
     const ticket = await googleClient.verifyIdToken({
@@ -382,11 +411,44 @@ export const googleAuth = async (req, res) => {
     const { email, name, picture } = ticket.getPayload() || {};
     if (!email) return res.status(400).json({ success: false, message: "Invalid Google token payload" });
 
-    let user = await findUserByEmail(email);
+    const cleanEmail = String(email).trim().toLowerCase();
+    let user = await findUserByEmail(cleanEmail);
+
+    if (user && user.auth_provider === "local") {
+      logSecurityAudit({ req, eventType: "LOGIN_FAILED", userId: user.id, email: cleanEmail, status: "FAILED", details: "Attempted Google login on local account" });
+      return res.status(404).json({
+        success: false,
+        notFound: true,
+        message: "User not found, try another way",
+      });
+    }
+
+    // If user is attempting to SIGN UP / CREATE ACCOUNT, but already exists in the database:
+    if (user && mode === "signup") {
+      logSecurityAudit({ req, eventType: "REGISTER_FAILED", userId: user.id, email: cleanEmail, status: "FAILED", details: "Attempted Google signup on existing account" });
+      return res.status(409).json({
+        success: false,
+        alreadyExists: true,
+        message: "This email is already in use. Please log in.",
+      });
+    }
 
     if (!user) {
+      // If user attempted login and no account exists with this Gmail
+      if (mode === "login") {
+        logSecurityAudit({ req, eventType: "LOGIN_FAILED", email: cleanEmail, status: "FAILED", details: "Google login attempted on non-existent account" });
+        return res.status(404).json({
+          success: false,
+          notFound: true,
+          email: cleanEmail,
+          name,
+          message: "User not found, try another way",
+        });
+      }
+
       const assignedRole = ["owner", "student"].includes(role) ? role : "student";
       const cleanGender = ["male", "female"].includes(gender) ? gender : "prefer_not_to_say";
+      const cleanedPhone = phone ? String(phone).trim().replace(/\D/g, "") : null;
       const hashedPassword = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
 
       const result = await createUser({
@@ -394,7 +456,7 @@ export const googleAuth = async (req, res) => {
         email,
         password: hashedPassword,
         role: assignedRole,
-        phone: null,
+        phone: cleanedPhone,
         profile_image: picture || null,
         gender: cleanGender,
         is_email_verified: 1,
@@ -591,11 +653,38 @@ export const updatePayoutDetails = async (req, res) => {
       return res.status(400).json({ success: false, message: "IFSC Code is required" });
     }
 
-    const cleanHolder = encrypt(String(account_holder).trim());
-    const cleanBank = encrypt(String(bank_name).trim());
-    const cleanAccount = encrypt(String(account_number).trim());
-    const cleanIfsc = encrypt(String(ifsc_code).trim().toUpperCase());
-    const cleanUpi = upi_id ? encrypt(String(upi_id).trim()) : null;
+    const cleanHolderPlain = String(account_holder).trim();
+    const cleanBankPlain = String(bank_name).trim();
+    const cleanAccountPlain = String(account_number).trim();
+    const cleanIfscPlain = String(ifsc_code).trim().toUpperCase();
+    const cleanUpiPlain = upi_id ? String(upi_id).trim() : null;
+
+    const cleanHolder = encrypt(cleanHolderPlain);
+    const cleanBank = encrypt(cleanBankPlain);
+    const cleanAccount = encrypt(cleanAccountPlain);
+    const cleanIfsc = encrypt(cleanIfscPlain);
+    const cleanUpi = cleanUpiPlain ? encrypt(cleanUpiPlain) : null;
+
+    const existingUserDoc = await User.findById(userId).lean();
+    let existingAccounts = Array.isArray(existingUserDoc?.bank_accounts) ? [...existingUserDoc.bank_accounts] : [];
+
+    const primaryIndex = existingAccounts.findIndex(acc => acc.is_primary);
+    const newAccEntry = {
+      id: primaryIndex >= 0 ? existingAccounts[primaryIndex].id : crypto.randomUUID(),
+      account_holder: cleanHolder,
+      bank_name: cleanBank,
+      account_number: cleanAccount,
+      ifsc_code: cleanIfsc,
+      upi_id: cleanUpi,
+      is_primary: true,
+      created_at: primaryIndex >= 0 ? existingAccounts[primaryIndex].created_at || new Date() : new Date(),
+    };
+
+    if (primaryIndex >= 0) {
+      existingAccounts[primaryIndex] = newAccEntry;
+    } else {
+      existingAccounts = [newAccEntry, ...existingAccounts.map(a => ({ ...a, is_primary: false }))];
+    }
 
     await User.updateOne(
       { _id: userId },
@@ -605,6 +694,7 @@ export const updatePayoutDetails = async (req, res) => {
         account_number: cleanAccount,
         ifsc_code: cleanIfsc,
         upi_id: cleanUpi,
+        bank_accounts: existingAccounts,
       }
     );
 
@@ -614,7 +704,8 @@ export const updatePayoutDetails = async (req, res) => {
       success: true,
       message: "Bank account and payout details saved successfully",
       user: formatAuthUser(updatedUser),
-      is_payout_configured: true
+      is_payout_configured: true,
+      bank_accounts: updatedUser.bank_accounts || []
     });
   } catch (error) {
     console.error("Update Payout Details Error:", error);
@@ -647,6 +738,311 @@ export const getPayoutStatus = async (req, res) => {
   } catch (error) {
     console.error("Get Payout Status Error:", error);
     return res.status(500).json({ success: false, message: "Failed to fetch payout status" });
+  }
+};
+
+// 11.1 GET ALL BANK ACCOUNTS (Authenticated)
+export const getBankAccounts = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    let user = await findUserById(userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    let bankAccounts = Array.isArray(user.bank_accounts) ? [...user.bank_accounts] : [];
+
+    // Auto-migrate legacy bank account if bank_accounts array is empty
+    if (bankAccounts.length === 0 && user.account_number && user.ifsc_code) {
+      const defaultId = crypto.randomUUID();
+      const defaultAcc = {
+        id: defaultId,
+        account_holder: encrypt(user.account_holder || user.full_name || "Primary Account"),
+        bank_name: encrypt(user.bank_name || "Primary Bank"),
+        account_number: encrypt(user.account_number),
+        ifsc_code: encrypt(user.ifsc_code),
+        upi_id: user.upi_id ? encrypt(user.upi_id) : null,
+        is_primary: true,
+        created_at: new Date(),
+      };
+
+      await User.updateOne(
+        { _id: userId },
+        { $set: { bank_accounts: [defaultAcc] } }
+      );
+
+      user = await findUserById(userId);
+      bankAccounts = user.bank_accounts || [];
+    }
+
+    const formattedAccounts = formatBankAccountsList(bankAccounts);
+
+    return res.status(200).json({
+      success: true,
+      bank_accounts: formattedAccounts,
+      is_configured: formattedAccounts.length > 0,
+    });
+  } catch (error) {
+    console.error("Get Bank Accounts Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to fetch bank accounts" });
+  }
+};
+
+// 11.2 ADD NEW BANK ACCOUNT (Authenticated)
+export const addBankAccount = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { account_holder, bank_name, account_number, ifsc_code, upi_id, is_primary = false } = req.body;
+
+    if (!account_holder || !String(account_holder).trim()) {
+      return res.status(400).json({ success: false, message: "Beneficiary / Account Holder Name is required" });
+    }
+    if (!bank_name || !String(bank_name).trim()) {
+      return res.status(400).json({ success: false, message: "Bank Name is required" });
+    }
+    if (!account_number || !String(account_number).trim()) {
+      return res.status(400).json({ success: false, message: "Account Number is required" });
+    }
+    if (!ifsc_code || !String(ifsc_code).trim()) {
+      return res.status(400).json({ success: false, message: "IFSC Code is required" });
+    }
+
+    const cleanHolder = String(account_holder).trim();
+    const cleanBank = String(bank_name).trim();
+    const cleanAccount = String(account_number).trim().replace(/\s+/g, "");
+    const cleanIfsc = String(ifsc_code).trim().toUpperCase();
+    const cleanUpi = upi_id ? String(upi_id).trim() : "";
+
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleanIfsc)) {
+      return res.status(400).json({ success: false, message: "Invalid IFSC Code format (e.g. HDFC0001234)" });
+    }
+
+    const userDoc = await User.findById(userId).lean();
+    if (!userDoc) return res.status(404).json({ success: false, message: "User not found" });
+
+    const existingAccounts = Array.isArray(userDoc.bank_accounts) ? userDoc.bank_accounts : [];
+    const isFirstAccount = existingAccounts.length === 0;
+    const makePrimary = Boolean(is_primary || isFirstAccount);
+
+    const newId = crypto.randomUUID();
+    const newEncryptedAccount = {
+      id: newId,
+      account_holder: encrypt(cleanHolder),
+      bank_name: encrypt(cleanBank),
+      account_number: encrypt(cleanAccount),
+      ifsc_code: encrypt(cleanIfsc),
+      upi_id: cleanUpi ? encrypt(cleanUpi) : null,
+      is_primary: makePrimary,
+      created_at: new Date(),
+    };
+
+    let updatedAccounts = [];
+    if (makePrimary) {
+      updatedAccounts = [
+        newEncryptedAccount,
+        ...existingAccounts.map((a) => ({ ...a, is_primary: false })),
+      ];
+    } else {
+      updatedAccounts = [...existingAccounts, newEncryptedAccount];
+    }
+
+    const updatePayload = {
+      bank_accounts: updatedAccounts,
+    };
+
+    if (makePrimary) {
+      updatePayload.account_holder = encrypt(cleanHolder);
+      updatePayload.bank_name = encrypt(cleanBank);
+      updatePayload.account_number = encrypt(cleanAccount);
+      updatePayload.ifsc_code = encrypt(cleanIfsc);
+      updatePayload.upi_id = cleanUpi ? encrypt(cleanUpi) : null;
+    }
+
+    await User.updateOne({ _id: userId }, { $set: updatePayload });
+
+    const updatedUser = await findUserById(userId);
+    const formattedAccounts = formatBankAccountsList(updatedUser.bank_accounts);
+
+    return res.status(201).json({
+      success: true,
+      message: "Bank account added successfully",
+      bank_account: formattedAccounts.find((a) => a.id === newId),
+      bank_accounts: formattedAccounts,
+      user: formatAuthUser(updatedUser),
+    });
+  } catch (error) {
+    console.error("Add Bank Account Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to add bank account" });
+  }
+};
+
+// 11.3 UPDATE BANK ACCOUNT (Authenticated)
+export const updateBankAccount = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { id } = req.params;
+    const { account_holder, bank_name, account_number, ifsc_code, upi_id, is_primary } = req.body;
+
+    const userDoc = await User.findById(userId).lean();
+    if (!userDoc) return res.status(404).json({ success: false, message: "User not found" });
+
+    const accounts = Array.isArray(userDoc.bank_accounts) ? [...userDoc.bank_accounts] : [];
+    const accountIndex = accounts.findIndex((a) => a.id === id);
+
+    if (accountIndex === -1) {
+      return res.status(404).json({ success: false, message: "Bank account not found" });
+    }
+
+    const existingAcc = accounts[accountIndex];
+    const cleanHolder = account_holder !== undefined ? String(account_holder).trim() : decrypt(existingAcc.account_holder);
+    const cleanBank = bank_name !== undefined ? String(bank_name).trim() : decrypt(existingAcc.bank_name);
+    const cleanAccount = account_number !== undefined ? String(account_number).trim().replace(/\s+/g, "") : decrypt(existingAcc.account_number);
+    const cleanIfsc = ifsc_code !== undefined ? String(ifsc_code).trim().toUpperCase() : decrypt(existingAcc.ifsc_code);
+    const cleanUpi = upi_id !== undefined ? String(upi_id).trim() : (existingAcc.upi_id ? decrypt(existingAcc.upi_id) : "");
+    const willBePrimary = is_primary !== undefined ? Boolean(is_primary) : Boolean(existingAcc.is_primary);
+
+    if (cleanIfsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleanIfsc)) {
+      return res.status(400).json({ success: false, message: "Invalid IFSC Code format" });
+    }
+
+    const updatedAccountEntry = {
+      ...existingAcc,
+      account_holder: encrypt(cleanHolder),
+      bank_name: encrypt(cleanBank),
+      account_number: encrypt(cleanAccount),
+      ifsc_code: encrypt(cleanIfsc),
+      upi_id: cleanUpi ? encrypt(cleanUpi) : null,
+      is_primary: willBePrimary,
+    };
+
+    let updatedAccounts = accounts.map((a, idx) => {
+      if (idx === accountIndex) return updatedAccountEntry;
+      if (willBePrimary) return { ...a, is_primary: false };
+      return a;
+    });
+
+    const updatePayload = {
+      bank_accounts: updatedAccounts,
+    };
+
+    if (willBePrimary) {
+      updatePayload.account_holder = encrypt(cleanHolder);
+      updatePayload.bank_name = encrypt(cleanBank);
+      updatePayload.account_number = encrypt(cleanAccount);
+      updatePayload.ifsc_code = encrypt(cleanIfsc);
+      updatePayload.upi_id = cleanUpi ? encrypt(cleanUpi) : null;
+    }
+
+    await User.updateOne({ _id: userId }, { $set: updatePayload });
+
+    const updatedUser = await findUserById(userId);
+    const formattedAccounts = formatBankAccountsList(updatedUser.bank_accounts);
+
+    return res.status(200).json({
+      success: true,
+      message: "Bank account updated successfully",
+      bank_accounts: formattedAccounts,
+      user: formatAuthUser(updatedUser),
+    });
+  } catch (error) {
+    console.error("Update Bank Account Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to update bank account" });
+  }
+};
+
+// 11.4 DELETE BANK ACCOUNT (Authenticated)
+export const deleteBankAccount = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { id } = req.params;
+
+    const userDoc = await User.findById(userId).lean();
+    if (!userDoc) return res.status(404).json({ success: false, message: "User not found" });
+
+    const accounts = Array.isArray(userDoc.bank_accounts) ? [...userDoc.bank_accounts] : [];
+    const target = accounts.find((a) => a.id === id);
+
+    if (!target) {
+      return res.status(404).json({ success: false, message: "Bank account not found" });
+    }
+
+    const remainingAccounts = accounts.filter((a) => a.id !== id);
+    let updatePayload = { bank_accounts: remainingAccounts };
+
+    if (target.is_primary && remainingAccounts.length > 0) {
+      remainingAccounts[0].is_primary = true;
+      updatePayload.account_holder = remainingAccounts[0].account_holder;
+      updatePayload.bank_name = remainingAccounts[0].bank_name;
+      updatePayload.account_number = remainingAccounts[0].account_number;
+      updatePayload.ifsc_code = remainingAccounts[0].ifsc_code;
+      updatePayload.upi_id = remainingAccounts[0].upi_id || null;
+    } else if (remainingAccounts.length === 0) {
+      updatePayload.account_holder = null;
+      updatePayload.bank_name = null;
+      updatePayload.account_number = null;
+      updatePayload.ifsc_code = null;
+      updatePayload.upi_id = null;
+    }
+
+    await User.updateOne({ _id: userId }, { $set: updatePayload });
+
+    const updatedUser = await findUserById(userId);
+    const formattedAccounts = formatBankAccountsList(updatedUser.bank_accounts);
+
+    return res.status(200).json({
+      success: true,
+      message: "Bank account removed successfully",
+      bank_accounts: formattedAccounts,
+      user: formatAuthUser(updatedUser),
+    });
+  } catch (error) {
+    console.error("Delete Bank Account Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to delete bank account" });
+  }
+};
+
+// 11.5 SET PRIMARY BANK ACCOUNT (Authenticated)
+export const setPrimaryBankAccount = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { id } = req.params;
+
+    const userDoc = await User.findById(userId).lean();
+    if (!userDoc) return res.status(404).json({ success: false, message: "User not found" });
+
+    const accounts = Array.isArray(userDoc.bank_accounts) ? [...userDoc.bank_accounts] : [];
+    const target = accounts.find((a) => a.id === id);
+
+    if (!target) {
+      return res.status(404).json({ success: false, message: "Bank account not found" });
+    }
+
+    const updatedAccounts = accounts.map((a) => ({
+      ...a,
+      is_primary: a.id === id,
+    }));
+
+    const updatePayload = {
+      bank_accounts: updatedAccounts,
+      account_holder: target.account_holder,
+      bank_name: target.bank_name,
+      account_number: target.account_number,
+      ifsc_code: target.ifsc_code,
+      upi_id: target.upi_id || null,
+    };
+
+    await User.updateOne({ _id: userId }, { $set: updatePayload });
+
+    const updatedUser = await findUserById(userId);
+    const formattedAccounts = formatBankAccountsList(updatedUser.bank_accounts);
+
+    return res.status(200).json({
+      success: true,
+      message: "Primary bank account set successfully",
+      bank_accounts: formattedAccounts,
+      user: formatAuthUser(updatedUser),
+    });
+  } catch (error) {
+    console.error("Set Primary Bank Account Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to set primary bank account" });
   }
 };
 
@@ -730,10 +1126,122 @@ export const getVerificationStatus = async (req, res) => {
     return res.status(200).json({
       success: true,
       email: user.email,
+      role: user.role,
       is_email_verified: Boolean(user.is_email_verified) || user.auth_provider === "google",
       auth_provider: user.auth_provider || "local",
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// 12. REQUEST ACCOUNT DELETION OTP (Strict 10-minute expiry)
+export const requestDeleteAccountOTP = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    const user = await findUserById(userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const otp = await generateAndSaveOTP(user.id, 10);
+    await sendAccountDeletionOTP(user.email, otp, user.full_name);
+
+    await logSecurityAudit({
+      req,
+      eventType: "ACCOUNT_DELETE_REQUEST",
+      userId: user.id,
+      email: user.email,
+      status: "SUCCESS",
+      details: "Requested account deletion OTP (10 min expiry)",
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Account deletion OTP sent to your registered email address (valid for 10 minutes).",
+      email: user.email,
+    });
+  } catch (error) {
+    console.error("Request Delete Account OTP Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to send account deletion verification code" });
+  }
+};
+
+// 13. CONFIRM ACCOUNT DELETION WITH OTP
+export const deleteAccountWithOTP = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { otp, agreeTerms, agreePrivacy } = req.body;
+
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    if (!agreeTerms || !agreePrivacy) {
+      return res.status(400).json({
+        success: false,
+        message: "You must accept the Terms & Conditions and Privacy Policy to proceed with account deletion.",
+      });
+    }
+
+    if (!otp || String(otp).trim().length !== 6) {
+      return res.status(400).json({ success: false, message: "Please enter the 6-digit verification code." });
+    }
+
+    const user = await findUserById(userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const now = new Date();
+    if (!user.otp_code || user.otp_code !== String(otp).trim() || new Date(user.otp_expiry) < now) {
+      await logSecurityAudit({
+        req,
+        eventType: "ACCOUNT_DELETE_FAILED",
+        userId: user.id,
+        email: user.email,
+        status: "FAILED",
+        details: "Invalid or expired account deletion OTP code",
+      });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification code (valid for 10 minutes). Please request a new one.",
+      });
+    }
+
+    // Log security audit before deleting
+    await logSecurityAudit({
+      req,
+      eventType: "ACCOUNT_DELETED",
+      userId: user.id,
+      email: user.email,
+      status: "SUCCESS",
+      details: `User permanently deleted account (${user.role})`,
+    });
+
+    // Delete user from the database
+    await User.deleteOne({ _id: user.id });
+
+    // Clean up auxiliary user records safely
+    try {
+      const DormnAiConversation = (await import("../schemas/dormnAiConversationSchema.js")).default;
+      const DormnAiMessage = (await import("../schemas/dormnAiMessageSchema.js")).default;
+      const DormnAiMemory = (await import("../schemas/dormnAiMemorySchema.js")).default;
+      const SavedPG = (await import("../schemas/savedPGSchema.js")).default;
+      const StudentProfile = (await import("../schemas/studentProfileSchema.js")).default;
+
+      await Promise.allSettled([
+        DormnAiConversation.deleteMany({ user_id: user.id }),
+        DormnAiMessage.deleteMany({ user_id: user.id }),
+        DormnAiMemory.deleteMany({ user_id: user.id }),
+        SavedPG.deleteMany({ user_id: user.id }),
+        StudentProfile.deleteOne({ user_id: user.id }),
+      ]);
+    } catch (cleanupErr) {
+      console.warn("Auxiliary data cleanup warning:", cleanupErr?.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Your account has been permanently deleted.",
+    });
+  } catch (error) {
+    console.error("Delete Account Error:", error);
+    return res.status(500).json({ success: false, message: "Failed to delete account. Please try again later." });
   }
 };

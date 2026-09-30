@@ -4,13 +4,59 @@ import {
   IndianRupee, Wrench, Bell, ClipboardList, User,
   Sparkles, ArrowLeft, Compass, CheckCircle2, Clock, Lock, ShieldCheck,
   MapPin, Wifi, Moon, Utensils, Building2, ChevronDown, MessageSquare,
-  AlertTriangle, FileText
+  AlertTriangle, FileText, Users, Phone, MessageCircle, X, HardHat
 } from 'lucide-react';
 import api, { IMAGE_BASE_URL } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import MacOSDock from '../components/ui/mac-os-dock';
 import { getProfileAvatar } from '../constants/studentDockConfig';
+
+const ROLE_STYLES = {
+  "Cook / Chef": { icon: "👨‍🍳", color: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" },
+  "Electrician": { icon: "⚡", color: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20" },
+  "Security Guard": { icon: "🛡️", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" },
+  "Housekeeper / Cleaner": { icon: "🧹", color: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20" },
+  "Plumber": { icon: "🔧", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" },
+  "Warden / Manager": { icon: "👔", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" },
+  "Carpenter": { icon: "🪚", color: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20" },
+  "Laundry / Dhobi": { icon: "🧺", color: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20" },
+  "Maintenance Tech": { icon: "🛠️", color: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20" },
+  "Other": { icon: "👤", color: "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20" },
+};
+
+const getStaffRoleStyle = (role) => {
+  if (!role) return { icon: "👤", color: "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20" };
+  if (ROLE_STYLES[role]) return ROLE_STYLES[role];
+  const rLower = role.toLowerCase();
+  for (const [key, val] of Object.entries(ROLE_STYLES)) {
+    if (key.toLowerCase() === rLower || key.toLowerCase().includes(rLower) || rLower.includes(key.toLowerCase())) {
+      return val;
+    }
+  }
+  return { icon: "👤", color: "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20" };
+};
+
+const formatStaffAvatar = (url) => {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+  if (url.startsWith("/uploads/")) return `${IMAGE_BASE_URL}${url}`;
+  if (url.startsWith("/api/uploads/")) return `${IMAGE_BASE_URL}${url.replace('/api', '')}`;
+  return `${IMAGE_BASE_URL}/uploads/${url}`;
+};
+
+const formatUserAvatar = (user) => {
+  if (!user) return getProfileAvatar();
+  const raw = user.profile_image || user.avatar;
+  if (!raw) return getProfileAvatar(user.id);
+  if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("data:")) return raw;
+  if (raw.startsWith("/uploads/")) return `${IMAGE_BASE_URL}${raw}`;
+  if (raw.startsWith("/api/uploads/")) return `${IMAGE_BASE_URL}${raw.replace('/api', '')}`;
+  if (raw.startsWith("/icons/")) return raw;
+  return `${IMAGE_BASE_URL}/uploads/${raw}`;
+};
+
+
 
 const DEFAULT_PG_IMAGES = [
   "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1400&auto=format&fit=crop",
@@ -68,12 +114,33 @@ export default function MyPG() {
   const [openCards, setOpenCards] = useState({
     specs: false,
     rent: false,
-    caretaker: false
+    caretaker: false,
+    staff: false
   });
+  const [pgStaff, setPgStaff] = useState([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [showStaffModal, setShowStaffModal] = useState(false);
+
 
   const toggleCard = useCallback((key) => {
     setOpenCards(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
+
+  const [isChatInputFocused, setIsChatInputFocused] = useState(false);
+
+  useEffect(() => {
+    const handleChatKeyboard = (e) => {
+      setIsChatInputFocused(!!e.detail?.focused);
+    };
+    window.addEventListener('dormn_chat_keyboard', handleChatKeyboard);
+    return () => window.removeEventListener('dormn_chat_keyboard', handleChatKeyboard);
+  }, []);
+
+  useEffect(() => {
+    if (activeAction !== 'chat') {
+      setIsChatInputFocused(false);
+    }
+  }, [activeAction]);
 
   useEffect(() => {
     if (actionParam) setActiveAction(actionParam);
@@ -130,9 +197,9 @@ export default function MyPG() {
   useEffect(() => {
     const fetchStay = async () => {
       try {
-        // 1. Primary: Use the dedicated my-pgs endpoint (correctly checks approved OR paid, excludes cancelled)
+        // 1. Primary: Use the dedicated my-pgs endpoint (returns active paid booking)
         const myPgRes = await api.get('/bookings/my-pgs').catch(() => null);
-        if (myPgRes?.data?.success && myPgRes.data?.booking) {
+        if (myPgRes?.data?.success && myPgRes.data?.booking && myPgRes.data.booking.payment_status === 'paid') {
           setPgInfo(myPgRes.data.booking);
           setActiveBookingId(myPgRes.data.booking.booking_id || myPgRes.data.booking.id || null);
           setHasEnrolledPG(true);
@@ -142,52 +209,43 @@ export default function MyPG() {
           return;
         }
 
-        // 2. Fallback: Check full bookings list for pending/approved-unpaid states
+        // 2. Fallback: Check full bookings list for paid, approved-unpaid, and pending states
         const bookRes = await api.get('/bookings/my-bookings').catch(() => null);
         const list = Array.isArray(bookRes?.data?.bookings || bookRes?.data) ? (bookRes?.data?.bookings || bookRes?.data) : [];
 
-        // Check for any approved booking (even if my-pgs didn't return it)
-        const approvedStay = list.find(b => 
-          (b.status === 'approved' || b.payment_status === 'paid') && b.status !== 'cancelled'
+        // Check if student has any confirmed & paid booking
+        const paidStay = list.find(b => 
+          (b.payment_status === 'paid' || b.status === 'paid') && b.status !== 'cancelled'
         );
 
-        if (approvedStay) {
-          setPgInfo(approvedStay);
+        if (paidStay) {
+          setPgInfo(paidStay);
+          setActiveBookingId(paidStay.id || paidStay.booking_id || null);
           setHasEnrolledPG(true);
           setApprovedBookings([]);
           setPendingBookings([]);
         } else {
-          // Check for pending bookings
-          const pending = groupLatestBookings(list, b => b.status === 'pending');
-          if (pending.length > 0) {
-            setPendingBookings(pending);
-            setApprovedBookings([]);
+          // Check for approved bookings that are awaiting payment
+          const approved = groupLatestBookings(list, b => b.status === 'approved' && b.payment_status !== 'paid');
+          if (approved.length > 0) {
+            setApprovedBookings(approved);
+            setPendingBookings([]);
             setHasEnrolledPG(false);
             setPgInfo(null);
           } else {
-            // Check local KYC / enrollments fallback
-            try {
-              const localKyc = JSON.parse(localStorage.getItem('dormn_kyc_enrollments') || '[]');
-              const myKyc = Array.isArray(localKyc) ? localKyc.find(k => (user?.email && k.student_email === user?.email) || (user?.id && k.user_id === user?.id)) : null;
-              if (myKyc) {
-                setPgInfo({
-                  id: myKyc.pg_id || myKyc.id,
-                  title: myKyc.pg_title || myKyc.title || "My PG Accommodation",
-                  address: myKyc.pg_address || myKyc.address || "Sector 62, Noida",
-                  owner_name: myKyc.owner_name || "PG Property Manager",
-                  room_no: myKyc.room_no || "204",
-                  sharing_type: myKyc.sharing_type || "Twin Sharing",
-                  price: myKyc.monthly_rent || myKyc.price || 8500,
-                  payment_status: myKyc.payment_status || 'paid',
-                  status: 'approved'
-                });
-                setHasEnrolledPG(true);
-                return;
-              }
-            } catch {}
-
-            setHasEnrolledPG(false);
-            setPgInfo(null);
+            // Check for pending bookings
+            const pending = groupLatestBookings(list, b => b.status === 'pending');
+            if (pending.length > 0) {
+              setPendingBookings(pending);
+              setApprovedBookings([]);
+              setHasEnrolledPG(false);
+              setPgInfo(null);
+            } else {
+              setHasEnrolledPG(false);
+              setPgInfo(null);
+              setApprovedBookings([]);
+              setPendingBookings([]);
+            }
           }
         }
       } catch (err) {
@@ -199,6 +257,36 @@ export default function MyPG() {
     };
     fetchStay();
   }, [user]);
+
+
+  useEffect(() => {
+    const fetchStaff = async () => {
+      const targetPgId = pgInfo?.pg_id || pgInfo?.id || pgInfo?._id;
+      if (!targetPgId) {
+        setPgStaff([]);
+        return;
+      }
+      setStaffLoading(true);
+      try {
+        const res = await api.get(`/staff/pg/${targetPgId}`);
+        const staffData = res.data?.staff || res.data?.data || [];
+        if (res.data?.success && Array.isArray(staffData)) {
+          setPgStaff(staffData);
+        } else {
+          setPgStaff([]);
+        }
+      } catch (err) {
+        console.warn("Failed to load PG staff:", err);
+        setPgStaff([]);
+      } finally {
+        setStaffLoading(false);
+      }
+    };
+
+    if (hasEnrolledPG && pgInfo) {
+      fetchStaff();
+    }
+  }, [hasEnrolledPG, pgInfo]);
 
   const handlePayNow = async (booking) => {
     const amount = Number(booking.booked_price || booking.price || 0);
@@ -297,7 +385,8 @@ export default function MyPG() {
       id: 'rent',
       name: 'Pay Rent',
       icon: '/icons/payrents-removebg-preview.png',
-      sub: 'Dues & Invoices'
+      sub: 'Dues & Invoices',
+      iconScale: 1.25
     },
     {
       id: 'requests',
@@ -311,13 +400,15 @@ export default function MyPG() {
       name: 'Notifications',
       icon: '/icons/notifications-removebg-preview.png',
       badge: unreadNotifCount,
-      sub: 'All Owner Updates'
+      sub: 'All Owner Updates',
+      iconScale: 1.25
     },
     {
       id: 'chat',
       name: 'PG Chat',
       icon: '/icons/dormn_chat-removebg-preview.png',
-      sub: 'Residents & Host Lounge'
+      sub: 'Residents & Host Lounge',
+      iconScale: 1.65
     },
     {
       id: 'notices',
@@ -330,15 +421,17 @@ export default function MyPG() {
       id: 'registration',
       name: 'Registration',
       icon: '/icons/regestration_from-removebg-preview.png',
-      sub: 'KYC & Verification'
+      sub: 'KYC & Verification',
+      iconScale: 1.15
     },
     {
       id: 'account',
       name: 'My Account',
-      icon: user?.profile_image || getProfileAvatar(user?.id),
-      sub: 'Profile & Policies'
+      icon: formatUserAvatar(user),
+      sub: 'Profile & Policies',
+      isProfile: true
     }
-  ], [activeReqCount, unreadNotifCount, unreadNoticesCount, user?.profile_image, user?.id]);
+  ], [activeReqCount, unreadNotifCount, unreadNoticesCount, user]);
 
   const pgHeroImage = useMemo(() => {
     if (!pgInfo) return DEFAULT_PG_IMAGES[0];
@@ -360,13 +453,17 @@ export default function MyPG() {
   // Render Sub-view when a feature is selected
   if (activeAction) {
     return (
-      <div className="min-h-screen bg-[#FAF9F5] dark:bg-[#07090e] text-gray-900 dark:text-white flex flex-col">
+      <div className={`bg-[#FAF9F5] dark:bg-[#07090e] text-gray-900 dark:text-white flex flex-col ${
+        activeAction === 'chat' ? 'h-[100dvh] max-h-[100dvh] overflow-hidden' : 'min-h-screen'
+      }`}>
         <Navbar />
         
         <div className={`flex-1 w-full mx-auto ${
           activeAction === 'chat' 
-            ? 'max-w-full px-2 sm:px-4 md:px-6 pt-2 pb-24 h-[calc(100vh-80px)] flex flex-col' 
-            : 'max-w-5xl px-4 sm:px-6 pt-4 sm:pt-6 pb-28'
+            ? `max-w-full px-0 sm:px-4 md:px-6 pt-0 sm:pt-2 ${
+                isChatInputFocused ? 'pb-0' : 'pb-[4.75rem]'
+              } sm:pb-24 flex-1 h-full min-h-0 flex flex-col overflow-hidden transition-[padding] duration-200` 
+            : 'max-w-5xl px-3 sm:px-6 pt-3 sm:pt-6 pb-20 sm:pb-28'
         }`}>
           <Suspense fallback={<div className="p-12 text-center flex items-center justify-center"><div className="w-8 h-8 border-4 border-[#93B733] border-t-transparent rounded-full animate-spin" /></div>}>
             {activeAction === 'chat' && <PGChat pgInfo={pgInfo} onBack={handleBack} />}
@@ -393,7 +490,11 @@ export default function MyPG() {
 
         {/* Bottom macOS Dock */}
         {hasEnrolledPG && (
-          <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center pointer-events-none">
+          <div className={`fixed bottom-1.5 sm:bottom-4 left-0 right-0 z-40 flex justify-center pointer-events-none pb-[env(safe-area-inset-bottom,0px)] transition-all duration-300 ${
+            activeAction === 'chat' && isChatInputFocused 
+              ? 'translate-y-36 opacity-0 pointer-events-none' 
+              : 'translate-y-0 opacity-100'
+          }`}>
             <div className="pointer-events-auto">
               <MacOSDock apps={DOCK_APPS} variant="resident" onAppClick={handleDockClick} openApps={[activeAction]} />
             </div>
@@ -495,7 +596,7 @@ export default function MyPG() {
         {hasEnrolledPG && pgInfo ? (
           <div className="space-y-4 animate-in fade-in duration-300">
             {/* 3-Card Balanced Single View Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
               
               {/* CARD 1: STAY & ROOM DETAILS */}
               <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#10141e] border border-gray-200/80 dark:border-white/10 shadow-sm flex flex-col justify-between transition-all">
@@ -686,6 +787,114 @@ export default function MyPG() {
                 </div>
               </div>
 
+            
+{/* CARD 4: PG STAFF & HELPDESK */}
+              <div className="p-3 sm:p-5 rounded-2xl sm:rounded-3xl bg-white dark:bg-[#10141e] border border-gray-200/80 dark:border-white/10 shadow-xs flex flex-col justify-between transition-all">
+                {/* Header (Clickable on Mobile) */}
+                <div 
+                  onClick={() => toggleCard('staff')}
+                  className="w-full flex items-center justify-between cursor-pointer md:cursor-default select-none"
+                >
+                  <div className="flex items-center gap-2.5 sm:gap-3">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                      <Users size={16} className="sm:w-5 sm:h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white">PG Staff</h3>
+                      <p className="text-[10px] sm:text-[11px] font-medium text-gray-400">Cook, Guards & Tech</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] sm:text-[10px] font-black uppercase">
+                      {pgStaff.length > 0 ? `${pgStaff.length} On Duty` : "Staff"}
+                    </span>
+                    <button 
+                      type="button" 
+                      className="md:hidden p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-transform duration-300"
+                      aria-label="Toggle details"
+                    >
+                      <ChevronDown size={16} className={`transform transition-transform duration-300 ${openCards.staff ? 'rotate-180 text-amber-500' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Collapsible Content */}
+                <div className={`${openCards.staff ? 'block' : 'hidden'} md:block pt-3 border-t border-gray-100 dark:border-white/5 md:border-0 md:pt-4 space-y-2.5 sm:space-y-4`}>
+                  {staffLoading ? (
+                    <div className="py-4 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
+                      <div className="w-3.5 h-3.5 border-2 border-[#93B733] border-t-transparent rounded-full animate-spin" />
+                      <span>Loading...</span>
+                    </div>
+                  ) : pgStaff.length === 0 ? (
+                    <div className="py-2.5 text-center">
+                      <p className="text-xs text-gray-400">No staff members listed yet.</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">Contact owner for support.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {pgStaff.slice(0, 2).map((member, idx) => {
+                        const roleCfg = getStaffRoleStyle(member.role);
+                        const avatar = formatStaffAvatar(member.image_url);
+                        const cleanPhone = (member.phone || "").replace(/[^0-9+]/g, "");
+                        const cleanWa = (member.whatsapp || member.phone || "").replace(/[^0-9]/g, "");
+
+                        return (
+                          <div key={member.id || member._id || idx} className="p-1.5 sm:p-2 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-white/5 flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg overflow-hidden bg-gray-200 dark:bg-white/10 shrink-0 flex items-center justify-center text-xs font-bold">
+                                {avatar ? (
+                                  <img src={avatar} alt={member.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                ) : (
+                                  roleCfg.icon || member.name.charAt(0)
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate">{member.name}</p>
+                                <span className={`inline-block text-[9px] font-semibold px-1 py-0.2 rounded border ${roleCfg.color} truncate`}>
+                                  {roleCfg.icon} {member.role}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              {cleanPhone && (
+                                <a
+                                  href={`tel:${cleanPhone}`}
+                                  title={`Call ${member.name}`}
+                                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 flex items-center justify-center transition"
+                                >
+                                  <Phone size={11} />
+                                </a>
+                              )}
+                              {cleanWa && (
+                                <a
+                                  href={`https://wa.me/${cleanWa}?text=${encodeURIComponent(`Hi ${member.name}, I am a resident at ${pgInfo.title || pgInfo.pg_name || 'the PG'}.`)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={`WhatsApp ${member.name}`}
+                                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20 flex items-center justify-center transition"
+                                >
+                                  <MessageCircle size={11} />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowStaffModal(true); }}
+                    className="w-full py-2 sm:py-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 text-amber-600 dark:text-amber-400 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Users size={13} />
+                    <span>{pgStaff.length > 2 ? `View All ${pgStaff.length} Staff` : 'View PG Staff'}</span>
+                  </button>
+                </div>
+              </div>
+
+            
             </div>
 
             {/* Bottom Quick Feature Summary Pill Bar */}
@@ -775,9 +984,138 @@ export default function MyPG() {
         )}
       </main>
 
+      {/* ── PG STAFF DIRECTORY MODAL (Mobile-Optimized) ── */}
+      {showStaffModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-xl max-h-[88vh] rounded-2xl sm:rounded-3xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-white/10 shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-3.5 py-2.5 sm:px-6 sm:py-3.5 border-b border-gray-100 dark:border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Users size={16} className="sm:w-5 sm:h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white">PG Staff Directory</h3>
+                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                    {pgInfo?.title || pgInfo?.pg_name || "Accommodation"} • {pgStaff.length} On Duty
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowStaffModal(false)}
+                className="w-7 h-7 rounded-full bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 text-gray-600 dark:text-gray-300 flex items-center justify-center transition cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-3 sm:p-5 overflow-y-auto space-y-2.5">
+              {pgStaff.length === 0 ? (
+                <div className="text-center py-8">
+                  <Users size={28} className="mx-auto text-gray-400 mb-2" />
+                  <p className="text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-300">No staff members registered yet</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Please reach out directly to the PG owner.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {pgStaff.map((staff, idx) => {
+                    const roleCfg = getStaffRoleStyle(staff.role);
+                    const avatar = formatStaffAvatar(staff.image_url);
+                    const cleanPhone = (staff.phone || "").replace(/[^0-9+]/g, "");
+                    const cleanWa = (staff.whatsapp || staff.phone || "").replace(/[^0-9]/g, "");
+
+                    return (
+                      <div
+                        key={staff.id || staff._id || idx}
+                        className="rounded-xl sm:rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.02] p-2.5 sm:p-3.5 flex flex-col justify-between space-y-2 hover:border-[#93B733]/50 transition"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl overflow-hidden bg-gray-200 dark:bg-white/10 shrink-0 flex items-center justify-center text-sm font-black border border-gray-200 dark:border-white/10">
+                            {avatar ? (
+                              <img
+                                src={avatar}
+                                alt={staff.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                                }}
+                              />
+                            ) : null}
+                            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-[#93B733]/20 to-emerald-500/20 text-gray-700 dark:text-gray-200 ${avatar ? "hidden" : "flex"}`}>
+                              {roleCfg.icon || staff.name.charAt(0)}
+                            </div>
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white truncate">
+                              {staff.name}
+                            </h4>
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border mt-0.5 ${roleCfg.color}`}>
+                              <span>{roleCfg.icon}</span>
+                              <span className="truncate">{staff.role}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {staff.timings && (
+                          <div className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-400 bg-white dark:bg-black/20 px-2 py-1 rounded-lg border border-gray-100 dark:border-white/5">
+                            <Clock size={11} className="text-[#93B733] shrink-0" />
+                            <span className="truncate">{staff.timings}</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1.5 pt-1 border-t border-gray-200/60 dark:border-white/5">
+                          {cleanPhone ? (
+                            <a
+                              href={`tel:${cleanPhone}`}
+                              className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition flex items-center justify-center gap-1"
+                            >
+                              <Phone size={11} />
+                              <span>Call</span>
+                            </a>
+                          ) : (
+                            <span className="text-[11px] text-gray-400">No phone</span>
+                          )}
+
+                          {cleanWa ? (
+                            <a
+                              href={`https://wa.me/${cleanWa}?text=${encodeURIComponent(`Hi ${staff.name}, I am a resident at ${pgInfo?.title || pgInfo?.pg_name || 'the PG'}.`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 py-1.5 px-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-bold transition flex items-center justify-center gap-1 shadow-xs"
+                            >
+                              <MessageCircle size={11} />
+                              <span>WhatsApp</span>
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-3.5 py-2.5 bg-gray-50 dark:bg-black/30 border-t border-gray-100 dark:border-white/10 flex items-center justify-between text-[11px] text-gray-500">
+              <span className="truncate max-w-[200px] sm:max-w-none">Direct staff directory for residents</span>
+              <button
+                onClick={() => setShowStaffModal(false)}
+                className="px-3 py-1 rounded-lg bg-gray-200 dark:bg-white/10 hover:bg-gray-300 text-gray-800 dark:text-gray-200 font-bold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      
       {/* ── BOTTOM MACOS DOCK (All 7 Features from Image) ── */}
       {hasEnrolledPG && (
-        <div className="fixed bottom-4 left-0 right-0 z-40 flex justify-center pointer-events-none">
+        <div className="fixed bottom-1.5 sm:bottom-4 left-0 right-0 z-40 flex justify-center pointer-events-none pb-[env(safe-area-inset-bottom,0px)]">
           <div className="pointer-events-auto">
             <MacOSDock apps={DOCK_APPS} variant="resident" onAppClick={handleDockClick} openApps={activeAction ? [activeAction] : ['/my-pg']} />
           </div>

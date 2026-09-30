@@ -9,6 +9,45 @@ body,
   max-width: 100%;
   background: #FAF9F5;
   color: #1a1a1a;
+  text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* On mobile (< 1024px): keep mobile font rendering completely untouched */
+@media (max-width: 1023px) {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* On laptop & desktop (>= 1024px): Crystal-clear sharp subpixel text rendering */
+@media (min-width: 1024px) {
+  html,
+  body {
+    -webkit-font-smoothing: auto !important;
+    -moz-osx-font-smoothing: auto !important;
+    text-rendering: optimizeLegibility !important;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+
+  /* Make SVG icons and line graphics crisp without pixel blur */
+  svg {
+    shape-rendering: geometricPrecision;
+  }
+
+  /* Prevent Chromium rasterization texture blur during transforms/hovers on laptop displays */
+  .transform,
+  [class*="hover:-translate"],
+  [class*="hover:scale"] {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+  }
+
+  img {
+    image-rendering: auto;
+  }
 }
 
 /* Pure Black Dark Theme for Whole Application */
@@ -24,7 +63,8 @@ html.dark [class*="bg-[#F0F2F5]"],
 html.dark [class*="bg-[#f8f9f3]"],
 html.dark [class*="bg-[#f0f1eb]"],
 html.dark [class*="from-[#f8f9f3]"],
-html.dark [class*="to-[#f0f1eb]"] {
+html.dark [class*="to-[#f0f1eb]"],
+html.dark .min-h-screen:not([class*="bg-white"]):not([class*="bg-gray-"]):not([class*="rounded-"]) {
   background-color: #000000 !important;
   background-image: none !important;
   color: #ffffff !important;
@@ -63,8 +103,7 @@ html.dark .mac-os-dock-container {
   -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
 }
 
-html.dark header nav:not(.mobile-subnav),
-html.dark nav:not(.mobile-subnav) {
+html.dark header nav {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
@@ -72,10 +111,22 @@ html.dark nav:not(.mobile-subnav) {
   -webkit-backdrop-filter: none !important;
 }
 
-/* Mobile sub-header navigation & capsules: pure black (#000000) */
-.mobile-subnav,
+/* Owner & Mobile Bottom Navigation Bars: Solid background in Light (#FFFFFF) and Dark (#000000) Mode */
+.owner-bottom-nav,
+nav.owner-bottom-nav {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+}
+
+html.dark .owner-bottom-nav,
+html.dark nav.owner-bottom-nav {
+  background-color: #000000 !important;
+  background: #000000 !important;
+  border-top-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Mobile sub-header navigation & capsules: pure black (#000000) in dark mode */
 html.dark .mobile-subnav,
-nav.mobile-subnav,
 html.dark nav.mobile-subnav {
   background: #000000 !important;
   background-color: #000000 !important;
@@ -85,9 +136,8 @@ html.dark nav.mobile-subnav {
 }
 
 @media (max-width: 639px) {
-  header,
   html.dark header,
-  header.sticky {
+  html.dark header.sticky {
     border: none !important;
     border-bottom: none !important;
     border-bottom-width: 0px !important;
@@ -117,6 +167,7 @@ html.dark h5,
 html.dark h6,
 html.dark label,
 html.dark [class*="text-[#0D3A1D]"],
+html.dark [class*="text-[#3A2935]"],
 html.dark [class*="text-gray-900"],
 html.dark [class*="text-gray-800"],
 html.dark [class*="text-gray-700"] {
@@ -130,9 +181,57 @@ html.dark [class*="text-gray-400"] {
   color: #a3a3a3 !important;
 }
 
-html.dark [class*="text-[#93B733]"],
-html.dark [class*="text-[#4E700F]"] {
-  color: #93B733 !important;
+/* High-contrast green text in dark mode:
+   Electric neon lime (#bbf246) for 12:1+ AAA contrast on dark surfaces */
+html.dark [class~="text-[#93B733]"],
+html.dark [class~="text-[#4E700F]"],
+html.dark [class*="text-[#93B733]"]:not([class*="bg-[#93B733]"]),
+html.dark [class*="text-[#4E700F]"]:not([class*="bg-[#93B733]"]) {
+  color: #bbf246 !important;
+}
+
+/* Solid bright lime-green buttons & badges: black text (scoped strictly without cascading *) */
+[class~="bg-[#93B733]"],
+button.bg-\[\#93B733\],
+a.bg-\[\#93B733\],
+.btn-lime {
+  color: #000000 !important;
+}
+
+[class~="bg-[#93B733]"] svg,
+button.bg-\[\#93B733\] svg,
+a.bg-\[\#93B733\] svg,
+.btn-lime svg {
+  stroke: #000000 !important;
+}
+
+/* Translucent green containers & badges in dark mode (exact classes only, never page wrappers or selection classes) */
+html.dark [class~="bg-[#93B733]/5"],
+html.dark [class~="bg-[#93B733]/10"],
+html.dark [class~="bg-[#93B733]/15"],
+html.dark [class~="bg-[#93B733]/20"],
+html.dark [class~="bg-[#93B733]/25"],
+html.dark [class~="bg-[#93B733]/30"],
+html.dark [class~="bg-[#93B733]/40"] {
+  background-color: rgba(187, 242, 70, 0.1) !important;
+  border-color: rgba(187, 242, 70, 0.3) !important;
+}
+html.dark [class~="bg-[#93B733]/5"] [class*="text-[#93B733]"],
+html.dark [class~="bg-[#93B733]/10"] [class*="text-[#93B733]"],
+html.dark [class~="bg-[#93B733]/15"] [class*="text-[#93B733]"],
+html.dark [class~="bg-[#93B733]/20"] [class*="text-[#93B733]"],
+html.dark [class~="bg-[#93B733]/30"] [class*="text-[#93B733]"],
+html.dark [class~="bg-[#93B733]/5"] [class*="text-[#4E700F]"],
+html.dark [class~="bg-[#93B733]/10"] [class*="text-[#4E700F]"],
+html.dark [class~="bg-[#93B733]/15"] [class*="text-[#4E700F]"],
+html.dark [class~="bg-[#93B733]/20"] [class*="text-[#4E700F]"],
+html.dark [class~="bg-[#93B733]/30"] [class*="text-[#4E700F]"],
+html.dark [class~="bg-[#93B733]/5"] [class*="text-[#0D3A1D]"],
+html.dark [class~="bg-[#93B733]/10"] [class*="text-[#0D3A1D]"],
+html.dark [class~="bg-[#93B733]/15"] [class*="text-[#0D3A1D]"],
+html.dark [class~="bg-[#93B733]/20"] [class*="text-[#0D3A1D]"],
+html.dark [class~="bg-[#93B733]/30"] [class*="text-[#0D3A1D]"] {
+  color: #bbf246 !important;
 }
 
 /* Inputs, buttons, selects */
@@ -560,5 +659,4 @@ html.dark .events-dock-container {
     width: calc((100cqw - 36px) / 4);
   }
 }
-
 

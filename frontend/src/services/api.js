@@ -26,4 +26,34 @@ API.interceptors.request.use((req) => {
   return req;
 });
 
+// Handle expired / invalid token responses automatically
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const msg = error.response?.data?.message || "";
+      const isTokenIssue =
+        msg.includes("Invalid or expired token") ||
+        msg.includes("Not authorized") ||
+        msg.includes("jwt expired");
+      if (isTokenIssue) {
+        try {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+        } catch {}
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("dormn_session_expired", { detail: msg }));
+          const currentPath = window.location.pathname;
+          // Avoid redirect loop if already on auth page
+          if (!currentPath.startsWith("/auth")) {
+            const redirectUrl = encodeURIComponent(currentPath + window.location.search);
+            window.location.href = `/auth?redirect=${redirectUrl}&expired=true`;
+          }
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default API;

@@ -15,11 +15,6 @@ const razorpayInstance = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-const PLAN_PRICES = {
-  standard: { monthly: 999, yearly: 799 },
-  pro: { monthly: 1999, yearly: 1599 },
-};
-
 // Tolerant read: native values pass through, legacy JSON strings are parsed.
 const parseMaybeJson = (v) =>
   typeof v === "string"
@@ -37,12 +32,98 @@ const datediff = (a, b) => {
   return Math.round((ua - ub) / 86400000);
 };
 
+export const calculateOwnerPlanPricing = (accountAgeDays = 0) => {
+  const isPhase2 = accountAgeDays > 30 && accountAgeDays <= 120; // Months 2, 3, 4: 50% discount
+  const isPhase3 = accountAgeDays > 120 && accountAgeDays <= 180; // Months 5, 6: 25% discount
+
+  const cycles = [
+    { id: 'monthly', months: 1, label: 'Monthly' },
+    { id: '3months', months: 3, label: '3 Months' },
+    { id: '6months', months: 6, label: '6 Months' },
+    { id: 'yearly', months: 12, label: 'Yearly' },
+  ];
+
+  const plans = {
+    free: {
+      monthlyEffective: 0,
+      originalMonthly: null,
+      totalAmount: 0,
+      label: 'Free',
+      discountBadge: null,
+      totalLabel: '30-day free trial • 1 PG listing',
+    },
+    standard: {},
+    pro: {},
+  };
+
+  const planBases = { standard: 999, pro: 1999 };
+
+  ['standard', 'pro'].forEach((planId) => {
+    const base = planBases[planId];
+    plans[planId] = {};
+
+    cycles.forEach((cycle) => {
+      let effectiveMonthly = base;
+      let originalMonthly = null;
+      let discountBadge = null;
+      let totalLabel = '';
+
+      if (isPhase2) {
+        effectiveMonthly = Math.round(base * 0.50);
+        originalMonthly = base;
+        discountBadge = '50% OFF';
+        const total = effectiveMonthly * cycle.months;
+        totalLabel = `Billed ₹${total.toLocaleString()} for ${cycle.months} month${cycle.months > 1 ? 's' : ''} (50% Launch Discount)`;
+      } else if (isPhase3) {
+        effectiveMonthly = Math.round(base * 0.75);
+        originalMonthly = base;
+        discountBadge = '25% OFF';
+        const total = effectiveMonthly * cycle.months;
+        totalLabel = `Billed ₹${total.toLocaleString()} for ${cycle.months} month${cycle.months > 1 ? 's' : ''} (25% Launch Discount)`;
+      } else {
+        if (cycle.id === '3months') {
+          effectiveMonthly = Math.round(base * 0.95);
+          originalMonthly = base;
+          discountBadge = '5% OFF';
+          totalLabel = `Billed ₹${(effectiveMonthly * 3).toLocaleString()} for 3 months (Save 5%)`;
+        } else if (cycle.id === '6months') {
+          effectiveMonthly = Math.round(base * 0.90);
+          originalMonthly = base;
+          discountBadge = '10% OFF';
+          totalLabel = `Billed ₹${(effectiveMonthly * 6).toLocaleString()} for 6 months (Save 10%)`;
+        } else if (cycle.id === 'yearly') {
+          effectiveMonthly = Math.round(base * 0.80);
+          originalMonthly = base;
+          discountBadge = '20% OFF';
+          totalLabel = `Billed ₹${(effectiveMonthly * 12).toLocaleString()} for 1 year (Save 20%)`;
+        } else {
+          effectiveMonthly = base;
+          originalMonthly = null;
+          discountBadge = null;
+          totalLabel = 'Billed monthly';
+        }
+      }
+
+      plans[planId][cycle.id] = {
+        monthlyEffective: effectiveMonthly,
+        originalMonthly,
+        totalAmount: effectiveMonthly * cycle.months,
+        label: `₹${effectiveMonthly.toLocaleString()}/m`,
+        discountBadge,
+        totalLabel,
+      };
+    });
+  });
+
+  return plans;
+};
+
 export const getMySubscription = async (req, res) => {
   try {
     const ownerId = req.user.id;
     const user = await User.findById(ownerId)
       .select(
-        "subscription_tier subscription_status subscription_cycle subscription_started_at subscription_expires_at max_pg_listings custom_plan_config"
+        "subscription_tier subscription_status subscription_cycle subscription_started_at subscription_expires_at max_pg_listings custom_plan_config created_at"
       )
       .lean();
 
@@ -51,6 +132,35 @@ export const getMySubscription = async (req, res) => {
     }
 
     const current_pg_count = await PG.countDocuments({ owner_id: ownerId });
+
+    // Calculate owner account tenure & progressive promo discount phase
+    const registrationDate = user.created_at || user.subscription_started_at || new Date();
+    const accountAgeDays = Math.max(0, Math.floor((Date.now() - new Date(registrationDate).getTime()) / (1000 * 60 * 60 * 24)));
+
+    let promoPhase = 'phase1';
+    let promoDiscountPercent = 100;
+    let promoLabel = 'Month 1: 100% Free Trial';
+    let phaseDaysLeft = Math.max(0, 30 - accountAgeDays);
+
+    if (accountAgeDays > 180) {
+      promoPhase = 'standard';
+      promoDiscountPercent = 0;
+      promoLabel = 'Standard Owner Rates';
+      phaseDaysLeft = null;
+    } else if (accountAgeDays > 120) {
+      promoPhase = 'phase3';
+      promoDiscountPercent = 25;
+      promoLabel = 'Months 5 & 6: 25% Special Discount';
+      phaseDaysLeft = Math.max(0, 180 - accountAgeDays);
+    } else if (accountAgeDays > 30) {
+      promoPhase = 'phase2';
+      promoDiscountPercent = 50;
+      promoLabel = 'Months 2, 3, 4: 50% Special Discount';
+      phaseDaysLeft = Math.max(0, 120 - accountAgeDays);
+    }
+
+    // Fully authoritative server-calculated pricing
+    const calculatedPlans = calculateOwnerPlanPricing(accountAgeDays);
 
     const subscriptionData = {
       tier: user.subscription_tier,
@@ -62,6 +172,12 @@ export const getMySubscription = async (req, res) => {
       max_pg_listings: user.max_pg_listings,
       custom_plan_config: parseMaybeJson(user.custom_plan_config),
       current_pg_count,
+      account_age_days: accountAgeDays,
+      promo_phase: promoPhase,
+      promo_discount_percent: promoDiscountPercent,
+      promo_label: promoLabel,
+      phase_days_left: phaseDaysLeft,
+      calculated_plans: calculatedPlans,
     };
 
     res.json({ success: true, data: subscriptionData });
@@ -75,26 +191,58 @@ export const createSubscriptionOrder = async (req, res) => {
     const { plan, cycle, customConfig } = req.body;
     const ownerId = req.user.id;
 
-    if (!['monthly', 'yearly'].includes(cycle)) {
+    const normalizedCycle = cycle === '3months' ? '3months' : cycle === 'three_months' ? '3months' : cycle === '6months' ? '6months' : cycle === 'six_months' ? '6months' : cycle === 'yearly' ? 'yearly' : 'monthly';
+
+    if (!['monthly', '3months', 'three_months', '6months', 'six_months', 'yearly'].includes(cycle)) {
       return res.status(400).json({ message: 'Invalid cycle' });
     }
 
-    let monthlyPrice = 0;
+    const user = await User.findById(ownerId).select('created_at subscription_started_at').lean();
+    const registrationDate = user?.created_at || user?.subscription_started_at || new Date();
+    const accountAgeDays = Math.max(0, Math.floor((Date.now() - new Date(registrationDate).getTime()) / (1000 * 60 * 60 * 24)));
+
+    // Pure server-side calculated pricing - immune to client-side tampering/DevTools modifications
+    const calculatedPlans = calculateOwnerPlanPricing(accountAgeDays);
+
+    let amount = 0;
     if (plan === 'standard' || plan === 'pro') {
-      monthlyPrice = PLAN_PRICES[plan][cycle];
-    } else if (plan === 'custom') {
-      const maxListings = customConfig?.maxListings || 1;
-      monthlyPrice = 499 + (Math.max(0, maxListings - 1) * 100);
-      if (customConfig?.priorityPlacement) monthlyPrice += 300;
-      if (customConfig?.analytics) monthlyPrice += 200;
-      if (cycle === 'yearly') {
-        monthlyPrice = Math.round(monthlyPrice * 0.8); // 20% discount
+      const planConfig = calculatedPlans[plan]?.[normalizedCycle];
+      if (!planConfig) {
+        return res.status(400).json({ message: 'Invalid plan or billing cycle' });
       }
+      amount = planConfig.totalAmount;
+    } else if (plan === 'custom') {
+      const isPhase2 = accountAgeDays > 30 && accountAgeDays <= 120;
+      const isPhase3 = accountAgeDays > 120 && accountAgeDays <= 180;
+      const maxListings = customConfig?.maxListings || 1;
+      const baseMonthly = 499 + (Math.max(0, maxListings - 1) * 100);
+      let addOn = 0;
+      if (customConfig?.priorityPlacement) addOn += 300;
+      if (customConfig?.analytics) addOn += 200;
+      const totalBase = baseMonthly + addOn;
+
+      let monthlyPrice = totalBase;
+      if (isPhase2) {
+        monthlyPrice = Math.round(totalBase * 0.50);
+      } else if (isPhase3) {
+        monthlyPrice = Math.round(totalBase * 0.75);
+      } else if (normalizedCycle === '3months') {
+        monthlyPrice = Math.round(totalBase * 0.95);
+      } else if (normalizedCycle === '6months') {
+        monthlyPrice = Math.round(totalBase * 0.90);
+      } else if (normalizedCycle === 'yearly') {
+        monthlyPrice = Math.round(totalBase * 0.80);
+      }
+
+      let monthsCount = 1;
+      if (normalizedCycle === '3months') monthsCount = 3;
+      else if (normalizedCycle === '6months') monthsCount = 6;
+      else if (normalizedCycle === 'yearly') monthsCount = 12;
+
+      amount = monthlyPrice * monthsCount;
     } else {
       return res.status(400).json({ message: 'Invalid plan' });
     }
-
-    const amount = cycle === 'yearly' ? monthlyPrice * 12 : monthlyPrice;
 
     const options = {
       amount: amount * 100, // amount in paise
@@ -106,8 +254,12 @@ export const createSubscriptionOrder = async (req, res) => {
 
     const validFrom = new Date();
     const validUntil = new Date();
-    if (cycle === 'yearly') {
+    if (normalizedCycle === 'yearly') {
       validUntil.setFullYear(validUntil.getFullYear() + 1);
+    } else if (normalizedCycle === '6months') {
+      validUntil.setMonth(validUntil.getMonth() + 6);
+    } else if (normalizedCycle === '3months') {
+      validUntil.setMonth(validUntil.getMonth() + 3);
     } else {
       validUntil.setMonth(validUntil.getMonth() + 1);
     }
@@ -115,13 +267,12 @@ export const createSubscriptionOrder = async (req, res) => {
     await OwnerSubscription.create({
       owner_id: ownerId,
       plan_name: plan,
-      billing_cycle: cycle,
+      billing_cycle: normalizedCycle,
       amount,
       razorpay_order_id: order.id,
       valid_from: validFrom,
       valid_until: validUntil,
       status: 'created',
-      // custom_plan_config is now stored as a NATIVE value (was string-serialised).
       custom_plan_config: customConfig ? customConfig : null,
     });
 
@@ -184,7 +335,10 @@ export const verifySubscriptionPayment = async (req, res) => {
       }
 
       const cycle = subscription.billing_cycle;
-      const days = cycle === 'yearly' ? 365 : 30;
+      let days = 30;
+      if (cycle === 'yearly') days = 365;
+      else if (cycle === '6months' || cycle === 'six_months') days = 180;
+      else if (cycle === '3months' || cycle === 'three_months') days = 90;
 
       const startedAt = new Date();
       const expiresAt = new Date(startedAt.getTime() + days * 24 * 60 * 60 * 1000);

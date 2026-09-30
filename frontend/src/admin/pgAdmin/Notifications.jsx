@@ -81,25 +81,80 @@ const Notifications = () => {
         ? rawRequests.filter(r => myPgIds.has(String(r.pg_id)) || myPgTitles.has((r.pg_title || '').toLowerCase().trim()))
         : [];
 
-      // Transform real MySQL database bookings into notifications
-      const mappedBookings = dbBookings.map((b) => ({
-        id: `booking-${b.id}`,
-        rawId: b.id,
-        type: "booking",
-        title: `Booking Request #${b.id}`,
-        category: "Bookings",
-        senderName: b.student_name || b.student_email?.split("@")[0] || "Student Applicant",
-        senderEmail: b.student_email || "N/A",
-        senderPhone: b.student_phone || "+91 98765 43210",
-        senderRole: "Student Applicant",
-        avatarColor: b.status === "approved" ? "from-emerald-500 to-teal-500" : b.status === "rejected" ? "from-rose-500 to-pink-500" : "from-blue-500 to-cyan-500",
-        pgName: b.pg_title || "Your PG Listing",
-        location: b.city || "Noida",
-        time: b.created_at ? new Date(b.created_at).toLocaleDateString('en-IN') : "Real-time DB",
-        status: b.status || "pending",
-        unread: b.status === "pending",
-        message: `Hello Owner, I have submitted a booking request for your property '${b.pg_title || "PG Listing"}'. Current database status is: ${b.status?.toUpperCase() || "PENDING"}.`,
-      }));
+      // Deduplicate bookings: only show the latest active booking per student per PG unless user really made multiple separate bookings for different properties
+      const latestBookingsMap = {};
+      for (const b of dbBookings) {
+        if (b.status === "paused") continue;
+        const studentKey = (b.student_email || b.student_name || String(b.student_id || '')).toLowerCase().trim();
+        const pgKey = String(b.pg_id || b.title || b.pg_title || '').toLowerCase().trim();
+        const key = `${studentKey}_${pgKey}`;
+        const bTime = new Date(b.booking_date || b.created_at || 0).getTime() || Number(b.id) || 0;
+        const existingTime = latestBookingsMap[key]
+          ? (new Date(latestBookingsMap[key].booking_date || latestBookingsMap[key].created_at || 0).getTime() || Number(latestBookingsMap[key].id) || 0)
+          : -1;
+        if (!latestBookingsMap[key] || bTime > existingTime) {
+          latestBookingsMap[key] = b;
+        }
+      }
+      const deduplicatedBookings = Object.values(latestBookingsMap);
+
+      let readNotifIds = new Set();
+      try {
+        readNotifIds = new Set(JSON.parse(localStorage.getItem('dormn_read_owner_notifications') || '[]'));
+      } catch {}
+
+      // Transform real MySQL database bookings into notifications detailing what is coming
+      const mappedBookings = deduplicatedBookings.map((b) => {
+        const isPending = b.status === "pending";
+        const isApproved = b.status === "approved";
+        const isCancelled = b.status === "cancelled";
+        const isRejected = b.status === "rejected";
+
+        const roomInfo = b.selected_room_type || "Room";
+        const rentInfo = b.booked_price || b.price ? `₹${Number(b.booked_price || b.price).toLocaleString('en-IN')}/mo` : "";
+        const formattedDate = b.booking_date ? new Date(b.booking_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : (b.created_at ? new Date(b.created_at).toLocaleDateString('en-IN') : "Recent");
+
+        let notifTitle = `Booking Request #${b.id}`;
+        let whatIsComing = "";
+        if (isPending) {
+          notifTitle = `Incoming Tenant: ${b.student_name || "Applicant"}`;
+          whatIsComing = `Incoming move-in request for ${roomInfo}${rentInfo ? ` (${rentInfo})` : ""}. Student applied on ${formattedDate}. Review & approve application.`;
+        } else if (isApproved) {
+          notifTitle = `Approved Tenant: ${b.student_name || "Applicant"}`;
+          whatIsComing = `Confirmed application for ${roomInfo}${rentInfo ? ` (${rentInfo})` : ""}. Student is authorized to pay rent and move in.`;
+        } else if (isCancelled) {
+          notifTitle = `Cancelled Request #${b.id}: ${b.student_name || "Applicant"}`;
+          whatIsComing = `Booking application for ${roomInfo} was cancelled by applicant on ${formattedDate}.${b.cancellation_reason ? ` Reason: ${b.cancellation_reason}` : ""}`;
+        } else if (isRejected) {
+          notifTitle = `Declined Request #${b.id}: ${b.student_name || "Applicant"}`;
+          whatIsComing = `Booking application for ${roomInfo} was declined by owner.`;
+        } else {
+          notifTitle = `Booking #${b.id} (${b.status})`;
+          whatIsComing = `Application status: ${b.status?.toUpperCase() || "UPDATED"}.`;
+        }
+
+        return {
+          id: `booking-${b.id}`,
+          rawId: b.id,
+          type: "booking",
+          title: notifTitle,
+          category: "Bookings",
+          senderName: b.student_name || b.student_email?.split("@")[0] || "Student Applicant",
+          senderEmail: b.student_email || "N/A",
+          senderPhone: b.student_phone || "N/A",
+          senderRole: isApproved ? "Confirmed Tenant" : "Student Applicant",
+          avatarColor: isApproved ? "from-emerald-500 to-teal-500" : isCancelled || isRejected ? "from-rose-500 to-pink-500" : "from-blue-500 to-cyan-500",
+          pgName: b.pg_title || b.title || "Your PG Listing",
+          location: b.city || "Jodhpur",
+          time: formattedDate,
+          status: b.status || "pending",
+          unread: isPending && !readNotifIds.has(`booking-${b.id}`),
+          message: whatIsComing,
+          roomType: roomInfo,
+          rent: rentInfo,
+          studentMessage: b.message || ""
+        };
+      });
 
       // Transform maintenance requests into notifications
       const mappedRequests = dbRequests.map((r) => ({
@@ -120,7 +175,7 @@ const Notifications = () => {
         location: "Current Resident",
         time: r.filed_at ? new Date(r.filed_at).toLocaleDateString('en-IN') : "Real-time DB",
         status: r.status || "open",
-        unread: r.status === "open",
+        unread: r.status === "open" && !readNotifIds.has(`req-${r.id}`),
         message: r.description || "Student requested maintenance assistance.",
         resolutionNote: r.resolution_note || ""
       }));
@@ -230,6 +285,25 @@ const Notifications = () => {
     }
   };
 
+  const markNotificationRead = (notifId) => {
+    try {
+      const readIds = new Set(JSON.parse(localStorage.getItem('dormn_read_owner_notifications') || '[]'));
+      readIds.add(String(notifId));
+      localStorage.setItem('dormn_read_owner_notifications', JSON.stringify([...readIds]));
+      setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, unread: false } : n));
+      window.dispatchEvent(new CustomEvent('dormn_seen_counts_updated'));
+    } catch {}
+  };
+
+  const handleMarkAllRead = () => {
+    try {
+      const allIds = notifications.map(n => String(n.id));
+      localStorage.setItem('dormn_read_owner_notifications', JSON.stringify(allIds));
+      setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+      window.dispatchEvent(new CustomEvent('dormn_seen_counts_updated'));
+    } catch {}
+  };
+
   const unreadCount = notifications.filter((n) => n.unread).length;
   const maintenanceCount = notifications.filter((n) => n.type === "maintenance" && n.status === "open").length;
 
@@ -276,14 +350,25 @@ const Notifications = () => {
           ))}
         </div>
 
-        {/* Refresh Sync Button */}
-        <button
-          onClick={fetchLiveNotifications}
-          className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition shrink-0"
-        >
-          <RefreshCw size={14} className={loading ? "animate-spin text-[#93B733]" : "text-[#93B733]"} />
-          <span>Sync Database</span>
-        </button>
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 shrink-0">
+          {unreadCount > 0 && (
+            <button
+              onClick={handleMarkAllRead}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3.5 py-2.5 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
+            >
+              <CheckCircle2 size={14} className="text-[#93B733]" />
+              <span>Mark All Read</span>
+            </button>
+          )}
+          <button
+            onClick={fetchLiveNotifications}
+            className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-2.5 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition shrink-0 cursor-pointer"
+          >
+            <RefreshCw size={14} className={loading ? "animate-spin text-[#93B733]" : "text-[#93B733]"} />
+            <span>Sync Database</span>
+          </button>
+        </div>
 
       </div>
 
@@ -309,6 +394,7 @@ const Notifications = () => {
               onClick={() => {
                 setSelectedNotif(notif);
                 setResolutionNote(notif.resolutionNote || "");
+                markNotificationRead(notif.id);
               }}
               className={`group relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 rounded-3xl border p-5 cursor-pointer transition-all duration-200 ${
                 notif.unread

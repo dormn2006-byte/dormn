@@ -1,9 +1,10 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { Eye, EyeOff, KeyRound, Mail, ArrowLeft, CheckCircle2, User, Phone, Lock, ShieldCheck } from "lucide-react";
 import { AuthContext } from "../../context/AuthContext";
 import api from "../../services/api";
 import { GoogleLogin } from "@react-oauth/google";
+import EmailVerificationModal from "../../components/auth/EmailVerificationModal";
 
 const checkPasswordRules = (pwd) => {
   const p = pwd || "";
@@ -20,18 +21,18 @@ const PasswordAuditBox = ({ rules }) => {
   const { validCount, hasMinLength, hasUpper, hasLower, hasNumber } = rules;
   const isStrong = validCount === 4;
   const colorCls = isStrong ? "text-emerald-600" : validCount >= 2 ? "text-amber-600" : "text-rose-500";
-  const label = isStrong ? "Strong (Audit Passed)" : validCount === 3 ? "Good" : validCount === 2 ? "Fair" : "Weak";
+  const label = isStrong ? "Strong" : validCount === 3 ? "Good" : validCount === 2 ? "Fair" : "Weak";
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-3.5 space-y-2 text-xs animate-fadeIn">
-      <div className="flex items-center justify-between font-bold">
-        <span className="text-gray-500 text-[11px] uppercase tracking-wider flex items-center gap-1">
-          <ShieldCheck size={13} className="text-[#0D3A1D]" /> Security Audit
+    <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-2.5 space-y-1.5 text-xs animate-fadeIn transition-all">
+      <div className="flex items-center justify-between text-[11px] font-bold">
+        <span className="text-gray-500 flex items-center gap-1">
+          <ShieldCheck size={12} className="text-[#0D3A1D]" /> Password Strength
         </span>
-        <span className={`text-[11px] font-black ${colorCls}`}>{label}</span>
+        <span className={`font-black ${colorCls}`}>{label}</span>
       </div>
 
-      <div className="h-1.5 w-full rounded-full bg-gray-200 overflow-hidden flex gap-1">
+      <div className="h-1 w-full rounded-full bg-gray-200 overflow-hidden flex gap-1">
         {[1, 2, 3, 4].map((step) => (
           <div
             key={step}
@@ -42,16 +43,16 @@ const PasswordAuditBox = ({ rules }) => {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px]">
+      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 pt-0.5 text-[10px]">
         {[
-          { label: "More than 8 chars", ok: hasMinLength },
+          { label: "> 8 characters", ok: hasMinLength },
           { label: "1 Uppercase (A-Z)", ok: hasUpper },
           { label: "1 Lowercase (a-z)", ok: hasLower },
-          { label: "Any number (0-9)", ok: hasNumber },
+          { label: "1 Number (0-9)", ok: hasNumber },
         ].map((c) => (
-          <div key={c.label} className={`flex items-center gap-1.5 font-semibold ${c.ok ? "text-emerald-600" : "text-gray-400"}`}>
-            <CheckCircle2 size={13} className={c.ok ? "text-emerald-500 shrink-0" : "text-gray-300 shrink-0"} />
-            <span>{c.label}</span>
+          <div key={c.label} className={`flex items-center gap-1 font-semibold ${c.ok ? "text-emerald-600" : "text-gray-400"}`}>
+            <span className="text-[11px] leading-none shrink-0">{c.ok ? "✓" : "○"}</span>
+            <span className="truncate">{c.label}</span>
           </div>
         ))}
       </div>
@@ -107,12 +108,76 @@ export default function Auth() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false);
+  const [pendingAuth, setPendingAuth] = useState(null);
+
+  useEffect(() => {
+    if (searchParams.get("expired") === "true") {
+      setError("Your session has expired. Please log in again to continue.");
+    }
+  }, [searchParams]);
+
   const [formData, setFormData] = useState({ full_name: "", email: "", phone: "", password: "", gender: "" });
 
   const passwordRules = checkPasswordRules(formData.password);
   const resetPasswordRules = checkPasswordRules(newPassword);
 
   const handleChange = (e) => setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  // Safe role-based navigation that prevents student/owner dashboard cross-routing
+  const navigateByRole = (targetUser, customRedirect) => {
+    const isEventAdmin = targetUser.role === "event_admin" || targetUser.role === "event_manager";
+
+    if (customRedirect && customRedirect !== "/auth" && customRedirect !== "/login" && customRedirect !== "/dashboard") {
+      const isOwnerRoute = customRedirect.startsWith("/owner") || customRedirect.startsWith("/admin");
+      const isStudentRoute = customRedirect.startsWith("/student") || customRedirect.startsWith("/my-") || customRedirect.startsWith("/saved-pgs");
+      const isSuperAdminRoute = customRedirect.startsWith("/superadmin") || customRedirect.startsWith("/super-admin");
+
+      if (targetUser.role === "superadmin") {
+        navigate(customRedirect);
+        return;
+      }
+      if (targetUser.role === "owner" && !isStudentRoute && !isSuperAdminRoute) {
+        navigate(customRedirect);
+        return;
+      }
+      if (targetUser.role === "student" && !isOwnerRoute && !isSuperAdminRoute) {
+        navigate(customRedirect);
+        return;
+      }
+    }
+
+    if (isEventAdmin) navigate("/event-admin/dashboard");
+    else if (targetUser.role === "superadmin") navigate("/superadmin/dashboard");
+    else if (targetUser.role === "owner") navigate("/owner/dashboard");
+    else navigate("/student/dashboard");
+  };
+
+  const handleVerificationSuccess = (data) => {
+    const verifiedUser = data?.user || (pendingAuth?.user ? { ...pendingAuth.user, is_email_verified: 1, isEmailVerified: true } : null);
+    const authToken = data?.token || pendingAuth?.token;
+
+    if (verifiedUser && authToken) {
+      if (userRole === "owner" && verifiedUser.role === "student") {
+        setError("This account is registered as a Student. Please select the Student portal to log in.");
+        return;
+      }
+      if (userRole === "student" && verifiedUser.role === "owner") {
+        setError("This account is registered as a Property Owner. Please select the Property Owner portal to log in.");
+        return;
+      }
+
+      login(verifiedUser, authToken);
+      navigateByRole(verifiedUser, redirectParam);
+    }
+  };
+
+  const handleVerificationClose = () => {
+    setShowEmailVerificationModal(false);
+    if (pendingAuth) {
+      setError("Please verify your email address to access your account.");
+    }
+  };
 
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
@@ -127,12 +192,25 @@ export default function Auth() {
       const res = await api.post("/auth/google", {
         token: credentialResponse.credential,
         role: userRole,
-        gender: formData.gender || null
+        gender: formData.gender || null,
+        mode: authMode
       });
 
       if (res.data?.success) {
         const user = res.data.user;
         const isEventAdmin = user.role === "event_admin" || user.role === "event_manager";
+
+        if (userRole === "owner" && user.role === "student") {
+          setError("This account is registered as a Student. Please select the Student portal to log in.");
+          setLoading(false);
+          return;
+        }
+
+        if (userRole === "student" && user.role === "owner") {
+          setError("This account is registered as a Property Owner. Please select the Property Owner portal to log in.");
+          setLoading(false);
+          return;
+        }
 
         if (userRole === "owner" && user.role !== "owner" && user.role !== "superadmin" && !isEventAdmin) {
           setError("Access denied. You do not have owner privileges.");
@@ -141,15 +219,30 @@ export default function Auth() {
         }
 
         login(user, res.data.token);
-        if (redirectParam && redirectParam !== "/auth") navigate(redirectParam);
-        else if (isEventAdmin) navigate("/event-admin/dashboard");
-        else if (user.role === "superadmin") navigate("/superadmin/dashboard");
-        else if (user.role === "owner") navigate("/owner/dashboard");
-        else navigate("/student/dashboard");
+        navigateByRole(user, redirectParam);
       }
     } catch (err) {
       console.error("Google sign-in error:", err);
-      setError(err.response?.data?.message || "Google sign-in failed. Please try again.");
+      const isNotFound = err.response?.status === 404 || err.response?.data?.notFound || err.response?.data?.message?.includes("User not found");
+      const isAlreadyExists = err.response?.status === 409 || err.response?.data?.alreadyExists;
+
+      if (isNotFound && authMode === "login") {
+        const returnedEmail = err.response?.data?.email;
+        const returnedName = err.response?.data?.name;
+        if (returnedEmail) {
+          setFormData((prev) => ({
+            ...prev,
+            email: returnedEmail,
+            full_name: returnedName || prev.full_name,
+          }));
+        }
+        setAuthMode("signup");
+        setError("User not found, try another way. Please sign up to create your account.");
+      } else if (isAlreadyExists) {
+        setError("This email is already in use. Please log in.");
+      } else {
+        setError(err.response?.data?.message || "Google sign-in failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -170,7 +263,26 @@ export default function Auth() {
         setSuccessMessage("6-digit login OTP sent to your email!");
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to send OTP.");
+      const isNotFound = err.response?.status === 404 || err.response?.data?.notFound || err.response?.data?.message?.includes("User not found");
+      if (isNotFound) {
+        setError(
+          <div className="flex flex-col gap-1.5">
+            <span>User not found, try another way.</span>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("signup");
+                setError("");
+              }}
+              className="text-left font-black text-[#93B733] hover:text-[#0D3A1D] underline cursor-pointer"
+            >
+              Don't have an account? Sign up here &rarr;
+            </button>
+          </div>
+        );
+      } else {
+        setError(err.response?.data?.message || "Failed to send OTP.");
+      }
     } finally {
       setLoading(false);
     }
@@ -242,6 +354,18 @@ export default function Auth() {
           const user = res.data.user;
           const isEventAdmin = user.role === "event_admin" || user.role === "event_manager";
 
+          if (userRole === "owner" && user.role === "student") {
+            setError("This account is registered as a Student. Please select the Student portal to log in.");
+            setLoading(false);
+            return;
+          }
+
+          if (userRole === "student" && user.role === "owner") {
+            setError("This account is registered as a Property Owner. Please select the Property Owner portal to log in.");
+            setLoading(false);
+            return;
+          }
+
           if (userRole === "owner" && user.role !== "owner" && user.role !== "superadmin" && !isEventAdmin) {
             setError("Access denied. You do not have owner privileges.");
             setLoading(false);
@@ -249,11 +373,7 @@ export default function Auth() {
           }
 
           login(user, res.data.token);
-          if (redirectParam && redirectParam !== "/auth") navigate(redirectParam);
-          else if (isEventAdmin) navigate("/event-admin/dashboard");
-          else if (user.role === "superadmin") navigate("/superadmin/dashboard");
-          else if (user.role === "owner") navigate("/owner/dashboard");
-          else navigate("/student/dashboard");
+          navigateByRole(user, redirectParam);
         }
       } else {
         if (!agreeTerms || !agreePrivacy) {
@@ -262,7 +382,12 @@ export default function Auth() {
           return;
         }
         if (!formData.gender) {
-          setError("Please select your gender.");
+          setError("Please select your gender (Male, Female, or Prefer not to say).");
+          setLoading(false);
+          return;
+        }
+        if (!formData.phone || formData.phone.trim().replace(/\D/g, "").length < 10) {
+          setError("Please enter a valid 10-digit phone number.");
           setLoading(false);
           return;
         }
@@ -278,19 +403,43 @@ export default function Auth() {
           password: formData.password,
           role: userRole,
           gender: formData.gender,
-          ...(userRole === "owner" ? { phone: formData.phone } : {})
+          phone: formData.phone.trim().replace(/\D/g, "")
         };
 
         const res = await api.post("/auth/register", payload);
         if (res.data?.success) {
-          login(res.data.user, res.data.token);
-          if (redirectParam) navigate(redirectParam);
-          else if (userRole === "owner") navigate("/owner/dashboard");
-          else navigate("/student/dashboard");
+          // Immediately require email verification to complete signup
+          setPendingAuth({ user: res.data.user, token: res.data.token });
+          setShowEmailVerificationModal(true);
+          setLoading(false);
+          return;
         }
       }
     } catch (err) {
-      setError(err.response?.data?.message || `${authMode === "login" ? "Login" : "Signup"} failed.`);
+      const isNotFound = err.response?.status === 404 || err.response?.data?.notFound || err.response?.data?.message?.includes("User not found");
+      const isAlreadyExists = err.response?.status === 409 || err.response?.data?.alreadyExists;
+
+      if (isNotFound && authMode === "login") {
+        setError(
+          <div className="flex flex-col gap-1.5">
+            <span>User not found, try another way.</span>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("signup");
+                setError("");
+              }}
+              className="text-left font-black text-[#93B733] hover:text-[#0D3A1D] underline cursor-pointer"
+            >
+              Don't have an account? Sign up here &rarr;
+            </button>
+          </div>
+        );
+      } else if (isAlreadyExists) {
+        setError("This email is already in use. Please log in.");
+      } else {
+        setError(err.response?.data?.message || `${authMode === "login" ? "Login" : "Signup"} failed.`);
+      }
     } finally {
       setLoading(false);
     }
@@ -331,10 +480,10 @@ export default function Auth() {
       </nav>
 
       {/* Card Container */}
-      <div className="relative z-10 flex flex-1 items-center justify-center p-4 md:p-6">
-        <div className="w-full max-w-[480px] bg-white/95 backdrop-blur-2xl rounded-[2rem] md:rounded-[2.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/50 flex flex-col overflow-hidden">
+      <div className="relative z-10 flex flex-1 items-center justify-center p-3 sm:p-4 md:p-6 my-auto">
+        <div className="w-full max-w-[480px] max-h-[calc(100vh-2rem)] bg-white/95 backdrop-blur-2xl rounded-[2rem] md:rounded-[2.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-white/50 flex flex-col overflow-y-auto">
           {/* Header */}
-          <div className="text-center px-6 pt-8 pb-5 border-b border-gray-100/80">
+          <div className="text-center px-6 pt-6 pb-4 border-b border-gray-100/80">
             <h2 className="text-xl font-black text-[#0D3A1D]">
               {authMode === "forgot" ? "Reset Your Password" : authMode === "login" ? "Welcome Back" : "Create an Account"}
             </h2>
@@ -347,14 +496,14 @@ export default function Auth() {
             </p>
           </div>
 
-          <div className="p-6 md:p-8 flex-1 flex flex-col">
+          <div className="p-5 sm:p-6 md:p-7 flex-1 flex flex-col">
             {/* Role Switcher */}
             {authMode !== "forgot" && (
-              <div className="flex rounded-xl bg-gray-100/80 p-1.5 mb-6 border border-gray-200/50">
-                <button type="button" onClick={() => setUserRole("student")} className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition flex justify-center items-center cursor-pointer ${userRole === "student" ? "bg-white text-[#0D3A1D] shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}>
+              <div className="flex rounded-xl bg-gray-100/80 p-1.5 mb-4 border border-gray-200/50">
+                <button type="button" onClick={() => setUserRole("student")} className={`flex-1 rounded-lg py-2 text-sm font-bold transition flex justify-center items-center cursor-pointer ${userRole === "student" ? "bg-white text-[#0D3A1D] shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}>
                   Student
                 </button>
-                <button type="button" onClick={() => setUserRole("owner")} className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition flex justify-center items-center cursor-pointer ${userRole === "owner" ? "bg-white text-[#0D3A1D] shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}>
+                <button type="button" onClick={() => setUserRole("owner")} className={`flex-1 rounded-lg py-2 text-sm font-bold transition flex justify-center items-center cursor-pointer ${userRole === "owner" ? "bg-white text-[#0D3A1D] shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}>
                   Property Owner
                 </button>
               </div>
@@ -482,7 +631,7 @@ export default function Auth() {
               </form>
             ) : (
               /* ══════════ LOGIN / SIGNUP ══════════ */
-              <form className="space-y-4 flex-1" onSubmit={handleSubmit}>
+              <form className="space-y-3.5 flex-1" onSubmit={handleSubmit}>
                 {authMode === "signup" && (
                   <div className="relative">
                     <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -492,7 +641,7 @@ export default function Auth() {
                       value={formData.full_name}
                       onChange={handleChange}
                       placeholder="Full Name"
-                      className="w-full rounded-2xl border-2 border-gray-100 bg-gray-50/50 pl-11 pr-5 py-4 text-sm font-semibold text-[#0D3A1D] outline-none placeholder:text-gray-400 focus:border-[#93B733] focus:bg-white"
+                      className="w-full rounded-2xl border-2 border-gray-100 bg-gray-50/50 pl-11 pr-5 py-3 sm:py-3.5 text-sm font-semibold text-[#0D3A1D] outline-none placeholder:text-gray-400 focus:border-[#93B733] focus:bg-white"
                       required
                     />
                   </div>
@@ -506,13 +655,13 @@ export default function Auth() {
                     value={formData.email}
                     onChange={handleChange}
                     placeholder="Email address"
-                    className="w-full rounded-2xl border-2 border-gray-100 bg-gray-50/50 pl-11 pr-5 py-4 text-sm font-semibold text-[#0D3A1D] outline-none placeholder:text-gray-400 focus:border-[#93B733] focus:bg-white"
+                    className="w-full rounded-2xl border-2 border-gray-100 bg-gray-50/50 pl-11 pr-5 py-3 sm:py-3.5 text-sm font-semibold text-[#0D3A1D] outline-none placeholder:text-gray-400 focus:border-[#93B733] focus:bg-white"
                     required
                   />
                 </div>
 
                 {authMode === "signup" && (
-                  <div className="space-y-1.5 pt-1">
+                  <div className="space-y-1.5 pt-0.5">
                     <label className="block text-xs font-bold text-gray-700 px-1">Gender</label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
@@ -524,7 +673,7 @@ export default function Auth() {
                           key={item.value}
                           type="button"
                           onClick={() => { setFormData((p) => ({ ...p, gender: item.value })); setError(""); }}
-                          className={`flex items-center justify-center rounded-2xl border-2 px-2 py-3.5 text-xs font-bold transition cursor-pointer text-center ${
+                          className={`flex items-center justify-center rounded-2xl border-2 px-2 py-2.5 sm:py-3 text-xs font-bold transition cursor-pointer text-center ${
                             formData.gender === item.value ? "border-[#93B733] bg-[#93B733]/15 text-[#0D3A1D] shadow-sm ring-2 ring-[#93B733]/30 scale-[1.02]" : "border-gray-100 bg-gray-50/50 text-gray-600 hover:bg-gray-100/70"
                           }`}
                         >
@@ -546,7 +695,7 @@ export default function Auth() {
                   </div>
                 )}
 
-                {authMode === "signup" && userRole === "owner" && (
+                {authMode === "signup" && (
                   <div className="relative">
                     <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     <input
@@ -554,15 +703,16 @@ export default function Auth() {
                       name="phone"
                       value={formData.phone}
                       onChange={handleChange}
-                      placeholder="Phone number"
-                      className="w-full rounded-2xl border-2 border-gray-100 bg-gray-50/50 pl-11 pr-5 py-4 text-sm font-semibold text-[#0D3A1D] outline-none placeholder:text-gray-400 focus:border-[#93B733] focus:bg-white"
+                      placeholder="Phone number (10 digits)"
+                      maxLength={10}
+                      className="w-full rounded-2xl border-2 border-gray-100 bg-gray-50/50 pl-11 pr-5 py-3 sm:py-3.5 text-sm font-semibold text-[#0D3A1D] outline-none placeholder:text-gray-400 focus:border-[#93B733] focus:bg-white"
                       required
                     />
                   </div>
                 )}
 
                 {(authMode === "signup" || (authMode === "login" && loginMethod === "password")) && (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <div className="relative">
                       <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                       <input
@@ -571,7 +721,7 @@ export default function Auth() {
                         value={formData.password}
                         onChange={handleChange}
                         placeholder={authMode === "signup" ? "Password (> 8 characters)" : "Password"}
-                        className="w-full rounded-2xl border-2 border-gray-100 bg-gray-50/50 pl-11 pr-12 py-4 text-sm font-semibold text-[#0D3A1D] outline-none placeholder:text-gray-400 focus:border-[#93B733] focus:bg-white"
+                        className="w-full rounded-2xl border-2 border-gray-100 bg-gray-50/50 pl-11 pr-12 py-3 sm:py-3.5 text-sm font-semibold text-[#0D3A1D] outline-none placeholder:text-gray-400 focus:border-[#93B733] focus:bg-white"
                         required={authMode === "signup" || loginMethod === "password"}
                       />
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">
@@ -594,7 +744,7 @@ export default function Auth() {
                       onChange={(e) => setOtp(e.target.value)}
                       placeholder="Enter 6-digit OTP"
                       maxLength={6}
-                      className="w-full rounded-2xl border-2 border-gray-100 bg-gray-50/50 pl-11 pr-5 py-4 text-sm font-semibold text-[#0D3A1D] outline-none placeholder:text-gray-400 focus:border-[#93B733] focus:bg-white tracking-widest"
+                      className="w-full rounded-2xl border-2 border-gray-100 bg-gray-50/50 pl-11 pr-5 py-3 sm:py-3.5 text-sm font-semibold text-[#0D3A1D] outline-none placeholder:text-gray-400 focus:border-[#93B733] focus:bg-white tracking-widest"
                       required
                       autoFocus
                     />
@@ -602,15 +752,15 @@ export default function Auth() {
                 )}
 
                 {authMode === "signup" && (
-                  <div className="space-y-3 pt-3 border-t border-gray-100">
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} className="mt-0.5 h-4.5 w-4.5 rounded border-gray-300 accent-[#0D3A1D] cursor-pointer shrink-0" />
+                  <div className="space-y-2.5 pt-2 border-t border-gray-100">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-[#0D3A1D] cursor-pointer shrink-0" />
                       <span className="text-xs text-gray-600 font-medium leading-snug">
                         I agree to the <Link to="/terms-and-conditions" target="_blank" className="font-bold text-[#0D3A1D] underline hover:text-[#93B733]">Terms & Conditions</Link>
                       </span>
                     </label>
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input type="checkbox" checked={agreePrivacy} onChange={(e) => setAgreePrivacy(e.target.checked)} className="mt-0.5 h-4.5 w-4.5 rounded border-gray-300 accent-[#0D3A1D] cursor-pointer shrink-0" />
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input type="checkbox" checked={agreePrivacy} onChange={(e) => setAgreePrivacy(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-[#0D3A1D] cursor-pointer shrink-0" />
                       <span className="text-xs text-gray-600 font-medium leading-snug">
                         I accept the <Link to="/privacy-policy" target="_blank" className="font-bold text-[#0D3A1D] underline hover:text-[#93B733]">Privacy Policy</Link>
                       </span>
@@ -620,14 +770,14 @@ export default function Auth() {
 
                 <button
                   type="submit"
-                  disabled={loading || (authMode === "signup" && (!agreeTerms || !agreePrivacy || !formData.gender || !passwordRules.isFullyValid))}
-                  className="mt-6 w-full rounded-2xl bg-[#93B733] px-6 py-4 text-sm font-black text-white shadow-[0_8px_20px_rgba(147,183,51,0.3)] transition hover:scale-[1.02] hover:bg-[#82a32d] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                  disabled={loading || (authMode === "signup" && (!agreeTerms || !agreePrivacy || !passwordRules.isFullyValid))}
+                  className="mt-4 w-full rounded-2xl bg-[#93B733] px-6 py-3.5 text-sm font-black text-white shadow-[0_8px_20px_rgba(147,183,51,0.3)] transition hover:scale-[1.02] hover:bg-[#82a32d] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
                 >
                   {loading ? "Processing..." : authMode === "login" ? (loginMethod === "otp" && !otpSent ? "Send OTP via Email" : "Log in securely") : "Create Account"}
                 </button>
 
                 {authMode === "login" && loginMethod === "password" && (
-                  <div className="mt-5 text-center">
+                  <div className="mt-4 text-center">
                     <button type="button" onClick={() => { setAuthMode("forgot"); setError(""); setSuccessMessage(""); setResetOtpSent(false); }} className="text-xs font-bold text-[#0D3A1D] hover:text-[#93B733] transition hover:underline cursor-pointer">
                       Forgot your password?
                     </button>
@@ -639,12 +789,12 @@ export default function Auth() {
             {/* Mode Toggle */}
             {authMode !== "forgot" && (
               <>
-                <div className="relative my-7">
+                <div className="relative my-5">
                   <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
                   <div className="relative flex justify-center text-sm"><span className="bg-white px-4 text-[10px] font-black uppercase tracking-widest text-gray-400">or</span></div>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-medium text-gray-500 mb-3">{authMode === "login" ? "Don't have an account?" : "Already have an account?"}</p>
+                  <p className="text-xs sm:text-sm font-medium text-gray-500 mb-2">{authMode === "login" ? "Don't have an account?" : "Already have an account?"}</p>
                   <button type="button" onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setError(""); setSuccessMessage(""); setOtpSent(false); setOtp(""); }} className="w-full rounded-2xl border-2 border-[#0D3A1D] bg-transparent px-6 py-4 text-sm font-black text-[#0D3A1D] transition hover:bg-gray-50 active:scale-[0.98] cursor-pointer">
                     {authMode === "login" ? "Sign up for Dormn" : "Log in instead"}
                   </button>
@@ -654,6 +804,15 @@ export default function Auth() {
           </div>
         </div>
       </div>
+
+      <EmailVerificationModal
+        isOpen={showEmailVerificationModal}
+        onClose={handleVerificationClose}
+        onSuccess={handleVerificationSuccess}
+        userEmail={pendingAuth?.user?.email || formData.email}
+        title={authMode === "signup" ? "Verify Your Email to Complete Signup" : "Verify Your Email to Continue"}
+        description="We've sent a 6-digit verification code to your email. Enter it below to activate your account and access all features without repeated verification."
+      />
     </div>
   );
 }

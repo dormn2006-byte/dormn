@@ -2,6 +2,7 @@ import User from "../schemas/userSchema.js";
 import PG from "../schemas/pgSchema.js";
 import Booking from "../schemas/bookingSchema.js";
 import { serialize } from "../utils/serialize.js";
+import { findUserById } from "../models/userModel.js";
 
 // Reusable join stages: pgs + users, LEFT JOIN style (preserve nulls) where the
 // original query used a LEFT JOIN, inner-join style (plain $unwind) otherwise.
@@ -201,6 +202,61 @@ export const deletePG = async (req, res) => {
   } catch (error) {
     console.log("Delete PG Error:", error);
 
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// Remove PG (soft-remove with admin note)
+export const removePG = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const admin_note = req.body.admin_note || req.body.note;
+
+    await PG.updateOne(
+      { _id: Number(id) },
+      { $set: { status: "removed", admin_note: admin_note ? String(admin_note).trim() : null } }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "PG removed successfully",
+    });
+  } catch (error) {
+    console.log("Remove PG Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// Request Revision for PG (set status to rejected with note for owner to fix)
+export const requestRevisionPG = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const noteText = req.body.admin_note || req.body.note;
+
+    if (!noteText || !String(noteText).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a revision note for the owner",
+      });
+    }
+
+    await PG.updateOne(
+      { _id: Number(id) },
+      { $set: { status: "rejected", admin_note: String(noteText).trim() } }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Revision requested successfully",
+    });
+  } catch (error) {
+    console.log("Request Revision PG Error:", error);
     return res.status(500).json({
       success: false,
       message: "Server Error",
@@ -433,11 +489,9 @@ export const getOwnerDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const owner = await User.findOne({ _id: Number(id), role: "owner" })
-      .select("full_name email phone role created_at")
-      .lean();
+    const owner = await findUserById(Number(id));
 
-    if (!owner) {
+    if (!owner || owner.role !== "owner") {
       return res.status(404).json({
         success: false,
         message: "Owner not found",
@@ -446,7 +500,7 @@ export const getOwnerDetails = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      owner: serialize(owner),
+      owner,
     });
   } catch (error) {
     console.log("Get Owner Details Error:", error);

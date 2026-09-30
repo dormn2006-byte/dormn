@@ -3,7 +3,7 @@ export const blogPosts = [
       id: 1,
       slug: "top-pgs-near-amity-university-noida",
       title: "Top 10 Verified PGs Near Amity University Noida (Sector 125)",
-      metaDescription: "Looking for a PG near Amity University Noida? Explore the best Boys, Girls, and COED PGs in Sector 125 & 126 with food, Wi-Fi, and zero brokerage.",
+      metaDescription: "Looking for a PG near Amity University Noida? Explore the best Boys, Girls, and COED PGs in Sector 125 & 126 with food, Wi-Fi, and direct owner booking.",
       city: "Noida",
       area: "Sector 125 / Amity",
       readTime: "5 min read",
@@ -22,7 +22,7 @@ export const blogPosts = [
         2. **Boys PG in Noida Sector 125:** Flexible timings, gaming lounges, and attached balconies.
         3. **COED PG in Sector 62:** Modern shared spaces perfect for students and young corporate interns.
   
-        Check out all active listings directly on Dormn Noida Search with zero brokerage fees!
+        Check out all active listings directly on Dormn Noida Search with direct host verification!
       `
     },
     {

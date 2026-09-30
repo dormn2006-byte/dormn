@@ -13,24 +13,24 @@ const HeroVisual = ({ featuredPG }) => {
       <div className="group/frame relative z-10 rounded-[2.5rem] border-2 border-white bg-white p-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.1)] transition-all duration-500 ease-in-out hover:scale-[1.02] hover:border-[#93B733] hover:shadow-[0_0_50px_rgba(147,183,51,0.65)] md:rounded-[3rem] md:p-3.5">
         
         {/* Inner Image Container */}
-        <div className="group relative h-[380px] w-full overflow-hidden rounded-[2rem] border border-white/50 transition-all duration-500 ease-in-out group-hover/frame:border-[#93B733]/80 md:h-[500px] md:rounded-[2.5rem]">
+        <div className="group relative h-[380px] w-full overflow-hidden rounded-[2rem] border border-white/50 transition-all duration-500 ease-in-out group-hover/frame:border-[#93B733]/80 md:h-[500px] md:rounded-[2.5rem] [transform:translateZ(0)] [backface-visibility:hidden]">
           
           <img
             src={
               featuredPG?.profile_image
                 ? `${IMAGE_BASE_URL}/uploads/${featuredPG.profile_image}`
-                : featuredPG?.image || "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=450&q=70&fm=webp"
+                : featuredPG?.image || "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1200&q=85&fm=webp"
             }
             alt="Luxury Student PG"
-            width={400}
+            width={480}
             height={500}
             loading="eager"
             fetchPriority="high"
             onError={(e) => {
               e.target.onerror = null;
-              e.target.src = "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=450&q=70&fm=webp";
+              e.target.src = "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1200&q=85&fm=webp";
             }}
-            className="block h-full w-full bg-gray-100 object-cover transition-transform duration-1000 group-hover:scale-110"
+            className="block h-full w-full bg-gray-100 object-cover transition-transform duration-1000 group-hover:scale-110 [transform:translateZ(0)] [backface-visibility:hidden]"
           />
 
           {/* Zen Overlay: Soft gradient to ensure text readability & add mood */}

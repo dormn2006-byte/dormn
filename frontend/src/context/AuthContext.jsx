@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect } from "react";
+import api from "../services/api";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext();
@@ -30,6 +31,50 @@ const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     purgeLegacyCaches();
+
+    // Background sync verification status if user logged in
+    const syncStatus = async () => {
+      const activeToken = localStorage.getItem("token");
+      if (!activeToken) return;
+      try {
+        const res = await api.get("/auth/verification-status");
+        if (res.data?.success) {
+          setUser((prev) => {
+            if (!prev) return prev;
+            const updated = {
+              ...prev,
+              ...(res.data.role && { role: res.data.role }),
+              ...(res.data.is_email_verified !== undefined && {
+                is_email_verified: res.data.is_email_verified ? 1 : 0,
+                isEmailVerified: Boolean(res.data.is_email_verified),
+              }),
+            };
+            try {
+              localStorage.setItem("user", JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        }
+      } catch (err) {
+        if (err?.response?.status === 401) {
+          setUser(null);
+          setToken(null);
+        }
+      }
+    };
+    syncStatus();
+
+    const handleExpired = () => {
+      setUser(null);
+      setToken(null);
+      try {
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+        purgeLegacyCaches();
+      } catch {}
+    };
+    window.addEventListener("dormn_session_expired", handleExpired);
+    return () => window.removeEventListener("dormn_session_expired", handleExpired);
   }, []);
 
   // Login Function

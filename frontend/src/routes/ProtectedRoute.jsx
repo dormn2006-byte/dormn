@@ -3,7 +3,7 @@ import { AuthContext } from "../context/AuthContext";
 
 const NotFound = lazy(() => import("../pages/NotFound"));
 
-const ProtectedRoute = ({ children, role }) => {
+const ProtectedRoute = ({ children, role, allowedRoles }) => {
   const { user, token } = useContext(AuthContext);
 
   const renderNotFound = () => (
@@ -22,22 +22,32 @@ const ProtectedRoute = ({ children, role }) => {
     return children;
   }
 
+  const targetRoles = allowedRoles
+    ? allowedRoles
+    : role
+    ? Array.isArray(role)
+      ? role
+      : [role]
+    : null;
+
   // 3. Event Admin route protection
-  if (role === "event_admin") {
+  if (targetRoles && targetRoles.includes("event_admin")) {
     if (user.role === "event_admin" || user.role === "event_manager") {
       return children;
     }
-    // Any other user trying to access /event-admin -> 404
     return renderNotFound();
   }
 
   // 4. If user is event admin trying to access non-event dashboards -> 404
-  if ((user.role === "event_admin" || user.role === "event_manager") && role !== "event_admin") {
+  if (
+    (user.role === "event_admin" || user.role === "event_manager") &&
+    (!targetRoles || !targetRoles.includes("event_admin"))
+  ) {
     return renderNotFound();
   }
 
   // 5. Role Mismatch -> Show 404 page immediately (Prevent cross-dashboard probing)
-  if (role && user.role !== role) {
+  if (targetRoles && !targetRoles.includes(user.role)) {
     return renderNotFound();
   }
 

@@ -18,7 +18,10 @@ import {
   X,
   Share2,
   Copy,
-  Check
+  Check,
+  CreditCard,
+  ArrowRight,
+  Sparkles
 } from "lucide-react";
 import api, { IMAGE_BASE_URL } from "../../services/api";
 
@@ -30,6 +33,7 @@ const MyPGs = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [selectedPgForView, setSelectedPgForView] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [payoutConfigured, setPayoutConfigured] = useState(true);
 
   const handleCopyLink = (pgId, e) => {
     e?.stopPropagation();
@@ -55,15 +59,24 @@ const MyPGs = () => {
 
   useEffect(() => {
     fetchMyPGs();
+    api.get("/auth/payout-status")
+      .then((res) => setPayoutConfigured(Boolean(res.data?.is_configured)))
+      .catch(() => setPayoutConfigured(false));
   }, [fetchMyPGs]);
 
-  // Counts for status tabs
-  const counts = useMemo(() => ({
-    all: pgPages.length,
-    approved: pgPages.filter((p) => p.status === "approved").length,
-    pending: pgPages.filter((p) => p.status === "pending").length,
-    rejected: pgPages.filter((p) => p.status === "rejected").length,
-  }), [pgPages]);
+  const handleAddPgClick = (e) => {
+    if (e) e.preventDefault();
+    navigate("/owner/add-pg");
+  };
+
+  // Counts for status tabs (single pass)
+  const counts = useMemo(() => {
+    const c = { all: pgPages.length, approved: 0, pending: 0, rejected: 0, removed: 0 };
+    for (const p of pgPages) {
+      if (c[p.status] !== undefined) c[p.status]++;
+    }
+    return c;
+  }, [pgPages]);
 
   // Filtered properties
   const filteredPGs = useMemo(() => {
@@ -88,9 +101,47 @@ const MyPGs = () => {
     }
   }, [fetchMyPGs]);
 
+  const handleResubmit = useCallback(async (pgId, title) => {
+    if (window.confirm(`Re-submit "${title}" for admin approval?`)) {
+      try {
+        const res = await api.put(`/pg/resubmit/${pgId}`);
+        alert(res?.data?.message || "Property re-submitted for approval successfully!");
+        fetchMyPGs();
+      } catch (error) {
+        alert(error?.response?.data?.message || "Failed to re-submit property");
+      }
+    }
+  }, [fetchMyPGs]);
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto">
-      
+
+      {/* Missing Payout Alert Banner if any approved PGs exist */}
+      {!payoutConfigured && pgPages.some((p) => p.status === "approved") && (
+        <div className="p-4 sm:p-5 rounded-3xl border border-amber-500/40 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
+          <div className="flex items-start gap-4 min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <CreditCard size={24} />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white truncate">
+                Action Required: Configure Bank Details to Publish Live
+              </h4>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1 leading-snug">
+                Your property has been approved by admin! Please add your settlement bank details in your profile so students can view and book it on the Explore page.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate("/owner/profile?tab=payouts")}
+            className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-xs sm:text-sm font-bold transition shadow-sm shrink-0 cursor-pointer flex items-center gap-2 self-start sm:self-center"
+          >
+            <span>Configure Bank Details</span>
+            <ArrowRight size={18} />
+          </button>
+        </div>
+      )}
+
       {/* Big Bold Search & Category Action Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-3 sm:p-5 shadow-sm">
         
@@ -101,13 +152,14 @@ const MyPGs = () => {
             { id: "approved", label: "Approved Live", count: counts.approved },
             { id: "pending", label: "Pending Review", count: counts.pending },
             { id: "rejected", label: "Needs Revision", count: counts.rejected },
+            { id: "removed", label: "Removed", count: counts.removed },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2.5 rounded-2xl px-3 py-2 sm:px-5 sm:py-3.5 text-xs sm:text-sm font-black transition-all shrink-0 ${
                 activeTab === tab.id
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/25"
+                  ? tab.id === "removed" ? "bg-rose-600 text-white shadow-lg shadow-rose-500/25" : "bg-blue-600 text-white shadow-lg shadow-blue-500/25"
                   : "bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10"
               }`}
             >
@@ -134,13 +186,14 @@ const MyPGs = () => {
             />
           </div>
 
-          <Link
-            to="/owner/add-pg"
-            className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 px-4 py-2.5 sm:px-6 sm:py-3.5 text-xs sm:text-sm font-black text-white shadow-lg shadow-blue-500/25 transition-all shrink-0"
+          <button
+            type="button"
+            onClick={handleAddPgClick}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 px-4 py-2.5 sm:px-6 sm:py-3.5 text-xs sm:text-sm font-black text-white shadow-lg shadow-blue-500/25 transition-all shrink-0 cursor-pointer"
           >
             <Plus size={18} />
             <span>Add PG</span>
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -155,13 +208,14 @@ const MyPGs = () => {
           <Building2 size={36} className="text-gray-400 mx-auto mb-4" />
           <h3 className="text-base sm:text-xl font-black text-gray-900 dark:text-white">No properties found</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Try switching status filters or adding a new PG listing.</p>
-          <Link
-            to="/owner/add-pg"
-            className="inline-flex items-center gap-2 mt-5 rounded-2xl bg-blue-600 px-4 py-2.5 sm:px-6 sm:py-3.5 text-xs sm:text-sm font-black text-white hover:bg-blue-500 transition shadow-md"
+          <button
+            type="button"
+            onClick={handleAddPgClick}
+            className="inline-flex items-center gap-2 mt-5 rounded-2xl bg-blue-600 px-4 py-2.5 sm:px-6 sm:py-3.5 text-xs sm:text-sm font-black text-white hover:bg-blue-500 transition shadow-md cursor-pointer"
           >
             <Plus size={18} />
             <span>Add New Property</span>
-          </Link>
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-6">
@@ -186,12 +240,24 @@ const MyPGs = () => {
                 <div className="absolute left-1.5 top-1.5 sm:left-4 sm:top-4">
                   <span className={`rounded-md sm:rounded-xl px-1.5 py-0.5 sm:px-3.5 sm:py-1.5 text-[8px] sm:text-xs font-black uppercase tracking-wider shadow-md backdrop-blur-md border ${
                     pg.status === "approved"
-                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                      ? payoutConfigured
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                        : "bg-amber-500/20 text-amber-400 border-amber-500/40"
                       : pg.status === "rejected"
+                      ? "bg-amber-500/20 text-amber-500 border-amber-500/40"
+                      : pg.status === "removed"
                       ? "bg-rose-500/20 text-rose-400 border-rose-500/40"
-                      : "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                      : "bg-blue-500/20 text-blue-400 border-blue-500/40"
                   }`}>
-                    {pg.status === "approved" ? "LIVE" : pg.status?.toUpperCase() || "PENDING"}
+                    {pg.status === "approved"
+                      ? payoutConfigured
+                        ? "LIVE"
+                        : "NEEDS BANK"
+                      : pg.status === "rejected"
+                      ? "REVISION"
+                      : pg.status === "removed"
+                      ? "REMOVED"
+                      : "PENDING"}
                   </span>
                 </div>
 
@@ -238,47 +304,111 @@ const MyPGs = () => {
                   </span>
                 </div>
 
-                {/* Shareable Public URL Bar (Only when approved and live on explore page) */}
+                {/* Shareable Public URL Bar / Status Bar */}
                 {pg.status === "approved" ? (
-                  <div className="flex items-center justify-between gap-1 px-1.5 py-1 sm:px-3 sm:py-2 rounded-lg sm:rounded-2xl bg-emerald-50/50 dark:bg-emerald-500/[0.05] border border-emerald-500/20">
-                    <span className="text-[9px] sm:text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate">
-                      /pg/{pg.id}
-                    </span>
-                    <div className="flex items-center gap-1 shrink-0">
+                  payoutConfigured ? (
+                    <div className="flex items-center justify-between gap-1 px-1.5 py-1 sm:px-3 sm:py-2 rounded-lg sm:rounded-2xl bg-emerald-50/50 dark:bg-emerald-500/[0.05] border border-emerald-500/20">
+                      <span className="text-[9px] sm:text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate">
+                        /pg/{pg.id || pg._id}
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => handleCopyLink(pg.id || pg._id, e)}
+                          title="Copy Public Link"
+                          className="flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-xl text-[9px] sm:text-xs font-black bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition cursor-pointer"
+                        >
+                          {copiedId === (pg.id || pg._id) ? (
+                            <>
+                              <Check size={9} className="text-emerald-600" />
+                              <span className="text-emerald-700 dark:text-emerald-300">Done</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={9} />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                        <a
+                          href={`/pg/${pg.id || pg._id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open Live Public Listing"
+                          className="p-0.5 sm:p-1 rounded-md sm:rounded-xl text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition"
+                        >
+                          <ExternalLink size={11} className="sm:hidden" />
+                          <ExternalLink size={14} className="hidden sm:inline" />
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-1 px-1.5 py-1 sm:px-3 sm:py-2 rounded-lg sm:rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-500/30">
+                      <span className="text-[9px] sm:text-[11px] font-bold text-amber-700 dark:text-amber-300 truncate">
+                        Approved — Add Bank Details to Publish
+                      </span>
                       <button
-                        onClick={(e) => handleCopyLink(pg.id, e)}
-                        title="Copy Public Link"
-                        className="flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-xl text-[9px] sm:text-xs font-black bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition cursor-pointer"
+                        onClick={() => navigate("/owner/profile?tab=payouts")}
+                        className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-lg bg-amber-500 text-white font-bold text-[9px] sm:text-xs hover:bg-amber-600 transition shrink-0 cursor-pointer"
                       >
-                        {copiedId === pg.id ? (
-                          <>
-                            <Check size={9} className="text-emerald-600" />
-                            <span className="text-emerald-700 dark:text-emerald-300">Done</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy size={9} />
-                            <span>Copy</span>
-                          </>
-                        )}
+                        Add Bank
                       </button>
-                      <a
-                        href={`/pg/${pg.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Open Live Public Listing"
-                        className="p-0.5 sm:p-1 rounded-md sm:rounded-xl text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition"
+                    </div>
+                  )
+                ) : pg.status === "rejected" ? (
+                  <div className="flex flex-col gap-1.5 p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="flex items-center gap-1 font-bold text-[10px] sm:text-xs truncate">
+                        <Clock size={12} className="shrink-0 text-amber-500" />
+                        <span className="truncate">Needs Revision</span>
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => navigate(`/owner/edit-pg/${pg.id || pg._id}`)}
+                          className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-amber-500 text-white text-[9px] sm:text-xs font-bold hover:bg-amber-600 cursor-pointer shadow-xs"
+                          title="Edit details and address admin note"
+                        >
+                          Fix Now
+                        </button>
+                        <button
+                          onClick={() => handleResubmit(pg.id || pg._id, pg.title)}
+                          className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-emerald-600 text-white text-[9px] sm:text-xs font-bold hover:bg-emerald-500 cursor-pointer shadow-xs"
+                          title="Re-submit this listing for admin approval"
+                        >
+                          Re-submit
+                        </button>
+                      </div>
+                    </div>
+                    {pg.admin_note && (
+                      <div className="bg-amber-500/15 dark:bg-black/30 p-2 rounded-md border border-amber-500/25 text-[10px] sm:text-xs text-amber-800 dark:text-amber-300">
+                        <span className="font-bold">Admin Note: </span>
+                        <span className="leading-snug">{pg.admin_note}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : pg.status === "removed" ? (
+                  <div className="flex flex-col gap-1.5 p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="flex items-center gap-1 font-bold text-[10px] sm:text-xs truncate">
+                        <AlertTriangle size={12} className="shrink-0 text-rose-500" />
+                        <span className="truncate">Delisted / Removed</span>
+                      </span>
+                      <button
+                        onClick={() => navigate(`/owner/edit-pg/${pg.id || pg._id}`)}
+                        className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-600 dark:text-rose-300 text-[9px] sm:text-xs font-bold hover:bg-rose-500/30 shrink-0 cursor-pointer shadow-xs"
                       >
-                        <ExternalLink size={11} className="sm:hidden" />
-                        <ExternalLink size={14} className="hidden sm:inline" />
-                      </a>
+                        Edit Listing
+                      </button>
+                    </div>
+                    <div className="bg-rose-500/15 dark:bg-black/30 p-2 rounded-md border border-rose-500/25 text-[10px] sm:text-xs text-rose-800 dark:text-rose-300">
+                      <span className="font-bold">Admin Note: </span>
+                      <span className="leading-snug">{pg.admin_note || "This property was delisted by administrator and is hidden from Explore."}</span>
                     </div>
                   </div>
                 ) : (
                   <div className="flex items-center gap-1 px-1.5 py-1 sm:px-3 sm:py-2 rounded-lg sm:rounded-2xl bg-amber-50/60 dark:bg-amber-500/[0.04] border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[9px] sm:text-[11px] font-bold">
                     <Clock size={10} className="shrink-0 sm:hidden" />
                     <Clock size={13} className="shrink-0 hidden sm:inline" />
-                    <span className="truncate">Under review</span>
+                    <span className="truncate">Under admin review</span>
                   </div>
                 )}
               </div>
@@ -286,7 +416,7 @@ const MyPGs = () => {
               {/* Action Buttons Toolbar */}
               <div className="grid grid-cols-3 gap-1 sm:gap-2.5 border-t border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02] p-1.5 sm:p-4">
                 <button
-                  onClick={() => navigate(`/owner/pg-analytics/${pg.id}`)}
+                  onClick={() => navigate(`/owner/pg-analytics/${pg.id || pg._id}`)}
                   className="flex items-center justify-center gap-1 rounded-lg sm:rounded-2xl bg-blue-600 hover:bg-blue-500 py-1.5 sm:py-3 text-[9px] sm:text-xs font-black text-white transition shadow-xs cursor-pointer"
                 >
                   <Eye size={11} className="sm:hidden" />
@@ -295,7 +425,7 @@ const MyPGs = () => {
                 </button>
 
                 <button
-                  onClick={() => navigate(`/owner/edit-pg/${pg.id}`)}
+                  onClick={() => navigate(`/owner/edit-pg/${pg.id || pg._id}`)}
                   className="flex items-center justify-center gap-1 rounded-lg sm:rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 py-1.5 sm:py-3 text-[9px] sm:text-xs font-black text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
                 >
                   <Edit3 size={11} className="sm:hidden" />
@@ -304,7 +434,7 @@ const MyPGs = () => {
                 </button>
 
                 <button
-                  onClick={() => handleDelete(pg.id, pg.title)}
+                  onClick={() => handleDelete(pg.id || pg._id, pg.title)}
                   className="flex items-center justify-center gap-1 rounded-lg sm:rounded-2xl border border-rose-500/30 bg-rose-500/10 py-1.5 sm:py-3 text-[9px] sm:text-xs font-black text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
                 >
                   <Trash2 size={11} className="sm:hidden" />

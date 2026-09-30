@@ -54,10 +54,17 @@ export default function Events() {
   // View parameters
   const selectedEventId = searchParams.get("id");
   const viewParam = searchParams.get("view"); // 'tickets'
+  const categoryParam = searchParams.get("category");
 
   // Filter and Booking state
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeCategoryState, setActiveCategoryState] = useState("all");
+  
+  const activeCategory = categoryParam || activeCategoryState || "all";
+
+  const setActiveCategory = useCallback((cat) => {
+    setActiveCategoryState(cat);
+  }, []);
   const [selectedPassType, setSelectedPassType] = useState("single");
   const [groupSize, setGroupSize] = useState(4);
   const [activeInviteModal, setActiveInviteModal] = useState(null);
@@ -174,17 +181,19 @@ export default function Events() {
   }, [liveEvents, tickets]);
 
   const handleDockClick = useCallback(
-    (app) => {
-      if (app.id === "tickets") {
+    (appIdOrObj) => {
+      const targetId = typeof appIdOrObj === "object" && appIdOrObj !== null ? appIdOrObj.id : appIdOrObj;
+      if (targetId === "tickets") {
         setSearchParams({ view: "tickets" });
+      } else if (targetId === "all") {
+        setActiveCategory("all");
+        setSearchParams({});
       } else {
-        setActiveCategory(app.id);
-        if (selectedEventId || viewParam) {
-          setSearchParams({});
-        }
+        setActiveCategory(targetId);
+        setSearchParams({ category: targetId });
       }
     },
-    [selectedEventId, viewParam, setSearchParams]
+    [setActiveCategory, setSearchParams]
   );
 
   const currentOpenApps = useMemo(() => {
@@ -271,7 +280,7 @@ export default function Events() {
       eventTitle: currentEvent.title,
       category: currentEvent.category,
       guestName: guestName || "Dormn Resident",
-      guestPhone: guestPhone || "+91 98765 43210",
+      guestPhone: guestPhone || user?.phone || "N/A",
       guestEmail: user?.email || "resident@dormn.com",
       ticketType: selectedPassType,
       quantity: effectiveGroupSize,

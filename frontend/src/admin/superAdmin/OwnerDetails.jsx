@@ -7,6 +7,11 @@ import {
   MapPin,
   CheckCircle,
   Eye,
+  ShieldCheck,
+  CreditCard,
+  BadgeCheck,
+  FileText,
+  AlertCircle
 } from "lucide-react";
 import api from "../../services/api";
 import { AuthContext } from "../../context/AuthContext";
@@ -29,19 +34,24 @@ const OwnerDetails = () => {
       try {
         setLoading(true);
 
-        const ownersResponse = await api.get("/superadmin/owners", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        let ownerData = null;
+        try {
+          const detailRes = await api.get(`/superadmin/owner/${ownerId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (detailRes.data?.owner) {
+            ownerData = detailRes.data.owner;
+          }
+        } catch (detailErr) {
+          console.warn("Direct owner lookup fallback:", detailErr);
+          const ownersResponse = await api.get("/superadmin/owners", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const owners = ownersResponse.data.owners || ownersResponse.data || [];
+          ownerData = owners.find((item) => String(item.id) === String(ownerId));
+        }
 
-        const owners = ownersResponse.data.owners || ownersResponse.data || [];
-
-        const selectedOwner = owners.find(
-          (item) => String(item.id) === String(ownerId)
-        );
-
-        setOwner(selectedOwner || null);
+        setOwner(ownerData || null);
 
         if (ownerId) {
           const pgsResponse = await api.get(
@@ -169,6 +179,90 @@ const OwnerDetails = () => {
             {owner.status || "Active"}
           </h3>
           <p className="text-gray-400">Account Status</p>
+        </div>
+      </div>
+
+      {/* ── Government KYC & Payout Verification Section ── */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* KYC Verification Card */}
+        <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 backdrop-blur-xl">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-cyan-400">
+              <BadgeCheck size={20} />
+              <h3 className="text-lg font-bold text-white">Government KYC Verification</h3>
+            </div>
+            <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+              owner.pan_number ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
+            }`}>
+              <ShieldCheck size={12} />
+              {owner.pan_number ? "KYC Submitted" : "Pending Submission"}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3 border border-white/5">
+              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">PAN Card</span>
+              <span className="text-sm font-mono font-bold text-white">{owner.pan_number || "Not Provided"}</span>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3 border border-white/5">
+              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Aadhaar (UID)</span>
+              <span className="text-sm font-mono font-bold text-white">{owner.aadhaar_masked || "Not Provided"}</span>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3 border border-white/5">
+              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">GSTIN (Optional)</span>
+              <span className="text-sm font-mono font-bold text-white">{owner.gstin || "Not Provided"}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Bank & Settlements Card */}
+        <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 backdrop-blur-xl">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-emerald-400">
+              <CreditCard size={20} />
+              <h3 className="text-lg font-bold text-white">Settlement Bank Account</h3>
+            </div>
+            <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+              owner.account_number ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
+            }`}>
+              {owner.account_number ? "Configured" : "Not Set"}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3 border border-white/5">
+              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Beneficiary Name</span>
+              <span className="text-sm font-bold text-white">{owner.account_holder || "N/A"}</span>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3 border border-white/5">
+              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Bank Name</span>
+              <span className="text-sm font-bold text-white">{owner.bank_name || "N/A"}</span>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3 border border-white/5">
+              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Account Number</span>
+              <span className="text-sm font-mono font-bold text-white">
+                {owner.account_number || "N/A"}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3 border border-white/5">
+              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">IFSC Code</span>
+              <span className="text-sm font-mono font-bold text-white uppercase">
+                {owner.ifsc_code || "N/A"}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl bg-slate-950/60 p-3 border border-white/5">
+              <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">UPI ID</span>
+              <span className="text-sm font-mono font-bold text-white">
+                {owner.upi_id || "N/A"}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 

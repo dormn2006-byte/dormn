@@ -8,22 +8,22 @@ const EventCard = memo(({ item, onSelect }) => {
   return (
     <div
       onClick={() => onSelect(item.id)}
-      className="events-card-bg group bg-white dark:bg-[#0D0B1C]/90 border border-purple-200/80 dark:border-purple-500/20 hover:border-purple-400 dark:hover:border-pink-500/60 rounded-[18px] overflow-hidden shadow-md hover:shadow-2xl hover:shadow-purple-500/10 dark:hover:shadow-pink-500/15 transition-[transform,box-shadow] duration-200 flex flex-col cursor-pointer transform hover:-translate-y-1.5 backdrop-blur-sm"
+      className="events-card-bg group bg-white dark:bg-[#0D0B1C]/95 border border-purple-200/80 dark:border-purple-500/20 hover:border-purple-400 dark:hover:border-pink-500/60 rounded-[18px] overflow-hidden shadow-md hover:shadow-2xl hover:shadow-purple-500/10 dark:hover:shadow-pink-500/15 transition-[transform,box-shadow] duration-200 flex flex-col cursor-pointer transform hover:-translate-y-1.5 [transform:translateZ(0)] [backface-visibility:hidden]"
     >
       {/* Thumbnail Image with Price Badge & Time Left Badge */}
-      <div className="relative h-44 sm:h-48 w-full bg-black overflow-hidden">
+      <div className="relative h-44 sm:h-48 lg:h-52 w-full bg-black overflow-hidden [transform:translateZ(0)]">
         <img
           src={item.coverImage}
           alt={item.title}
           loading="lazy"
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 [transform:translateZ(0)] [backface-visibility:hidden]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
 
         {/* Top Left Countdown Badge when event time is close */}
         {timeStatus.label && (
           <span
-            className={`absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] font-black uppercase tracking-wider backdrop-blur-md shadow-sm border flex items-center gap-1.5 ${
+            className={`absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] lg:text-xs font-black uppercase tracking-wider backdrop-blur-md shadow-sm border flex items-center gap-1.5 ${
               timeStatus.isUrgent
                 ? "bg-amber-100 dark:bg-amber-950/85 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-500/50"
                 : "bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-pink-300 border-purple-200 dark:border-pink-500/40"
@@ -33,8 +33,8 @@ const EventCard = memo(({ item, onSelect }) => {
               size={11}
               className={
                 timeStatus.isUrgent
-                  ? "text-amber-500 dark:text-amber-400 animate-pulse"
-                  : "text-pink-600 dark:text-pink-400"
+                  ? "text-amber-500 dark:text-amber-400 animate-pulse lg:w-3.5 lg:h-3.5"
+                  : "text-pink-600 dark:text-pink-400 lg:w-3.5 lg:h-3.5"
               }
             />
             <span>{timeStatus.label}</span>
@@ -42,7 +42,7 @@ const EventCard = memo(({ item, onSelect }) => {
         )}
 
         {/* Top Right Price Tag */}
-        <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-md bg-white/95 dark:bg-black/85 backdrop-blur-md text-purple-900 dark:text-pink-300 text-[11px] font-black shadow-sm border border-purple-200 dark:border-pink-500/40">
+        <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-md bg-white/95 dark:bg-black/85 backdrop-blur-md text-purple-900 dark:text-pink-300 text-[11px] lg:text-xs font-black shadow-sm border border-purple-200 dark:border-pink-500/40">
           {typeof item.singlePrice === "number"
             ? `₹${item.singlePrice} Single`
             : `${item.singlePrice}`}
@@ -50,18 +50,18 @@ const EventCard = memo(({ item, onSelect }) => {
       </div>
 
       {/* Card Body */}
-      <div className="p-4 sm:p-4.5 flex-1 flex flex-col justify-between space-y-3.5">
+      <div className="p-4 sm:p-4.5 lg:p-5 flex-1 flex flex-col justify-between space-y-3.5">
         <div>
-          <h3 className="text-base sm:text-[17px] font-black text-gray-900 group-hover:text-purple-700 dark:text-white dark:group-hover:text-pink-400 transition-colors leading-tight capitalize">
+          <h3 className="text-base sm:text-[17px] lg:text-lg font-black text-gray-900 group-hover:text-purple-700 dark:text-white dark:group-hover:text-pink-400 transition-colors leading-tight capitalize">
             {item.title}
           </h3>
 
-          <p className="text-xs font-semibold text-purple-700/80 dark:text-purple-200/70 mt-0.5 capitalize truncate">
+          <p className="text-xs lg:text-sm font-semibold text-purple-700/80 dark:text-purple-200/70 mt-0.5 capitalize truncate">
             {item.tagline}
           </p>
 
-          <div className="flex items-center gap-1.5 text-xs font-bold text-gray-600 dark:text-gray-300 mt-2">
-            <MapPin size={13} className="text-pink-600 dark:text-pink-400 shrink-0" />
+          <div className="flex items-center gap-1.5 text-xs lg:text-sm font-bold text-gray-600 dark:text-gray-300 mt-2">
+            <MapPin size={13} className="text-pink-600 dark:text-pink-400 shrink-0 lg:w-4 lg:h-4" />
             <span className="capitalize truncate">{item.location}</span>
           </div>
         </div>

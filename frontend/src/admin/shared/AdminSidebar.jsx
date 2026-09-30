@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useContext, useState, useEffect } from "react";
 import {
   LayoutDashboard,
@@ -21,10 +21,14 @@ import {
   Sparkles,
   UserMinus,
   MessageSquare,
+  CalendarDays,
+  CalendarRange,
+  Tag,
 } from "lucide-react";
 import { AuthContext } from "../../context/AuthContext";
 import OwnerProfileModal from "./OwnerProfileModal";
 import api from "../../services/api";
+import { getUnseenCount, markOwnerCategorySeen } from "../../utils/ownerSeenBadges";
 
 const navItems = [
   {
@@ -58,6 +62,16 @@ const navItems = [
     icon: BookOpenCheck,
   },
   {
+    title: "PG Visits",
+    path: "/owner/visits",
+    icon: CalendarDays,
+  },
+  {
+    title: "Short Stays",
+    path: "/owner/short-stays",
+    icon: CalendarRange,
+  },
+  {
     title: "Cancellations",
     path: "/owner/cancellations",
     icon: UserMinus,
@@ -83,6 +97,16 @@ const navItems = [
     icon: CreditCard,
   },
   {
+    title: "Promo Codes",
+    path: "/owner/promo-codes",
+    icon: Tag,
+  },
+  {
+    title: "All Staff",
+    path: "/owner/staff",
+    icon: Users,
+  },
+  {
     title: "My Profile",
     path: "/owner/profile",
     icon: User,
@@ -91,6 +115,8 @@ const navItems = [
 
 const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMobile = false }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [seenTick, setSeenTick] = useState(0);
 
   const isPhoneSlider = isMobile || Boolean(closeSidebar);
   const DOCK_PATHS = ["/owner/add-pg", "/owner/my-pgs", "/owner/bookings", "/owner/payments"];
@@ -130,6 +156,27 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
   const ownerInitial = ownerName?.charAt(0)?.toUpperCase() || "O";
 
   const isVerified = user?.is_verified ?? true;
+
+  // Auto-mark category as seen when visiting route
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes("/owner/my-pgs")) markOwnerCategorySeen("myPgs", counts.myPgs);
+    if (path.includes("/owner/bookings")) {
+      markOwnerCategorySeen("pendingBookings", counts.pendingBookings);
+      markOwnerCategorySeen("bookings", counts.bookings);
+    }
+    if (path.includes("/owner/cancellations")) {
+      markOwnerCategorySeen("pendingCancellations", counts.pendingCancellations);
+      markOwnerCategorySeen("cancellations", counts.cancellations);
+    }
+    if (path.includes("/owner/requests")) {
+      markOwnerCategorySeen("openRequests", counts.openRequests);
+      markOwnerCategorySeen("requests", counts.requests);
+    }
+    if (path.includes("/owner/students")) markOwnerCategorySeen("tenants", counts.tenants);
+    if (path.includes("/owner/kyc-forms")) markOwnerCategorySeen("kycForms", counts.kycForms);
+    if (path.includes("/owner/payments")) markOwnerCategorySeen("payments", counts.payments);
+  }, [location.pathname, counts]);
 
   // Fetch live counts for sidebar menu items
   useEffect(() => {
@@ -231,51 +278,87 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
       }
     };
 
+    const handleSeenUpdate = () => setSeenTick((t) => t + 1);
+
     fetchSidebarCounts();
     window.addEventListener('storage', fetchSidebarCounts);
     window.addEventListener('dormn_request_updated', fetchSidebarCounts);
+    window.addEventListener('dormn_seen_counts_updated', handleSeenUpdate);
     return () => {
       window.removeEventListener('storage', fetchSidebarCounts);
       window.removeEventListener('dormn_request_updated', fetchSidebarCounts);
+      window.removeEventListener('dormn_seen_counts_updated', handleSeenUpdate);
     };
   }, []);
 
-  const getBadgeForItem = (title) => {
+  const getBadgeForItem = (title, itemPath) => {
+    // If user is currently viewing this page, never show an unread badge
+    if (itemPath && (location.pathname === itemPath || location.pathname.startsWith(itemPath + "/"))) {
+      return null;
+    }
+
     switch (title) {
-      case "My PGs":
-        return counts.myPgs > 0 ? { count: counts.myPgs, color: "bg-purple-500/15 text-purple-600 dark:text-purple-400" } : null;
+      case "My PGs": {
+        const unseen = getUnseenCount("myPgs", counts.myPgs);
+        return unseen > 0 ? { count: unseen, color: "bg-purple-500/15 text-purple-600 dark:text-purple-400" } : null;
+      }
       case "All Bookings":
-      case "Bookings":
-        return counts.bookings > 0 ? { 
-          count: counts.pendingBookings > 0 ? `${counts.pendingBookings} New` : counts.bookings, 
-          color: counts.pendingBookings > 0 ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-black animate-pulse" : "bg-blue-500/15 text-blue-600 dark:text-blue-400" 
-        } : null;
-      case "Cancellations":
-        return counts.cancellations > 0 ? {
-          count: counts.pendingCancellations > 0 ? `${counts.pendingCancellations} New` : counts.cancellations,
-          color: counts.pendingCancellations > 0 ? "bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 font-black animate-pulse" : "bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400"
-        } : null;
+      case "Bookings": {
+        const unseenPending = getUnseenCount("pendingBookings", counts.pendingBookings);
+        if (unseenPending > 0) {
+          return { count: `${unseenPending} New`, color: "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-black animate-pulse" };
+        }
+        const unseenTotal = getUnseenCount("bookings", counts.bookings);
+        if (unseenTotal > 0) {
+          return { count: unseenTotal, color: "bg-blue-500/15 text-blue-600 dark:text-blue-400" };
+        }
+        return null;
+      }
+      case "Cancellations": {
+        const unseenPending = getUnseenCount("pendingCancellations", counts.pendingCancellations);
+        if (unseenPending > 0) {
+          return { count: `${unseenPending} New`, color: "bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 font-black animate-pulse" };
+        }
+        const unseenTotal = getUnseenCount("cancellations", counts.cancellations);
+        if (unseenTotal > 0) {
+          return { count: unseenTotal, color: "bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400" };
+        }
+        return null;
+      }
       case "All Requests":
-      case "Requests":
-        return counts.requests > 0 ? { 
-          count: counts.openRequests > 0 ? `${counts.openRequests} Open` : counts.requests, 
-          color: counts.openRequests > 0 ? "bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 font-black" : "bg-gray-100 dark:bg-white/10 text-gray-400" 
-        } : null;
+      case "Requests": {
+        const unseenOpen = getUnseenCount("openRequests", counts.openRequests);
+        if (unseenOpen > 0) {
+          return { count: `${unseenOpen} Open`, color: "bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 font-black" };
+        }
+        const unseenTotal = getUnseenCount("requests", counts.requests);
+        if (unseenTotal > 0) {
+          return { count: unseenTotal, color: "bg-gray-100 dark:bg-white/10 text-gray-400" };
+        }
+        return null;
+      }
       case "All Tenants":
-      case "Tenants":
-        return counts.tenants > 0 ? { count: counts.tenants, color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" } : null;
+      case "Tenants": {
+        const unseen = getUnseenCount("tenants", counts.tenants);
+        return unseen > 0 ? { count: unseen, color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" } : null;
+      }
       case "All KYC Forms":
-      case "KYC Forms":
-        return counts.kycForms > 0 ? { count: counts.kycForms, color: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400" } : null;
+      case "KYC Forms": {
+        const unseen = getUnseenCount("kycForms", counts.kycForms);
+        return unseen > 0 ? { count: unseen, color: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400" } : null;
+      }
       case "All Payments":
-      case "Payments":
-        return counts.payments > 0 ? { count: counts.payments, color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" } : null;
+      case "Payments": {
+        const unseen = getUnseenCount("payments", counts.payments);
+        return unseen > 0 ? { count: unseen, color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" } : null;
+      }
       default:
         return null;
     }
   };
 
   const handleLogout = () => {
+    if (closeSidebar) closeSidebar();
     if (authContext?.logout) {
       authContext.logout();
     } else {
@@ -290,25 +373,32 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
     setModalTab(tab);
     setIsModalOpen(true);
     setIsProfileMenuOpen(false);
+    if (closeSidebar) closeSidebar();
+  };
+
+  const handleNavigateProfile = (path) => {
+    setIsProfileMenuOpen(false);
+    if (closeSidebar) closeSidebar();
+    navigate(path);
   };
 
   return (
     <>
       <aside
         className={`relative flex h-screen flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-[#0b1020] transition-[width] duration-200 ease-in-out will-change-[width] ${
-          isCollapsed ? "w-[80px]" : "w-[260px]"
+          isMobile ? "w-full" : isCollapsed ? "w-[80px]" : "w-[260px]"
         }`}
       >
         {/* Top Branding */}
         <div
           onClick={isCollapsed ? toggleCollapse : undefined}
-          className={`group flex items-center px-4 py-6 pb-2 ${
-            isCollapsed ? "justify-center cursor-pointer" : "justify-between px-6"
+          className={`group flex items-center px-3.5 sm:px-5 py-3.5 sm:py-5 pb-1 sm:pb-2 ${
+            isCollapsed ? "justify-center cursor-pointer" : "justify-between"
           }`}
           title={isCollapsed ? "Click logo to expand sidebar" : undefined}
         >
-          <div className="flex items-center gap-3">
-            <div className="relative h-9 w-9 overflow-hidden rounded-xl shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="relative h-8 w-8 sm:h-9 sm:w-9 overflow-hidden rounded-xl shrink-0">
               <img 
                 src="/logo-sm.webp" 
                 alt="Dormn Logo" 
@@ -316,17 +406,17 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
               />
               {isCollapsed && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black dark:bg-[#0b1020] text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                  <PanelLeftOpen size={18} />
+                  <PanelLeftOpen size={16} />
                 </div>
               )}
             </div>
 
             {!isCollapsed && (
               <div>
-                <h2 className="text-xl font-black tracking-tight text-gray-900 dark:text-white leading-none">
+                <h2 className="text-lg sm:text-xl font-black tracking-tight text-gray-900 dark:text-white leading-none">
                   Dormn
                 </h2>
-                <p className="text-[10px] uppercase font-bold tracking-widest text-gray-400 mt-1">
+                <p className="text-[9px] sm:text-[10px] uppercase font-bold tracking-widest text-gray-400 mt-0.5 sm:mt-1">
                   Owner Panel
                 </p>
               </div>
@@ -339,10 +429,10 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
                 e.stopPropagation();
                 toggleCollapse();
               }}
-              className="hidden xl:flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 transition"
+              className="hidden xl:flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 transition"
               title="Collapse Sidebar"
             >
-              <PanelLeftClose size={16} />
+              <PanelLeftClose size={15} />
             </button>
           )}
 
@@ -352,46 +442,65 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
                 e.stopPropagation();
                 closeSidebar();
               }}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 xl:hidden"
+              className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 xl:hidden"
             >
-              <X size={16} />
+              <X size={15} />
             </button>
           )}
         </div>
 
-        <div className="px-4 py-4">
+        <div className="px-3 sm:px-4 py-2 sm:py-3">
           <div className="h-px w-full bg-gray-100 dark:bg-white/5"></div>
         </div>
 
         {/* Navigation Links with Count Badges */}
-        <div className="flex flex-1 flex-col gap-1.5 px-3 overflow-y-auto overflow-x-hidden">
+        <div className="flex flex-1 flex-col gap-0.5 sm:gap-1 px-2.5 sm:px-3 overflow-y-auto overflow-x-hidden">
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
-            const badge = getBadgeForItem(item.title);
+            const badge = getBadgeForItem(item.title, item.path);
 
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
-                onClick={closeSidebar}
+                onClick={() => {
+                  // Instant mark category seen upon click so badge clears with zero delay
+                  if (item.path.includes("/owner/my-pgs")) markOwnerCategorySeen("myPgs", counts.myPgs);
+                  if (item.path.includes("/owner/bookings")) {
+                    markOwnerCategorySeen("pendingBookings", counts.pendingBookings);
+                    markOwnerCategorySeen("bookings", counts.bookings);
+                  }
+                  if (item.path.includes("/owner/cancellations")) {
+                    markOwnerCategorySeen("pendingCancellations", counts.pendingCancellations);
+                    markOwnerCategorySeen("cancellations", counts.cancellations);
+                  }
+                  if (item.path.includes("/owner/requests")) {
+                    markOwnerCategorySeen("openRequests", counts.openRequests);
+                    markOwnerCategorySeen("requests", counts.requests);
+                  }
+                  if (item.path.includes("/owner/students")) markOwnerCategorySeen("tenants", counts.tenants);
+                  if (item.path.includes("/owner/kyc-forms")) markOwnerCategorySeen("kycForms", counts.kycForms);
+                  if (item.path.includes("/owner/payments")) markOwnerCategorySeen("payments", counts.payments);
+                  if (closeSidebar) closeSidebar();
+                }}
                 title={isCollapsed ? item.title : undefined}
                 className={({ isActive }) =>
-                  `group flex items-center justify-between rounded-xl py-3 text-sm font-semibold transition-all duration-200 ${
-                    isCollapsed ? "justify-center px-0" : "px-4"
+                  `group flex items-center justify-between rounded-xl py-2 sm:py-2.5 text-xs sm:text-[13px] font-semibold transition-all duration-150 ${
+                    isCollapsed ? "justify-center px-0" : "px-3 sm:px-3.5"
                   } ${
                     isActive
-                      ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                      ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold"
                       : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
                   }`
                 }
               >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <Icon size={20} className="shrink-0" />
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                  <Icon size={17} className="shrink-0" />
                   {!isCollapsed && <span className="truncate">{item.title}</span>}
                 </div>
 
                 {!isCollapsed && badge && (
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${badge.color}`}>
+                  <span className={`px-1.5 py-0.2 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] font-black shrink-0 ${badge.color}`}>
                     {badge.count}
                   </span>
                 )}
@@ -401,27 +510,27 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
         </div>
 
         {/* Bottom Section */}
-        <div className="px-3 pb-5 pt-2">
+        <div className={`px-2.5 sm:px-3 pt-1.5 ${isMobile ? "pb-20 sm:pb-24" : "pb-3 sm:pb-4"}`}>
           {/* Owner Profile Section with Upward Dropdown Menu */}
-          <div className="relative mb-3">
+          <div className="relative mb-2">
             <div 
               onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-              className={`group flex items-center cursor-pointer rounded-2xl border border-gray-200 dark:border-white/15 bg-gray-100 dark:bg-[#141b2d] hover:bg-gray-200 dark:hover:bg-[#1a233a] transition-all duration-200 ${
-                isCollapsed ? "justify-center p-2.5" : "gap-3 p-3.5"
+              className={`group flex items-center cursor-pointer rounded-xl border border-gray-200 dark:border-white/15 bg-gray-100 dark:bg-[#141b2d] hover:bg-gray-200 dark:hover:bg-[#1a233a] transition-all duration-200 ${
+                isCollapsed ? "justify-center p-2" : "gap-2.5 p-2 sm:p-2.5"
               }`}
               title="Click for Profile, Tier & Settings"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-pink-500 via-rose-500 to-cyan-500 text-sm font-black text-white shadow-md shadow-pink-500/20">
+              <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-tr from-pink-500 via-rose-500 to-cyan-500 text-xs sm:text-sm font-black text-white shadow-xs">
                 {ownerInitial}
               </div>
               {!isCollapsed && (
                 <>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-black text-gray-900 dark:text-white truncate leading-none mb-1">
+                    <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white truncate leading-none mb-1">
                       {ownerName}
                     </h3>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-black border shadow-sm ${
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.2 text-[9px] sm:text-[10px] font-black border shadow-2xs ${
                         user?.subscription_status === 'expired' 
                           ? 'bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-400 border-red-300 dark:border-red-500/40'
                           : user?.subscription_status === 'trial'
@@ -430,16 +539,16 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
                           ? 'bg-gray-100 dark:bg-gray-500/20 text-gray-800 dark:text-gray-400 border-gray-300 dark:border-gray-500/40'
                           : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/40'
                       }`}>
-                        <Zap size={11} className="fill-current" />
-                        <span>{user?.subscription_tier ? `${user.subscription_tier.charAt(0).toUpperCase() + user.subscription_tier.slice(1)} Tier` : "Free Tier"}</span>
+                        <Zap size={9} className="fill-current" />
+                        <span>{user?.subscription_tier ? `${user.subscription_tier.charAt(0).toUpperCase() + user.subscription_tier.slice(1)}` : "Free"}</span>
                       </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] font-black text-blue-700 dark:text-blue-400">
-                        <ShieldCheck size={13} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                      <span className="inline-flex items-center gap-0.5 text-[9px] sm:text-[10px] font-black text-blue-700 dark:text-blue-400">
+                        <ShieldCheck size={11} className="text-blue-600 dark:text-blue-400 shrink-0" />
                         <span>Verified</span>
                       </span>
                     </div>
                   </div>
-                  <ChevronUp size={16} className={`text-gray-400 transition-transform duration-200 shrink-0 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
+                  <ChevronUp size={15} className={`text-gray-400 transition-transform duration-200 shrink-0 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
                 </>
               )}
             </div>
@@ -451,34 +560,25 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
                   className="fixed inset-0 z-40" 
                   onClick={() => setIsProfileMenuOpen(false)}
                 ></div>
-                <div className={`absolute bottom-full mb-3 left-0 z-50 bg-white dark:bg-[#141c2e] border border-gray-200 dark:border-white/15 rounded-2xl shadow-2xl p-2 transition-all duration-200 ${
+                <div className={`absolute bottom-full mb-2 left-0 z-50 bg-white dark:bg-[#141c2e] border border-gray-200 dark:border-white/15 rounded-2xl shadow-2xl p-2 transition-all duration-200 ${
                   isCollapsed ? "w-48 left-full ml-2 bottom-0 mb-0" : "w-full"
                 }`}>
                   <button
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      navigate("/owner/profile");
-                    }}
+                    onClick={() => handleNavigateProfile("/owner/profile")}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
                   >
                     <User size={16} className="text-blue-500" />
                     <span>View Profile</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      navigate("/owner/profile?tab=tier");
-                    }}
+                    onClick={() => handleNavigateProfile("/owner/profile?tab=tier")}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
                   >
                     <Zap size={16} className="text-emerald-500" />
                     <span>Subscription Plan</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      navigate("/owner/profile?tab=security");
-                    }}
+                    onClick={() => handleNavigateProfile("/owner/profile?tab=security")}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition cursor-pointer"
                   >
                     <SettingsIcon size={16} className="text-purple-500" />
@@ -492,11 +592,11 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
           <button
             onClick={handleLogout}
             title={isCollapsed ? "Logout" : undefined}
-            className={`group flex items-center rounded-xl py-3 text-sm font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all duration-200 w-full ${
-              isCollapsed ? "justify-center px-0" : "gap-4 px-4"
+            className={`group flex items-center rounded-xl py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all duration-150 w-full ${
+              isCollapsed ? "justify-center px-0" : "gap-3 px-3 sm:px-3.5"
             }`}
           >
-            <LogOut size={20} className="shrink-0" />
+            <LogOut size={17} className="shrink-0" />
             {!isCollapsed && <span>Logout</span>}
           </button>
         </div>

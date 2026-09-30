@@ -5,6 +5,10 @@ const couponSchema = new mongoose.Schema(
   {
     _id: { type: Number },
 
+    owner_id: { type: Number, ref: 'User', index: true },
+    pg_id: { type: Number, ref: 'PG', default: null },
+    title: String,
+    description: String,
     code: { type: String, required: true, unique: true, uppercase: true },
     discount_type: {
       type: String,

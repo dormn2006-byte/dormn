@@ -20,8 +20,8 @@ export const getProfileAvatar = (userId) => {
 };
 
 // Build the dock apps array for student pages
-export const buildStudentDockApps = (userId) => [
-  { id: "/student/dashboard", name: "Profile", icon: getProfileAvatar(userId) },
+export const buildStudentDockApps = (userId, profileImage) => [
+  { id: "/student/dashboard", name: "Profile", icon: profileImage || getProfileAvatar(userId), isProfile: true },
   { id: "/my-bookings", name: "Requests", icon: '/icons/my_requests-removebg-preview.webp' },
   { id: "/saved-pgs", name: "Saved", icon: '/icons/saved_pg-removebg-preview.webp' },
   { id: "/student/settings", name: "Settings", icon: '/icons/settings-removebg-preview.webp' },

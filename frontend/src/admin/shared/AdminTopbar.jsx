@@ -18,16 +18,27 @@ const AdminTopbar = ({ sidebarOpen, setSidebarOpen, isCollapsed, toggleCollapse 
 
   useEffect(() => {
     const checkUnreadNotifications = async () => {
+      if (location.pathname.includes("/owner/notifications") || location.pathname.includes("/owner/bookings")) {
+        setHasUnread(false);
+        return;
+      }
       try {
         const { data } = await api.get("/bookings/owner-bookings");
-        const unread = (data.bookings || []).some((b) => b.status === "pending");
-        setHasUnread(unread);
+        const pendingList = (data.bookings || []).filter((b) => b.status === "pending");
+        let seenCounts = {};
+        try {
+          seenCounts = JSON.parse(localStorage.getItem("dormn_owner_seen_counts") || "{}");
+        } catch {}
+        const seenPending = seenCounts.pendingBookings || 0;
+        setHasUnread(pendingList.length > seenPending);
       } catch {
         setHasUnread(false);
       }
     };
 
     checkUnreadNotifications();
+    window.addEventListener("dormn_seen_counts_updated", checkUnreadNotifications);
+    return () => window.removeEventListener("dormn_seen_counts_updated", checkUnreadNotifications);
   }, [location.pathname]);
 
   const user = useMemo(() => {
@@ -72,14 +83,14 @@ const AdminTopbar = ({ sidebarOpen, setSidebarOpen, isCollapsed, toggleCollapse 
   const { title, subtitle } = getPageDetails();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-gray-200 dark:border-white/10 bg-white/80 dark:bg-[#070b1a]/80 backdrop-blur-2xl transition-colors duration-300">
+    <header className="sticky top-0 z-30 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#070b1a] transition-colors duration-200">
       <div className="flex items-center justify-between px-3.5 py-2.5 sm:px-4 sm:py-3 md:px-6 md:py-4 lg:px-8">
         {/* Left Section */}
         <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
           {/* Mobile Menu */}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white transition hover:bg-gray-100 dark:hover:bg-white/10 xl:hidden shrink-0"
+            className="flex h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-white transition hover:bg-gray-200 dark:hover:bg-white/20 xl:hidden shrink-0 cursor-pointer"
           >
             <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
@@ -98,7 +109,7 @@ const AdminTopbar = ({ sidebarOpen, setSidebarOpen, isCollapsed, toggleCollapse 
         {/* Right Section */}
         <div className="flex items-center gap-2 sm:gap-3 md:gap-4 shrink-0">
           {/* Search */}
-          <div className="hidden items-center gap-3 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-2.5 backdrop-blur-xl md:flex">
+          <div className="hidden items-center gap-3 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/10 px-4 py-2.5 md:flex">
             <Search size={18} className="text-gray-400" />
 
             <input
@@ -111,7 +122,7 @@ const AdminTopbar = ({ sidebarOpen, setSidebarOpen, isCollapsed, toggleCollapse 
           {/* Notification Button */}
           <button 
             onClick={() => navigate("/owner/notifications")}
-            className="relative flex h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white transition hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
+            className="relative flex h-9 w-9 sm:h-10 sm:w-10 md:h-11 md:w-11 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-white transition hover:bg-gray-200 dark:hover:bg-white/20 shrink-0 cursor-pointer"
             title="View Notifications"
           >
             <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -122,7 +133,7 @@ const AdminTopbar = ({ sidebarOpen, setSidebarOpen, isCollapsed, toggleCollapse 
           </button>
 
           {/* Theme Switch */}
-          <ThemeSwitch className="!h-9 !w-9 sm:!h-10 sm:!w-10 md:!h-11 md:!w-11 border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white shrink-0" />
+          <ThemeSwitch className="!h-9 !w-9 sm:!h-10 sm:!w-10 md:!h-11 md:!w-11 border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-white shrink-0" />
         </div>
       </div>
     </header>

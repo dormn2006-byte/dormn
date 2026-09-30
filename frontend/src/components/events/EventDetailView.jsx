@@ -41,6 +41,13 @@ export default function EventDetailView({
   const [couponError, setCouponError] = useState("");
   const [couponSuccess, setCouponSuccess] = useState("");
 
+  React.useEffect(() => {
+    setCouponInput("");
+    setAppliedCoupon(null);
+    setCouponError("");
+    setCouponSuccess("");
+  }, [currentEvent?.id]);
+
   const timeStatus = useMemo(() => getEventTimeStatus(currentEvent), [currentEvent]);
 
   const { effectiveGroupSize, basePrice, discountAmount, netPayable } = useMemo(() => {

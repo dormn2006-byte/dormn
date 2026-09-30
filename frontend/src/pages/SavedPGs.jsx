@@ -1,7 +1,7 @@
  import { useState, useEffect, useContext, useCallback, useRef, memo, useMemo } from 'react';
  import { useNavigate, Link } from 'react-router-dom';
  import { User, BookOpen, Heart, Settings, Search, Home, MapPin, Building2, X, ChevronRight, IndianRupee, Loader2, Bookmark } from 'lucide-react';
- import api from '../services/api';
+ import api, { IMAGE_BASE_URL } from '../services/api';
  import { AuthContext } from '../context/AuthContext';
  import MacOSDock from '../components/ui/mac-os-dock';
  import { ThemeSwitch } from '../components/ui/theme-switch-button';
@@ -23,38 +23,45 @@
  
  const PGCard = memo(({ pg, onUnsave }) => {
    const images = parseJSON(pg.images);
-   const imageUrl = images[0] || '';
- 
+   const rawImage = pg.profile_image || images[0] || (Array.isArray(pg.gallery) ? pg.gallery[0]?.image_url : null);
+   const imageUrl = rawImage
+     ? rawImage.startsWith('http') || rawImage.startsWith('data:')
+       ? rawImage
+       : `${IMAGE_BASE_URL}/uploads/${rawImage}`
+     : '';
+
+   const title = pg.title || pg.pg_name || "PG Accommodation";
+
    return (
      <SectionCard className="overflow-hidden flex flex-col group transition-all hover:shadow-md">
        <div className="relative h-48 sm:h-52 bg-gray-100 overflow-hidden">
          {imageUrl ? (
-           <img src={imageUrl} alt={pg.pg_name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+           <img src={imageUrl} alt={title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
          ) : (
            <div className="w-full h-full flex items-center justify-center text-gray-400">
              <Building2 size={36} />
            </div>
          )}
          <div className="absolute top-3.5 left-3.5 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-[#0D3A1D] shadow-sm uppercase tracking-wide">
-           {pg.pg_type}
+           {pg.pg_type || "PG"}
          </div>
          <button 
            onClick={(e) => { e.preventDefault(); onUnsave(pg.id); }}
-           className="absolute top-3.5 right-3.5 bg-white/90 backdrop-blur-sm p-2 rounded-full text-red-500 shadow-sm hover:bg-red-50 transition-colors"
+           className="absolute top-3.5 right-3.5 bg-white/90 backdrop-blur-sm p-2 rounded-full text-red-500 shadow-sm hover:bg-red-50 transition-colors cursor-pointer"
          >
            <X size={16} />
          </button>
        </div>
        <div className="p-5 sm:p-6 flex flex-col flex-1">
-         <h3 className="font-black text-xl text-gray-900 mb-1.5 leading-tight truncate">{pg.pg_name}</h3>
+         <h3 className="font-black text-xl text-gray-900 mb-1.5 leading-tight truncate">{title}</h3>
          <div className="flex items-center text-gray-500 text-xs sm:text-sm mb-4">
            <MapPin size={14} className="mr-1.5 text-gray-400 shrink-0" />
-           <span className="truncate">{pg.area}, {pg.city}</span>
+           <span className="truncate">{[pg.area, pg.city].filter(Boolean).join(", ")}</span>
          </div>
          <div className="mt-auto flex items-center justify-between pt-3.5 border-t border-gray-100">
            <div className="flex items-center text-gray-900">
              <IndianRupee size={16} className="mr-0.5 text-gray-800" />
-             <span className="font-black text-xl">{pg.price}</span>
+             <span className="font-black text-xl">{Number(pg.price || 0).toLocaleString()}</span>
              <span className="text-gray-500 text-xs font-bold ml-1">/mo</span>
            </div>
            <Link to={`/pg/${pg.id}`} className="flex items-center text-[#93B733] font-bold text-xs sm:text-sm hover:text-[#7a992a] transition-colors gap-0.5">
@@ -115,7 +122,7 @@
    const handleDockClick = useCallback((id) => navigate(id), [navigate]);
  
    return (
-     <div className="min-h-screen bg-gradient-to-b from-[#f8f9f3] to-[#f0f1eb] pb-28 font-sans selection:bg-[#93B733]/20">
+      <div className="min-h-screen bg-[#FAF9F5] dark:bg-[#000000] pb-28 font-sans selection:bg-[#93B733] selection:text-white">
         {/* ── HEADER ── */}
         <header className="sticky top-0 z-40 border-b border-gray-200/40 dark:border-gray-800/40 bg-white/70 dark:bg-black/70 backdrop-blur-2xl">
           <div className="mx-auto flex max-w-[1600px] h-14 items-center justify-between px-4 sm:px-6">

@@ -1,4 +1,6 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Trash2, X } from "lucide-react";
 import HeroSection from "../components/Home/HeroSection";
 import SearchSection from "../components/Home/SearchSection";
 import FeaturedListings from "../components/Home/FeaturedListings";
@@ -10,8 +12,12 @@ import API from "../services/api";
 import { hasAmenityMatch } from "../utils/amenities";
 
 const Home = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [featuredPGs, setFeaturedPGs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showDeletedToast, setShowDeletedToast] = useState(false);
   
   const [filters, setFilters] = useState({
     keyword: "",
@@ -40,6 +46,17 @@ const Home = () => {
     areas: [],
     landmarks: []
   });
+
+  // Check for account deleted notification from navigation state
+  useEffect(() => {
+    if (location.state?.accountDeleted) {
+      setShowDeletedToast(true);
+      // Clean up location state so refresh doesn't trigger again
+      navigate(location.pathname, { replace: true, state: {} });
+      const timer = setTimeout(() => setShowDeletedToast(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [location.state, location.pathname, navigate]);
 
   const filteredPGs = useMemo(() => {
     const list = featuredPGs.filter((pg) => {
@@ -72,7 +89,8 @@ const Home = () => {
       const minPriceMatch = !activeFilters.minPrice || Number(activeFilters.minPrice) <= 0 || pgPrice >= Number(activeFilters.minPrice);
       const maxPriceMatch = !activeFilters.maxPrice || Number(activeFilters.maxPrice) >= 50000 || pgPrice <= Number(activeFilters.maxPrice);
 
-      const amenityMatch = !activeFilters.amenity || hasAmenityMatch(pg, activeFilters.amenity);
+      const amenityList = activeFilters.amenities || (activeFilters.amenity ? activeFilters.amenity.split(",").map(s => s.trim().toLowerCase()).filter(Boolean) : []);
+      const amenityMatch = amenityList.length === 0 || amenityList.every(a => hasAmenityMatch(pg, a));
 
       return keywordMatch && typeMatch && cityMatch && areaMatch && landmarkMatch && minPriceMatch && maxPriceMatch && amenityMatch;
     });
@@ -83,7 +101,7 @@ const Home = () => {
       const aAvailable = aSpots > 0 ? 1 : 0;
       const bAvailable = bSpots > 0 ? 1 : 0;
       if (aAvailable !== bAvailable) {
-        return bAvailable - aAvailable; // PGs with available spots first (1), filled (0) at the bottom
+        return bAvailable - aAvailable;
       }
       return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
@@ -93,7 +111,6 @@ const Home = () => {
     const fetchHomeData = async () => {
       try {
         setLoading(true);
-        
         const [pgResponse, filterResponse] = await Promise.all([
           API.get("/pg/all"),
           API.get("/pg/filter-options")
@@ -109,7 +126,6 @@ const Home = () => {
             landmarks: filterResponse.data.data.colleges || [],
           });
         }
-
       } catch (error) {
         console.error("Home page data load failed:", error);
       } finally {
@@ -145,7 +161,6 @@ const Home = () => {
         setFilters={setFilters}
         onSearch={handleHomeSearch}
         availableCities={dynamicOptions.cities}
-        // Pass the dynamically filtered lists down to the search bar
         availableAreas={availableAreas}           
         availableLandmarks={availableLandmarks}   
       />
@@ -166,6 +181,30 @@ const Home = () => {
       <Suspense fallback={null}>
         <FeaturesShowcase />
       </Suspense>
+
+      {/* Sleek Bottom Notification: Account Deleted */}
+      {showDeletedToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-bottom-5 duration-300 max-w-md w-[92%] sm:w-auto">
+          <div className="flex items-center justify-between gap-3.5 rounded-full bg-[#111111]/95 dark:bg-white/95 text-white dark:text-gray-900 px-5 py-3.5 shadow-2xl backdrop-blur-xl border border-white/10 dark:border-black/10">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/20 text-red-500 dark:text-red-600 shrink-0">
+                <Trash2 size={15} />
+              </div>
+              <span className="text-xs sm:text-sm font-bold tracking-tight">
+                Your account has been permanently deleted.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDeletedToast(false)}
+              className="p-1 rounded-full text-gray-400 hover:text-white dark:hover:text-black transition cursor-pointer"
+              aria-label="Dismiss"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+      )}
     </PublicLayout>
   );
 };

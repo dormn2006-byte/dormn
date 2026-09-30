@@ -97,6 +97,20 @@ export const decryptUserObject = (user) => {
     }
   }
 
+  if (Array.isArray(decrypted.bank_accounts)) {
+    decrypted.bank_accounts = decrypted.bank_accounts.map((acc) => {
+      if (!acc || typeof acc !== "object") return acc;
+      return {
+        ...acc,
+        account_holder: decrypt(acc.account_holder),
+        bank_name: decrypt(acc.bank_name),
+        account_number: decrypt(acc.account_number),
+        ifsc_code: decrypt(acc.ifsc_code),
+        upi_id: acc.upi_id ? decrypt(acc.upi_id) : null,
+      };
+    });
+  }
+
   return decrypted;
 };
 

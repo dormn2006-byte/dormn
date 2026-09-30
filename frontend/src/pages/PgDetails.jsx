@@ -1,19 +1,32 @@
 
-import { useEffect, useState, useMemo, useContext, useCallback } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import Navbar from "../components/Navbar";
+import { useEffect, useState, useMemo, useContext, useCallback, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import API, { IMAGE_BASE_URL } from "../services/api";
 import { AuthContext } from "../context/AuthContext";
-import EmailVerificationModal from "../components/auth/EmailVerificationModal";
-import VisitSchedulePicker from "../components/booking/VisitSchedulePicker";
-import { formatVisitDate } from "../utils/visitDate";
-import {
-  Phone, MessageSquare, CheckCircle2, Clock, ChevronRight, ChevronLeft,
-  X, Sparkles, Building2, MapPin, AlertCircle, ShieldCheck, User, ExternalLink,
-  Share2, Copy, Check, ArrowLeft, BedDouble, BedSingle, Snowflake, Wind, Flame,
-  Wifi, Zap, UtensilsCrossed, Shirt, Bath, Car, Droplets, Dumbbell, Tv, PlayCircle
-} from "lucide-react";
 import { formatDuration } from "../config/mediaLimits";
+import AmenitiesModal from "../components/AmenitiesModal";
+import EmailVerificationModal from "../components/auth/EmailVerificationModal";
+import { isEmailVerified } from "../utils/verificationStorage";
+import { calcStayDays, calcDailyPrice } from "../utils/shortStayUtils";
+import { getPgFoodPreference } from "../utils/amenities";
+import {
+  Phone, MessageSquare, CheckCircle2, Clock, ChevronRight, ChevronLeft, ChevronDown,
+  X, Sparkles, Building2, AlertCircle, ShieldCheck,
+  Share2, Copy, Check, ArrowLeft, BedDouble, BedSingle, Snowflake, Wind, Flame,
+  Wifi, Zap, UtensilsCrossed, Shirt, Bath, Car, Droplets, Dumbbell, Tv,
+  CalendarClock, KeyRound, CalendarCheck, CalendarRange, Tag, Apple
+} from "lucide-react";
+import {
+  CheckInCalendarModal,
+  ScheduleVisitModal,
+  ShortStayCalendarModal,
+  VisitSuccessModal,
+  VisitAlreadyRequestedModal,
+  ShortStaySuccessModal,
+  ShortStayAlreadyRequestedModal,
+  BookingSuccessModal,
+  AuthPromptModal,
+} from "./pgDetails/PgDetailsModals";
 
 const AMENITY_MAP = [
   { match: /power|backup|generator|electricity/i, icon: Zap, bg: "bg-amber-500/10 dark:bg-amber-400/15", color: "text-amber-600 dark:text-amber-400", border: "border-amber-200/60 dark:border-amber-500/25" },
@@ -61,8 +74,6 @@ const DEFAULT_DETAILS_FALLBACKS = [
   "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=1200&q=80",
 ];
 
-// One gallery thumbnail — a photo, or a video's first frame with a play badge.
-// Videos are muted and control-less here; the player lives in the main viewer.
 const MediaThumbnail = ({ item, index }) => {
   if (item.type === "video") {
     return (
@@ -99,6 +110,7 @@ const MediaThumbnail = ({ item, index }) => {
     />
   );
 };
+
 
 const parseListField = (val) => {
   if (!val) return [];
@@ -143,14 +155,14 @@ const ROOM_DEFS = [
   },
 ];
 
-const CoolingBadge = ({ isAc, className = "" }) => (
-  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${className}`}>
+const CoolingBadge = ({ isAc, isOptActive = false, className = "" }) => (
+  <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${isOptActive ? "text-black font-black" : "text-gray-800 dark:text-white"} ${className}`}>
     {isAc ? (
-      <Snowflake className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+      <Snowflake className={`w-3.5 h-3.5 shrink-0 ${isOptActive ? "text-black" : "text-sky-500 dark:text-sky-400"}`} />
     ) : (
-      <Wind className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+      <Wind className={`w-3.5 h-3.5 shrink-0 ${isOptActive ? "text-black" : "text-emerald-600 dark:text-[#bbf246]"}`} />
     )}
-    <span>{isAc ? "AC Room" : "Non-AC"}</span>
+    <span className={isOptActive ? "text-black font-black" : "text-gray-800 dark:text-white font-bold"}>{isAc ? "AC Room" : "Non-AC"}</span>
   </span>
 );
 
@@ -163,7 +175,9 @@ const resolveRoomConfigurations = (pgData) => {
   if (pgData.sharing_options) {
     try {
       parsed = typeof pgData.sharing_options === "string" ? JSON.parse(pgData.sharing_options) : pgData.sharing_options;
-    } catch {}
+    } catch {
+      parsed = null;
+    }
   }
 
   const hasConfig = parsed && ROOM_DEFS.some((d) => parsed[d.key]?.available || parsed[d.key]?.ac_price || parsed[d.key]?.non_ac_price);
@@ -214,46 +228,75 @@ const PgDetails = () => {
 
   // Track if user already booked this PG and is under verification
   const [existingBooking, setExistingBooking] = useState(null);
+  const [existingVisit, setExistingVisit] = useState(null);
+  const [showAlreadyVisitedModal, setShowAlreadyVisitedModal] = useState(false);
+  const [existingShortStay, setExistingShortStay] = useState(null);
+  const [showAlreadyRequestedShortStayModal, setShowAlreadyRequestedShortStayModal] = useState(false);
+  const [showShortStayModal, setShowShortStayModal] = useState(false);
+  const [shortStayLoading, setShortStayLoading] = useState(false);
+  const [shortStaySuccessModal, setShortStaySuccessModal] = useState(false);
+  const [shortStaySuccessData, setShortStaySuccessData] = useState(null);
   // Track if user has an active stay at a DIFFERENT PG (blocks new bookings)
   const [activeStayAtOtherPG, setActiveStayAtOtherPG] = useState(null);
 
   // Check if current user already has a pending or active booking for this PG
   // AND check if they have an active stay at ANY other PG
+  // AND check if they have an active scheduled visit or short stay for this PG
   useEffect(() => {
-    const checkExistingBooking = async () => {
+    const checkExistingBookingAndVisits = async () => {
       const token = localStorage.getItem("token");
-      if (!token || !user) { setExistingBooking(null); setActiveStayAtOtherPG(null); return; }
+      if (!token || !user) {
+        setExistingBooking(null);
+        setActiveStayAtOtherPG(null);
+        setExistingVisit(null);
+        setExistingShortStay(null);
+        return;
+      }
       try {
-        const res = await API.get("/bookings/my-bookings");
-        const list = res.data?.bookings || res.data || [];
-        if (!Array.isArray(list)) { setExistingBooking(null); setActiveStayAtOtherPG(null); return; }
+        const [bookRes, visitRes, shortStayRes] = await Promise.all([
+          API.get("/bookings/my-bookings").catch(() => ({ data: [] })),
+          API.get("/visits/my").catch(() => ({ data: { visits: [] } })),
+          API.get("/short-stays/my").catch(() => ({ data: { shortStays: [] } })),
+        ]);
 
-        // A booking stops counting as an active stay once it is cancelled.
-        // An owner-approved stay cancellation flips status to "cancelled" but
-        // keeps payment_status as "paid", so cancelled must be excluded here.
-        const isCancelledBooking = (b) =>
-          b.status === "cancelled" ||
-          b.status === "rejected" ||
-          b.cancellation_status === "approved";
+        const list = bookRes.data?.bookings || bookRes.data || [];
+        if (Array.isArray(list)) {
+          // Check for existing booking at THIS PG
+          const found = list.find(
+            (b) => (Number(b.pg_id) === Number(id) || (b.title || b.pg_name || '').toLowerCase().trim() === (pg?.title || '').toLowerCase().trim()) && 
+                   (b.status === "pending" || b.status === "approved" || b.payment_status === "paid")
+          );
+          setExistingBooking(found || null);
 
-        // Check for existing booking at THIS PG
-        const found = list.find(
-          (b) => (Number(b.pg_id) === Number(id) || (b.title || b.pg_name || '').toLowerCase().trim() === (pg?.title || '').toLowerCase().trim()) && 
-                 !isCancelledBooking(b) &&
-                 (b.status === "pending" || b.status === "approved" || b.payment_status === "paid")
-        );
-        setExistingBooking(found || null);
+          // Check for active stay at a DIFFERENT PG
+          const otherActiveStay = list.find(
+            (b) => Number(b.pg_id) !== Number(id) &&
+                   (b.status === 'approved' || b.payment_status === 'paid') &&
+                   b.status !== 'cancelled'
+          );
+          setActiveStayAtOtherPG(otherActiveStay || null);
+        }
 
-        // Check for active stay at a DIFFERENT PG
-        const otherActiveStay = list.find(
-          (b) => Number(b.pg_id) !== Number(id) &&
-                 (b.status === 'approved' || b.payment_status === 'paid') &&
-                 !isCancelledBooking(b)
-        );
-        setActiveStayAtOtherPG(otherActiveStay || null);
-      } catch (err) { console.error("Check existing booking error:", err); }
+        const visitList = visitRes.data?.visits || [];
+        if (Array.isArray(visitList)) {
+          const foundVisit = visitList.find(
+            (v) => Number(v.pg_id) === Number(id) && (v.status === "pending" || v.status === "confirmed")
+          );
+          setExistingVisit(foundVisit || null);
+        }
+
+        const stayList = shortStayRes.data?.shortStays || [];
+        if (Array.isArray(stayList)) {
+          const foundStay = stayList.find(
+            (s) => Number(s.pg_id) === Number(id) && (s.status === "pending" || s.status === "approved")
+          );
+          setExistingShortStay(foundStay || null);
+        }
+      } catch (err) {
+        console.error("Check existing booking and visits error:", err);
+      }
     };
-    checkExistingBooking();
+    checkExistingBookingAndVisits();
   }, [id, user, pg?.title]);
 
   const bookingStatusMeta = useMemo(() => {
@@ -264,7 +307,8 @@ const PgDetails = () => {
       title: isApprovedUnpaid ? 'Booking Approved by Owner!' : isPaid ? 'Active Resident Stay' : 'Booking Request Under Review',
       sub: isApprovedUnpaid ? 'Your booking for this PG has been APPROVED by the owner! Pay rent now in My PG to unlock full portal access.' : isPaid ? 'You are currently an active resident at this PG.' : 'You have already submitted a booking request for this PG. Status: PENDING OWNER APPROVAL.',
       btnBg: isApprovedUnpaid ? 'bg-emerald-600 hover:bg-emerald-700' : isPaid ? 'bg-[#0D3A1D] hover:bg-[#092814]' : 'bg-amber-600 hover:bg-amber-700',
-      btnText: isApprovedUnpaid ? 'Already Approved (Pay Now in My PG)' : isPaid ? 'Already Active Stay (View Resident Portal)' : 'Already Requested (View Request Status)'
+      btnText: isApprovedUnpaid ? 'Pay in My PG' : isPaid ? 'Resident Portal' : 'View Status',
+      btnTextFull: isApprovedUnpaid ? 'Already Approved (Pay in My PG)' : isPaid ? 'Already Active Stay (Resident Portal)' : 'Already Requested (View Request Status)'
     };
   }, [existingBooking]);
 
@@ -277,6 +321,21 @@ const PgDetails = () => {
         const res = await API.get(`/pg/${id}`);
         const pgData = res.data?.pg;
         if (pgData) {
+          if (
+            pgData.status !== "approved" &&
+            Number(user?.id) !== Number(pgData.owner_id) &&
+            user?.role !== "admin" &&
+            user?.role !== "superadmin"
+          ) {
+            setError(
+              pgData.status === "removed"
+                ? "This property listing has been delisted by administrator and is currently unavailable."
+                : "This property listing is currently under review and is not publicly visible."
+            );
+            setPg(null);
+            return;
+          }
+
           setPg(pgData);
           const resolved = resolveRoomConfigurations(pgData);
           if (resolved.length > 0 && resolved[0].options?.length > 0) {
@@ -295,7 +354,7 @@ const PgDetails = () => {
     };
 
     fetchPG();
-  }, [id]);
+  }, [id, user]);
 
   const cleanAmenities = useMemo(() => parseListField(pg?.amenities), [pg?.amenities]);
   const cleanRules = useMemo(() => parseListField(pg?.rules), [pg?.rules]);
@@ -343,8 +402,7 @@ const PgDetails = () => {
   );
 
   const mediaCount = mediaItems.length;
-
-  const currentActiveIndex = mediaCount > 0
+const currentActiveIndex = mediaCount > 0
     ? ((activeImageIndex % mediaCount) + mediaCount) % mediaCount
     : 0;
   const activeMedia = mediaItems[currentActiveIndex] || null;
@@ -352,7 +410,8 @@ const PgDetails = () => {
     ? activeMedia.url
     : galleryImages[0] || DEFAULT_DETAILS_FALLBACKS[0];
 
-  // Gallery Controls
+  
+// Gallery Controls
   const showNextImage = (e) => {
     if (e) {
       e.preventDefault();
@@ -375,13 +434,19 @@ const PgDetails = () => {
   const [bookingSuccessModal, setBookingSuccessModal] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showAmenitiesModal, setShowAmenitiesModal] = useState(false);
   const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false);
+  const [verificationSource, setVerificationSource] = useState("check_in");
   const [copiedToast, setCopiedToast] = useState(false);
   const [isGalleryLoopPaused, setIsGalleryLoopPaused] = useState(false);
 
-  // Inline visit scheduler (date + time) shown inside the booking card
-  const [showVisitPicker, setShowVisitPicker] = useState(false);
-  const [scheduledVisit, setScheduledVisit] = useState({ date: "", time: "" });
+  // Check In & Visit Modal States
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [showVisitModal, setShowVisitModal] = useState(false);
+  const [visitLoading, setVisitLoading] = useState(false);
+  const [visitSuccessModal, setVisitSuccessModal] = useState(false);
+  const [scheduledVisitInfo, setScheduledVisitInfo] = useState(null);
+  const [chosenCheckInDate, setChosenCheckInDate] = useState(null);
 
   // Direct Share & Copy Link Handler
   const handleShare = useCallback(async () => {
@@ -410,7 +475,7 @@ const PgDetails = () => {
     } catch (err) {
       console.error("Clipboard copy failed:", err);
     }
-  }, [pg?.title, pg?.area, pg?.city]);
+  }, [pg]);
 
   // Memoized Real-time Owner Phone Number Details
   const { cleanPhoneDigits, formattedWaNumber, displayPhone } = useMemo(() => {
@@ -458,17 +523,16 @@ const PgDetails = () => {
     }
   }, [navigate]);
 
-  const handleBookVisit = async () => {
-    // Auth Check
+  // Handle Check In button click
+  const handleCheckInClick = () => {
     const token = localStorage.getItem("token");
     if (!token) {
       setShowAuthModal(true);
       return;
     }
 
-    // Email Verification Check (Non-Google email users must verify their email before booking)
-    const isEmailVerified = Boolean(user?.is_email_verified) || user?.auth_provider === "google";
-    if (user && !isEmailVerified) {
+    if (user && !isEmailVerified(user)) {
+      setVerificationSource("check_in");
       setShowEmailVerificationModal(true);
       return;
     }
@@ -495,31 +559,33 @@ const PgDetails = () => {
       return;
     }
 
-    // All checks passed — reveal the inline calendar so the student can pick
-    // the day & time they'll physically visit the PG.
-    setShowVisitPicker(true);
+    // Open Check-in Date Picker Modal
+    setShowCheckInModal(true);
   };
 
-  // Submit the visit/booking request with the student-chosen schedule
-  const handleConfirmVisit = async (date, time) => {
-    if (!date || !time) {
-      alert("Please select both a visit date and a time slot.");
-      return;
-    }
-
+  // Confirm Check-in and proceed to booking
+  const handleConfirmCheckIn = async (selectedCheckInDate, promoData = null) => {
     try {
       setBookingLoading(true);
+      setChosenCheckInDate(selectedCheckInDate);
       await API.post("/bookings/create", {
         pg_id: Number(id),
-        message: `Visit requested on ${formatVisitDate(date)} at ${time} for ${selectedRoom.label}`,
+        message: `Interested in checking in on ${selectedCheckInDate} for ${selectedRoom.label}${promoData?.code ? ` (Promo: ${promoData.code})` : ''}`,
         selected_room_type: selectedRoom.label,
-        booked_price: selectedRoom.price,
-        visit_date: date,
-        visit_time: time,
+        booked_price: promoData?.final_amount || selectedRoom.price,
+        check_in_date: selectedCheckInDate,
+        coupon_code: promoData?.code || null,
+        discount_amount: promoData?.discount_applied || 0,
       });
-      setScheduledVisit({ date, time });
-      setShowVisitPicker(false);
-      setExistingBooking({ status: "pending", pg_id: Number(id) });
+      setExistingBooking({ 
+        status: "pending", 
+        pg_id: Number(id), 
+        check_in_date: selectedCheckInDate,
+        coupon_code: promoData?.code || null,
+        discount_amount: promoData?.discount_applied || 0,
+        booked_price: promoData?.final_amount || selectedRoom.price,
+      });
+      setShowCheckInModal(false);
       setBookingSuccessModal(true);
     } catch (error) {
       console.error("Booking Error:", error);
@@ -533,13 +599,176 @@ const PgDetails = () => {
     }
   };
 
+  // Handle Request a Visit button click
+  const handleRequestVisitClick = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setShowAuthModal(true);
+      return;
+    }
+    // If student already has an active visit request for this PG, show status modal
+    if (existingVisit && (existingVisit.status === "pending" || existingVisit.status === "confirmed")) {
+      setShowAlreadyVisitedModal(true);
+      return;
+    }
+    setShowVisitModal(true);
+  };
+
+  // Confirm visit request submission
+  const handleConfirmVisit = async ({
+    visitDate,
+    visitTimeSlot,
+    studentName,
+    studentPhone,
+    studentEmail,
+    notes,
+  }) => {
+    try {
+      setVisitLoading(true);
+      await API.post("/visits", {
+        pg_id: Number(id),
+        visit_date: visitDate,
+        visit_time_slot: visitTimeSlot,
+        student_name: studentName,
+        student_phone: studentPhone,
+        student_email: studentEmail,
+        notes: notes,
+      });
+      setExistingVisit({
+        pg_id: Number(id),
+        visit_date: visitDate,
+        visit_time_slot: visitTimeSlot,
+        status: "pending",
+      });
+      setScheduledVisitInfo({
+        visitDate,
+        visitTimeSlot,
+        pgTitle: pg?.title,
+      });
+      setShowVisitModal(false);
+      setVisitSuccessModal(true);
+    } catch (error) {
+      console.error("Visit Request Error:", error);
+      if (error?.response?.data?.code === "VISIT_ALREADY_REQUESTED") {
+        setExistingVisit(error?.response?.data?.existingVisit || {
+          pg_id: Number(id),
+          visit_date: visitDate,
+          visit_time_slot: visitTimeSlot,
+          status: "pending",
+        });
+        setShowVisitModal(false);
+        setShowAlreadyVisitedModal(true);
+        return;
+      }
+      alert(error?.response?.data?.message || "Failed to schedule visit. Please try again.");
+    } finally {
+      setVisitLoading(false);
+    }
+  };
+
+  // Handle Short Stay button click
+  const handleShortStayClick = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    if (user && !isEmailVerified(user)) {
+      setVerificationSource("short_stay");
+      setShowEmailVerificationModal(true);
+      return;
+    }
+
+    // If student already has an active short stay request for this PG, show status modal
+    if (existingShortStay && (existingShortStay.status === "pending" || existingShortStay.status === "approved")) {
+      setShowAlreadyRequestedShortStayModal(true);
+      return;
+    }
+    setShowShortStayModal(true);
+  };
+
+  // Confirm Short Stay request submission
+  const handleConfirmShortStay = async ({
+    checkInDate,
+    checkOutDate,
+    totalDays,
+    roomType,
+    isAc,
+    guestCount,
+    dailyPrice,
+    totalAmount,
+    studentName,
+    studentPhone,
+    studentEmail,
+    purpose,
+  }) => {
+    try {
+      setShortStayLoading(true);
+      const res = await API.post("/short-stays", {
+        pg_id: Number(id),
+        check_in_date: checkInDate,
+        check_out_date: checkOutDate,
+        room_type: roomType,
+        is_ac: isAc,
+        guest_count: guestCount,
+        daily_price: dailyPrice,
+        student_name: studentName,
+        student_phone: studentPhone,
+        student_email: studentEmail,
+        purpose: purpose,
+      });
+
+      const newStay = {
+        id: res.data?.shortStayId,
+        pg_id: Number(id),
+        check_in_date: checkInDate,
+        check_out_date: checkOutDate,
+        total_days: totalDays,
+        room_type: roomType,
+        is_ac: isAc,
+        daily_price: dailyPrice,
+        total_amount: totalAmount,
+        status: "pending",
+      };
+
+      setExistingShortStay(newStay);
+      setShortStaySuccessData({
+        ...newStay,
+        pgTitle: pg?.title,
+      });
+      setShowShortStayModal(false);
+      setShortStaySuccessModal(true);
+    } catch (error) {
+      console.error("Short Stay Request Error:", error);
+      if (error?.response?.data?.code === "EMAIL_NOT_VERIFIED") {
+        setShowShortStayModal(false);
+        setVerificationSource("short_stay");
+        setShowEmailVerificationModal(true);
+        return;
+      }
+      if (error?.response?.data?.code === "SHORT_STAY_ALREADY_REQUESTED") {
+        setExistingShortStay(error?.response?.data?.existingStay || {
+          pg_id: Number(id),
+          check_in_date: checkInDate,
+          check_out_date: checkOutDate,
+          status: "pending",
+        });
+        setShowShortStayModal(false);
+        setShowAlreadyRequestedShortStayModal(true);
+        return;
+      }
+      alert(error?.response?.data?.message || "Failed to submit short stay request. Please try again.");
+    } finally {
+      setShortStayLoading(false);
+    }
+  };
 
   const [mainImageLoaded, setMainImageLoaded] = useState(false);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAF9F5] dark:bg-[#000000] font-sans selection:bg-[#93B733] selection:text-white pb-20">
-        <Navbar />
         <section className="relative z-10 mx-auto max-w-[1440px] 2xl:max-w-[1600px] px-4 py-8 sm:px-6 md:px-8 lg:px-10 md:py-12">
           <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:gap-12">
             <div className="flex flex-col gap-8">
@@ -577,10 +806,7 @@ const PgDetails = () => {
   const currentRoomPrice = selectedRoom.price || pg?.price || 0;
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#FAF9F5] dark:bg-[#000000] text-[#3A2935] dark:text-white font-sans selection:bg-[#93B733] selection:text-white pb-20">
-      {/* Navbar */}
-      <Navbar />
-
+    <div className="min-h-screen overflow-x-hidden bg-[#FAF9F5] dark:bg-[#000000] text-[#3A2935] dark:text-white font-sans pb-14 sm:pb-20">
       {/* Floating Copied Toast Notification */}
       {copiedToast && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -594,133 +820,215 @@ const PgDetails = () => {
       )}
 
       {/* Main Layout */}
-      <section className="relative z-10 mx-auto max-w-[1440px] 2xl:max-w-[1600px] px-3 py-4 sm:px-6 md:px-8 lg:px-10 md:py-6">
+      <section className="relative z-10 mx-auto max-w-[1440px] 2xl:max-w-[1600px] px-2.5 py-2.5 sm:px-6 md:px-8 lg:px-10 md:py-6">
         
-        {/* Top Back Navigation */}
-        <div className="mb-3 sm:mb-4">
-          <button
-            type="button"
-            onClick={handleBack}
-            className="group inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111625] px-3.5 py-1.5 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 shadow-sm transition-all hover:border-[#93B733] hover:text-[#0D3A1D] dark:hover:text-[#93B733] active:scale-95 cursor-pointer"
-          >
-            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5 text-gray-500 group-hover:text-[#93B733]" />
-            <span>Back</span>
-          </button>
+        {/* Top Header: Back Button, Title, PG Type, Rating, Status & Address (Above Image) */}
+        <div className="mb-2.5 sm:mb-5">
+          <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2.5">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="group inline-flex items-center gap-1.5 sm:gap-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111625] px-2.5 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 shadow-sm transition-all hover:border-[#93B733] hover:text-[#0D3A1D] dark:hover:text-[#93B733] active:scale-95 cursor-pointer"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform group-hover:-translate-x-0.5 text-gray-500 group-hover:text-[#93B733]" />
+              <span>Back</span>
+            </button>
+
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {pg.sponsored && (
+                <span className="rounded-md sm:rounded-lg bg-[#93B733]/10 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[8.5px] sm:text-[10px] font-bold uppercase tracking-wider text-[#93B733]">
+                  Sponsored
+                </span>
+              )}
+              
+              <span className="rounded-md sm:rounded-lg bg-gray-100 dark:bg-white/10 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[8.5px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                {pg.status || "Active"}
+              </span>
+
+              {/* Share Property Button */}
+              <button
+                type="button"
+                onClick={handleShare}
+                className="inline-flex items-center gap-1 sm:gap-1.5 rounded-lg sm:rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#111625] hover:bg-gray-100 px-2 py-1 sm:px-3 sm:py-1.5 text-[9.5px] sm:text-xs font-bold text-gray-800 dark:text-gray-200 transition cursor-pointer active:scale-95 shadow-xs"
+              >
+                <Share2 size={11} className="text-[#93B733] shrink-0" />
+                <span>{copiedToast ? "Copied!" : "Share"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* PG Title, Type, Rating & Food Preference */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-lg sm:text-3xl font-black tracking-tight text-[#3A2935] dark:text-white md:text-4xl">
+              {pg.title}
+            </h1>
+            <span className="inline-flex items-center gap-1 sm:gap-1.5 rounded-lg sm:rounded-xl border border-[#93B733]/40 bg-[#93B733]/15 text-[#2c4406] dark:text-[#bbf246] px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-xs">
+              <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#93B733] shrink-0" />
+              <span>{String(pg.pg_type || "PG").toUpperCase()}</span>
+            </span>
+
+            {/* Food Type Badge (Veg / Non-Veg) */}
+            {(() => {
+              const food = getPgFoodPreference(pg);
+              if (food.type === "Veg") {
+                return (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg sm:rounded-xl border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                    <UtensilsCrossed className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>Veg</span>
+                  </span>
+                );
+              }
+              return (
+                <span className="inline-flex items-center gap-1.5 rounded-lg sm:rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-xs">
+                  <span className="w-2 h-2 rounded-full bg-amber-700 shrink-0"></span>
+                  <UtensilsCrossed className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>Non-Veg</span>
+                </span>
+              );
+            })()}
+
+            <div className="inline-flex items-center gap-1 rounded-lg sm:rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.04] px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-bold text-[#3A2935] dark:text-white">
+              <span className="text-[#93B733]">★</span> {pg.rating || "New"}
+            </div>
+          </div>
+
+          {/* Address */}
+          <p className="mt-1 sm:mt-1.5 text-[11px] sm:text-sm font-medium text-gray-500 md:text-base flex items-center gap-1 sm:gap-1.5">
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#93B733] shrink-0" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+            {`${pg.area || ""}, ${pg.city || ""}`}
+          </p>
         </div>
 
-        <div className="grid gap-4 sm:gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:gap-12">
+        <div className="grid gap-2.5 sm:gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:gap-12">
           
           {/* LEFT SIDE: Details & Gallery */}
-          <div className="flex flex-col gap-4 sm:gap-8">
+          <div className="flex flex-col gap-2.5 sm:gap-8">
             
             {/* Gallery (Bento Box Style) */}
-            <div className="rounded-2xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-1.5 sm:p-2 md:rounded-[2.5rem] md:p-3 shadow-sm">
-              <div className="relative overflow-hidden rounded-xl sm:rounded-[1.5rem] md:rounded-[2rem] bg-gray-200 dark:bg-gray-800">
+            <div className="rounded-xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-1 sm:p-2 md:rounded-[2.5rem] md:p-3 shadow-sm">
+              <div className="relative overflow-hidden rounded-lg sm:rounded-[1.5rem] md:rounded-[2rem] bg-gray-200 dark:bg-gray-800">
                 
-                {/* Backside Shimmer Skeleton (photos only) */}
-                {!mainImageLoaded && activeMedia?.type !== "video" && (
+                {/* Dormn Verified PG Badge - Top Left */}
+                <div className="absolute top-2.5 left-2.5 sm:top-4 sm:left-4 z-20 flex items-center gap-1 sm:gap-1.5 rounded-full bg-[#0D3A1D]/90 dark:bg-black/85 backdrop-blur-md px-2.5 py-1 sm:px-3.5 sm:py-1.5 border border-[#93B733]/50 shadow-md">
+                  <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#93B733] shrink-0" />
+                  <span className="text-[9.5px] sm:text-xs font-black tracking-wide text-white uppercase">
+                    Dormn Verified PG
+                  </span>
+                </div>
+
+                {/* Backside Shimmer Skeleton */}
+                {!mainImageLoaded && (
                   <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 animate-pulse z-0" />
                 )}
 
-                {activeMedia?.type === "video" ? (
-                  <video
-                    key={activeMedia.url}
-                    src={activeMedia.url}
-                    poster={activeMedia.poster || undefined}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    className="h-[220px] sm:h-[360px] md:h-[480px] w-full bg-black object-contain"
-                  />
-                ) : (
-                  <img
-                    src={displayActiveImage}
-                    alt="PG"
-                    onLoad={() => setMainImageLoaded(true)}
-                    className={`h-[220px] sm:h-[360px] md:h-[480px] w-full object-cover transition-all duration-700 hover:scale-105 ${
-                      mainImageLoaded ? "opacity-100" : "opacity-0"
-                    }`}
-                    onError={(e) => {
-                      e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[0];
-                      setMainImageLoaded(true);
-                    }}
-                  />
-                )}
-                {mediaCount > 1 && (
+                <img
+                  src={displayActiveImage}
+                  alt="PG"
+                  onLoad={() => setMainImageLoaded(true)}
+                  className={`h-[190px] sm:h-[360px] md:h-[480px] w-full object-cover transition-all duration-700 hover:scale-105 ${
+                    mainImageLoaded ? "opacity-100" : "opacity-0"
+                  }`}
+                  onError={(e) => {
+                    e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[0];
+                    setMainImageLoaded(true);
+                  }}
+                />
+                {galleryImages.length > 1 && (
                   <>
                     <button
                       type="button"
                       onClick={showPreviousImage}
                       aria-label="Previous Image"
-                      className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 z-20 flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-gray-800 shadow-md transition-all hover:bg-white hover:scale-110 active:scale-95 cursor-pointer"
+                      className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 z-20 flex h-7 w-7 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-gray-800 shadow-md transition-all hover:bg-white hover:scale-110 active:scale-95 cursor-pointer"
                     >
-                      <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.5]" />
+                      <ChevronLeft className="h-3.5 w-3.5 sm:h-5 sm:w-5 stroke-[2.5]" />
                     </button>
 
                     <button
                       type="button"
                       onClick={showNextImage}
                       aria-label="Next Image"
-                      className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 z-20 flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-gray-800 shadow-md transition-all hover:bg-white hover:scale-110 active:scale-95 cursor-pointer"
+                      className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 z-20 flex h-7 w-7 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-gray-800 shadow-md transition-all hover:bg-white hover:scale-110 active:scale-95 cursor-pointer"
                     >
-                      <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.5]" />
+                      <ChevronRight className="h-3.5 w-3.5 sm:h-5 sm:w-5 stroke-[2.5]" />
                     </button>
 
-                    <div className="pointer-events-none absolute bottom-2.5 right-2.5 sm:bottom-4 sm:right-4 z-20 rounded-full bg-black/70 backdrop-blur-sm px-2.5 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-semibold text-white">
-                      {currentActiveIndex + 1} / {mediaCount}
+                    <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 z-20 rounded-full bg-black/70 backdrop-blur-sm px-2 py-0.5 sm:px-3 sm:py-1 text-[9px] sm:text-xs font-semibold text-white">
+                      {currentActiveIndex + 1} / {galleryImages.length}
                     </div>
                   </>
                 )}
               </div>
 
               {/* Single Section Thumbnail Strip: Static 4-col when <= 4, infinite loop marquee moving left when > 4 */}
-              {mediaItems.length <= 4 ? (
-                <div className="mt-1.5 sm:mt-2 md:mt-3 grid grid-cols-4 gap-1.5 sm:gap-2 md:gap-3">
-                  {mediaItems.map((item, index) => (
+              {galleryImages.length <= 4 ? (
+                <div className="mt-1 sm:mt-2 md:mt-3 grid grid-cols-4 gap-1 sm:gap-2 md:gap-3">
+                  {galleryImages.map((img, index) => (
                     <button
-                      key={`${item.type}-${item.url}-${index}`}
+                      key={index}
                       type="button"
                       onClick={() => setActiveImageIndex(index)}
-                      className={`overflow-hidden rounded-lg sm:rounded-xl border-2 transition-all duration-300 cursor-pointer ${
+                      className={`overflow-hidden rounded-md sm:rounded-xl border-2 transition-all duration-300 cursor-pointer ${
                         currentActiveIndex === index
                           ? "border-[#93B733] shadow-md opacity-100 ring-2 ring-[#93B733]/40 scale-[1.02]"
                           : "border-transparent opacity-70 hover:opacity-100"
                       }`}
                     >
-                      <MediaThumbnail item={item} index={index} />
+                      <img
+                        src={img}
+                        alt={`preview ${index + 1}`}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-10 w-full object-cover sm:h-20 md:h-24"
+                        onError={(e) => {
+                          e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[index % DEFAULT_DETAILS_FALLBACKS.length];
+                        }}
+                      />
                     </button>
                   ))}
                 </div>
               ) : (
                 <div 
-                  className="thumbnail-marquee-container mt-1.5 sm:mt-2 md:mt-3 overflow-hidden rounded-lg sm:rounded-xl"
+                  className="thumbnail-marquee-container mt-1 sm:mt-2 md:mt-3 overflow-hidden rounded-md sm:rounded-xl"
                   onMouseEnter={() => setIsGalleryLoopPaused(true)}
                   onMouseLeave={() => setIsGalleryLoopPaused(false)}
                   onTouchStart={() => setIsGalleryLoopPaused(true)}
                   onTouchEnd={() => setIsGalleryLoopPaused(false)}
                 >
                   <div 
-                    className="thumbnail-marquee-track gap-1.5 sm:gap-2 md:gap-3 py-0.5"
+                    className="thumbnail-marquee-track gap-1 sm:gap-2 md:gap-3 py-0.5"
                     style={{
                       animationPlayState: isGalleryLoopPaused ? "paused" : "running",
-                      animationDuration: `${Math.max(mediaItems.length * 2.2, 16)}s`
+                      animationDuration: `${Math.max(galleryImages.length * 2.2, 16)}s`
                     }}
                   >
-                    {[...mediaItems, ...mediaItems].map((item, index) => {
-                      const realIndex = index % mediaItems.length;
+                    {[...galleryImages, ...galleryImages].map((img, index) => {
+                      const realIndex = index % galleryImages.length;
                       const isSelected = currentActiveIndex === realIndex;
                       return (
                         <button
-                          key={`${item.type}-${realIndex}-${index >= mediaItems.length ? 'dup' : 'orig'}`}
+                          key={`${realIndex}-${index >= galleryImages.length ? 'dup' : 'orig'}`}
                           type="button"
                           onClick={() => setActiveImageIndex(realIndex)}
-                          className={`thumbnail-marquee-item overflow-hidden rounded-lg sm:rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                          className={`thumbnail-marquee-item overflow-hidden rounded-md sm:rounded-xl border-2 transition-all duration-200 cursor-pointer ${
                             isSelected
                               ? "border-[#93B733] shadow-md opacity-100 ring-2 ring-[#93B733]/40 scale-[1.02]"
                               : "border-transparent opacity-75 hover:opacity-100"
                           }`}
                         >
-                          <MediaThumbnail item={item} index={realIndex} />
+                          <img
+                            src={img}
+                            alt={`preview ${realIndex + 1}`}
+                            loading="lazy"
+                            decoding="async"
+                            className="h-10 w-full object-cover sm:h-20 md:h-24 pointer-events-none"
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[realIndex % DEFAULT_DETAILS_FALLBACKS.length];
+                            }}
+                          />
                         </button>
                       );
                     })}
@@ -729,111 +1037,43 @@ const PgDetails = () => {
               )}
             </div>
 
-            {/* About / Header Section */}
-            <div className="rounded-2xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-4 sm:p-6 shadow-sm md:rounded-[2.5rem] md:p-10">
-              <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <span className="rounded-lg bg-green-50 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-green-700">
-                    Verified Stay
-                  </span>
-
-                  {pg.sponsored && (
-                    <span className="rounded-lg bg-[#93B733]/10 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[#93B733]">
-                      Sponsored
-                    </span>
-                  )}
-                  
-                  <span className="rounded-lg bg-gray-100 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-600">
-                    {pg.status || "Active"}
-                  </span>
-                </div>
-
-                {/* Share PG Direct Button */}
-                <button
-                  type="button"
-                  onClick={handleShare}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-white/5 hover:bg-gray-100 px-2.5 py-1 sm:px-3.5 sm:py-1.5 text-[10px] sm:text-xs font-bold text-gray-800 dark:text-gray-200 transition cursor-pointer active:scale-95 shadow-xs"
-                >
-                  <Share2 size={12} className="text-[#93B733] shrink-0" />
-                  <span>{copiedToast ? "Link Copied!" : "Share Property"}</span>
-                </button>
-              </div>
-
-              <h1 className="text-xl sm:text-3xl font-black tracking-tight text-[#3A2935] md:text-5xl">
-                {pg.title}
-              </h1>
-
-              <p className="mt-1.5 sm:mt-3 text-xs sm:text-sm font-medium text-gray-500 md:text-base flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#93B733] shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                </svg>
-                {`${pg.area || ""}, ${pg.city || ""}`}
-              </p>
-
-              <div className="mt-3 sm:mt-6 flex flex-wrap items-center gap-2 sm:gap-3">
-                <div className="flex items-center gap-1.5 sm:gap-2 rounded-xl border-2 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.04] px-3 py-1.5 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-bold text-[#3A2935] dark:text-white">
-                  <span className="text-[#93B733]">★</span> {pg.rating || "New"} Ratings
-                </div>
-                <div className="flex items-center gap-1.5 sm:gap-2 rounded-xl border-2 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.04] px-3 py-1.5 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-bold text-[#3A2935] dark:text-white">
-                  <Building2 className="w-4 h-4 text-[#93B733]" /> {String(pg.pg_type || "PG").toUpperCase()}
-                </div>
-              </div>
-
-              {/* Description */}
-              <p className="mt-4 sm:mt-8 text-xs sm:text-sm leading-relaxed text-gray-600 dark:text-gray-300 md:text-base md:leading-8 whitespace-pre-line">
+            {/* About / Description Card (Desktop) */}
+            <div className="hidden lg:block rounded-xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-4 sm:p-6 shadow-sm md:rounded-[2.5rem] md:p-8">
+              <h3 className="text-base sm:text-xl font-black text-[#3A2935] dark:text-white tracking-tight mb-2 sm:mb-4">
+                About this PG
+              </h3>
+              <p className="text-xs sm:text-sm leading-relaxed text-gray-600 dark:text-gray-300 md:text-base md:leading-8 whitespace-pre-line">
                 {pg.description || "No description provided for this listing."}
               </p>
-            </div>
-
-            {/* Rules & Policies Section - Left Column */}
-            <div className="rounded-2xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-4 sm:p-6 shadow-sm md:rounded-[2.5rem] md:p-10 flex flex-col justify-start">
-              <h2 className="text-base sm:text-2xl md:text-3xl font-black text-[#3A2935] dark:text-white">Rules & Policies</h2>
-              {cleanRules.length > 0 ? (
-                <div className="mt-3 sm:mt-6 space-y-2 sm:space-y-3">
-                  {cleanRules.map((rule, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-2.5 sm:gap-3.5 rounded-xl sm:rounded-2xl border-2 border-gray-100 dark:border-gray-800/80 bg-gray-50 dark:bg-white/[0.04] px-3.5 py-2.5 sm:px-5 sm:py-4 text-xs sm:text-sm md:text-base font-medium text-gray-700 dark:text-gray-200"
-                    >
-                      <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-[#93B733] shrink-0 mt-1 sm:mt-1.5 md:mt-2"></span>
-                      <span className="leading-relaxed">{rule}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2 sm:mt-4 text-xs sm:text-sm font-medium text-gray-400">
-                  Standard house rules apply.
-                </p>
-              )}
             </div>
 
           </div>
 
           {/* RIGHT SIDE: Booking, Amenities & Actions */}
-          <div className="space-y-4 sm:space-y-6">
+          <div className="space-y-2.5 sm:space-y-6">
             
             {/* Container for right sidebar */}
-            <div className="space-y-4 sm:space-y-6">
+            <div className="space-y-2.5 sm:space-y-6">
               
               {/* Pricing & Booking Card */}
-              <div id="booking-card" className="rounded-2xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-4 sm:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] md:rounded-[2.5rem] md:p-8">
-                <div className="flex items-end justify-between border-b-2 border-gray-100 dark:border-gray-800 pb-4 sm:pb-6">
+              <div id="booking-card" className="rounded-xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-3 sm:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] md:rounded-[2.5rem] md:p-8">
+                <div className="flex items-end justify-between border-b-2 border-gray-100 dark:border-gray-800 pb-2.5 sm:pb-6">
                   <div>
-                    <h4 className="text-2xl sm:text-3xl font-black text-[#93B733]">
+                    <h4 className="text-xl sm:text-3xl font-black text-[#93B733]">
                       ₹{selectedRoom.price ? selectedRoom.price.toLocaleString() : Number(pg.price || 0).toLocaleString()}
                     </h4>
-                    <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400 mt-0.5 sm:mt-1 flex items-center gap-1">
-                      <span>Selected:</span>
+                    <p className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-gray-400 mt-0.5 sm:mt-1 flex items-center gap-1">
+                      <span className="text-gray-500 dark:text-gray-400 font-bold">Selected:</span>
                       <span className="text-gray-900 dark:text-white font-black">{selectedRoom.label || "Per Month"}</span>
                     </p>
                   </div>
                   <div className="text-right">
-                    <h3 className="text-xs sm:text-sm font-bold text-[#3A2935] dark:text-gray-200">{String(pg.pg_type || "").toUpperCase()} PG</h3>
-                    <div className="mt-1 flex items-center justify-end">
+                    <h3 className="text-[11px] sm:text-sm font-black text-gray-800 dark:text-white uppercase tracking-wider">{String(pg.pg_type || "").toUpperCase()} PG</h3>
+                    <div className="mt-0.5 sm:mt-1 flex items-center justify-end">
                       {(() => {
                         const spotsLeft = pg?.spots_left !== undefined ? pg.spots_left : Number(pg?.available_rooms || 0);
                         return (
-                          <span className={`inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-black px-2.5 py-1 rounded-xl border ${
+                          <span className={`inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-black px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl border ${
                             spotsLeft === 0
                               ? "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40"
                               : spotsLeft <= 3
@@ -842,12 +1082,12 @@ const PgDetails = () => {
                           }`}>
                             {spotsLeft === 0 ? (
                               <>
-                                <AlertCircle className="w-3.5 h-3.5" />
+                                <AlertCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                 <span>Fully Booked</span>
                               </>
                             ) : (
                               <>
-                                <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                                <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 fill-amber-500" />
                                 <span>{spotsLeft} Spots Left</span>
                               </>
                             )}
@@ -859,40 +1099,40 @@ const PgDetails = () => {
                 </div>
 
                 {/* Compact Room Selection (Sharing Options) */}
-                <div className="mt-4 sm:mt-6 border-b-2 border-gray-100 dark:border-gray-800 pb-4 sm:pb-6">
-                  <div className="flex items-center justify-between mb-2 sm:mb-3">
-                    <h3 className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                      <BedDouble className="w-4 h-4 text-[#93B733]" />
+                <div className="mt-2.5 sm:mt-6 border-b-2 border-gray-100 dark:border-gray-800 pb-2.5 sm:pb-6">
+                  <div className="flex items-center justify-between mb-1.5 sm:mb-3">
+                    <h3 className="font-black text-[11px] sm:text-sm text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1 sm:gap-1.5">
+                      <BedDouble className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#4E700F] dark:text-[#bbf246]" />
                       <span>Available Rooms & Sharing</span>
                     </h3>
-                    <span className="text-[10px] sm:text-xs font-bold text-[#93B733]">
+                    <span className="text-[9.5px] sm:text-xs font-black text-[#4E700F] dark:text-[#bbf246]">
                       {availableRooms.length} {availableRooms.length === 1 ? 'type' : 'types'}
                     </span>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-1.5 sm:space-y-2">
                     {availableRooms.map((room) => {
                       const isSelected = selectedRoom.type === room.type;
                       return (
                         <div
                           key={room.type}
-                          className={`rounded-xl border-2 p-2.5 transition-all ${
+                          className={`rounded-lg sm:rounded-xl border p-2 sm:p-2.5 transition-all ${
                             isSelected
-                              ? "border-[#93B733] bg-[#93B733]/5 dark:bg-[#93B733]/10 shadow-xs"
+                              ? "border-[#93B733] dark:border-[#bbf246] bg-[#93B733]/5 dark:bg-[#bbf246]/10 shadow-xs"
                               : "border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.03]"
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-1.5 text-xs font-bold text-gray-900 dark:text-white">
-                            <span className="flex items-center gap-1.5 capitalize">
-                              {room.type === "single" ? <BedSingle className="w-3.5 h-3.5 text-[#93B733]" /> : <BedDouble className="w-3.5 h-3.5 text-[#93B733]" />}
+                          <div className="flex items-center justify-between mb-1 sm:mb-1.5 text-[11px] sm:text-xs font-black text-gray-900 dark:text-white">
+                            <span className="flex items-center gap-1 sm:gap-1.5 capitalize">
+                              {room.type === "single" ? <BedSingle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#4E700F] dark:text-[#bbf246]" /> : <BedDouble className="w-3.5 h-3.5 text-[#4E700F] dark:text-[#bbf246]" />}
                               {room.title}
                             </span>
-                            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-300">
+                            <span className="text-[8.5px] sm:text-[9px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-200">
                               {room.badge}
                             </span>
                           </div>
 
-                          <div className={`grid gap-1.5 ${room.options.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                          <div className={`grid gap-1 sm:gap-1.5 ${room.options.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
                             {room.options.map((opt) => {
                               const isOptActive = isSelected && selectedRoom.isAc === opt.isAc;
                               return (
@@ -900,14 +1140,16 @@ const PgDetails = () => {
                                   key={opt.label}
                                   type="button"
                                   onClick={() => setSelectedRoom({ type: room.type, isAc: opt.isAc, price: opt.price, label: opt.label })}
-                                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                                  className={`flex items-center justify-between px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-lg border text-[10px] sm:text-[11px] font-black transition-all cursor-pointer ${
                                     isOptActive
-                                      ? "bg-[#93B733] text-white border-[#93B733] shadow-xs"
-                                      : "bg-white dark:bg-white/5 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-white/10 hover:border-[#93B733]"
+                                      ? "bg-[#93B733] text-black border-[#93B733] shadow-xs"
+                                      : "bg-white dark:bg-white/5 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-white/10 hover:border-[#93B733]"
                                   }`}
                                 >
-                                  <CoolingBadge isAc={opt.isAc} className={isOptActive ? "text-white" : ""} />
-                                  <span>₹{opt.price.toLocaleString()}</span>
+                                  <CoolingBadge isAc={opt.isAc} isOptActive={isOptActive} />
+                                  <span className={isOptActive ? "text-black font-black" : "text-gray-900 dark:text-white font-bold"}>
+                                    ₹{opt.price.toLocaleString()}
+                                  </span>
                                 </button>
                               );
                             })}
@@ -919,32 +1161,32 @@ const PgDetails = () => {
                 </div>
 
                 {/* --- ACTION BUTTONS --- */}
-                <div className="mt-4 sm:mt-6 space-y-2.5 sm:space-y-3">
+                <div className="mt-2.5 sm:mt-6 space-y-1.5 sm:space-y-3">
                   
                   {bookingStatusMeta && (
-                    <div className="rounded-xl sm:rounded-2xl border-2 border-emerald-400 dark:border-emerald-500/40 bg-emerald-50/70 dark:bg-emerald-500/10 p-3 sm:p-4 text-xs font-bold text-emerald-900 dark:text-emerald-200 shadow-xs">
+                    <div className="rounded-lg sm:rounded-2xl border-2 border-emerald-400 dark:border-emerald-500/40 bg-emerald-50/70 dark:bg-emerald-500/10 p-2 sm:p-4 text-xs font-bold text-emerald-900 dark:text-emerald-200 shadow-xs">
                       <div className="flex items-center gap-1.5 sm:gap-2 font-black text-emerald-800 dark:text-emerald-300 text-xs sm:text-sm">
-                        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         <span>{bookingStatusMeta.title}</span>
                       </div>
-                      <p className="mt-1 text-[10px] sm:text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">{bookingStatusMeta.sub}</p>
+                      <p className="mt-0.5 sm:mt-1 text-[9.5px] sm:text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 leading-snug">{bookingStatusMeta.sub}</p>
                     </div>
                   )}
 
                   {/* Warning: Active stay at another PG blocks new bookings */}
                   {activeStayAtOtherPG && !existingBooking && (
-                    <div className="rounded-xl sm:rounded-2xl border-2 border-amber-400 dark:border-amber-500/40 bg-amber-50/70 dark:bg-amber-500/10 p-3 sm:p-4 text-xs font-bold text-amber-900 dark:text-amber-200 shadow-xs">
+                    <div className="rounded-lg sm:rounded-2xl border-2 border-amber-400 dark:border-amber-500/40 bg-amber-50/70 dark:bg-amber-500/10 p-2 sm:p-4 text-xs font-bold text-amber-900 dark:text-amber-200 shadow-xs">
                       <div className="flex items-center gap-1.5 sm:gap-2 font-black text-amber-800 dark:text-amber-300 text-xs sm:text-sm">
-                        <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <AlertCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-amber-600 dark:text-amber-400 shrink-0" />
                         <span>You Already Have an Active PG Stay</span>
                       </div>
-                      <p className="mt-1 text-[10px] sm:text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                      <p className="mt-0.5 sm:mt-1 text-[9.5px] sm:text-[11px] font-semibold text-amber-700 dark:text-amber-300 leading-snug">
                         You are currently staying at <strong>"{activeStayAtOtherPG.title || activeStayAtOtherPG.pg_name || 'another PG'}"</strong>. 
                         To book a new PG, please request a cancellation from your current PG owner first.
                       </p>
                       <button
                         onClick={() => navigate('/my-pg?action=account')}
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-[11px] font-bold text-white transition cursor-pointer"
+                        className="mt-1.5 sm:mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 px-2.5 py-1 text-[10px] sm:text-[11px] font-bold text-white transition cursor-pointer"
                       >
                         Request Cancellation →
                       </button>
@@ -957,58 +1199,118 @@ const PgDetails = () => {
                     const hasActiveStayElsewhere = !!activeStayAtOtherPG && !existingBooking;
 
                     return (
-                      <button
-                        onClick={handleBookVisit}
-                        disabled={bookingLoading || isFullyBooked || hasActiveStayElsewhere}
-                        className={`w-full rounded-xl sm:rounded-2xl px-4 py-3 sm:px-5 sm:py-4 text-xs sm:text-sm font-bold text-white shadow-md transition-all active:scale-[0.98] ${
-                          isFullyBooked || hasActiveStayElsewhere
-                            ? "bg-gray-400 dark:bg-gray-800 text-gray-200 cursor-not-allowed shadow-none"
-                            : bookingLoading
-                            ? "opacity-60 cursor-wait bg-[#93B733]"
-                            : bookingStatusMeta
-                            ? `${bookingStatusMeta.btnBg} cursor-pointer`
-                            : "bg-[#93B733] hover:bg-[#82a32d] hover:shadow-lg cursor-pointer"
-                        }`}
-                      >
-                        {bookingLoading
-                          ? 'Submitting Request...'
-                          : hasActiveStayElsewhere
-                          ? 'Cancel Current Stay First'
-                          : isFullyBooked
-                          ? 'Fully Booked (0 Spots Left)'
-                          : bookingStatusMeta
-                          ? bookingStatusMeta.btnText
-                          : 'Request a Visit / Book Now'}
-                      </button>
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <div className="grid grid-cols-2 gap-1.5 sm:gap-2.5">
+                          {/* Button 1: Check In / Active Stay Portal */}
+                          <button
+                            onClick={handleCheckInClick}
+                            disabled={bookingLoading || isFullyBooked || hasActiveStayElsewhere}
+                            className={`w-full flex items-center justify-center gap-1 sm:gap-2 rounded-lg sm:rounded-2xl px-2 py-2 sm:px-4 sm:py-3.5 text-[10.5px] sm:text-sm font-black shadow-xs sm:shadow-md transition-all active:scale-[0.98] ${
+                              isFullyBooked || hasActiveStayElsewhere
+                                ? "bg-gray-400 dark:bg-gray-800 text-gray-200 cursor-not-allowed shadow-none"
+                                : bookingLoading
+                                ? "opacity-60 cursor-wait bg-[#93B733] text-black"
+                                : bookingStatusMeta
+                                ? `${bookingStatusMeta.btnBg} text-white cursor-pointer`
+                                : "bg-[#93B733] hover:bg-[#82a32d] text-black hover:shadow-lg cursor-pointer"
+                            }`}
+                          >
+                            <KeyRound className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${bookingStatusMeta ? "text-white" : "text-black"}`} />
+                            <span className={`font-black truncate ${bookingStatusMeta ? "text-white" : "text-black"}`}>
+                              {bookingLoading ? (
+                                'Submitting...'
+                              ) : hasActiveStayElsewhere ? (
+                                'Cancel Stay'
+                              ) : isFullyBooked ? (
+                                'Fully Booked'
+                              ) : bookingStatusMeta ? (
+                                <>
+                                  <span className="sm:hidden">{bookingStatusMeta.btnText}</span>
+                                  <span className="hidden sm:inline">{bookingStatusMeta.btnTextFull || bookingStatusMeta.btnText}</span>
+                                </>
+                              ) : (
+                                'Check In'
+                              )}
+                            </span>
+                          </button>
+
+                          {/* Button 2: Request a Visit */}
+                          <button
+                            onClick={handleRequestVisitClick}
+                            disabled={isFullyBooked || hasActiveStayElsewhere}
+                            className={`w-full flex items-center justify-center gap-1 sm:gap-2 rounded-lg sm:rounded-2xl px-2 py-2 sm:px-4 sm:py-3.5 text-[10.5px] sm:text-sm font-black shadow-xs transition-all active:scale-[0.98] ${
+                              isFullyBooked || hasActiveStayElsewhere
+                                ? "border border-gray-300 dark:border-gray-800 text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-900 cursor-not-allowed"
+                                : existingVisit?.status === "confirmed"
+                                ? "border-2 border-blue-500 bg-blue-500 hover:bg-blue-600 text-white cursor-pointer shadow-md"
+                                : existingVisit?.status === "pending"
+                                ? "border-2 border-amber-500 bg-amber-500/15 dark:bg-amber-500/25 text-amber-800 dark:text-amber-300 hover:bg-amber-500/25 cursor-pointer"
+                                : "border-2 border-[#93B733] bg-white dark:bg-[#151515] text-[#0D3A1D] dark:text-[#bbf246] hover:bg-[#93B733]/15 hover:border-[#82a32d] cursor-pointer"
+                            }`}
+                          >
+                            {existingVisit?.status === "confirmed" ? (
+                              <CalendarCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white shrink-0" />
+                            ) : existingVisit?.status === "pending" ? (
+                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700 dark:text-amber-300 shrink-0" />
+                            ) : (
+                              <CalendarClock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#93B733] dark:text-[#bbf246] shrink-0" />
+                            )}
+                            <span className={`truncate font-black ${existingVisit?.status === "confirmed" ? "text-white" : existingVisit?.status === "pending" ? "text-amber-900 dark:text-amber-300" : "text-[#0D3A1D] dark:text-[#bbf246]"}`}>
+                              {existingVisit?.status === "confirmed"
+                                ? "Visit Confirmed"
+                                : existingVisit?.status === "pending"
+                                ? "Visit Requested"
+                                : "Request a Visit"}
+                            </span>
+                          </button>
+                        </div>
+
+                        {/* Button 3: Short Stay (4–5 Days / Daily Stay) */}
+                        <button
+                          onClick={handleShortStayClick}
+                          className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg sm:rounded-2xl px-2.5 py-2 sm:px-4 sm:py-3.5 text-[11px] sm:text-sm font-black shadow-xs transition-all active:scale-[0.98] cursor-pointer ${
+                            existingShortStay?.status === "approved"
+                              ? "border-2 border-emerald-500 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+                              : existingShortStay?.status === "pending"
+                              ? "border-2 border-amber-500 bg-amber-500/15 dark:bg-amber-500/25 text-amber-800 dark:text-amber-300 hover:bg-amber-500/25"
+                              : "border-2 border-indigo-500/50 bg-indigo-50/70 dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-300 hover:bg-indigo-100/90 dark:hover:bg-indigo-900/50 hover:border-indigo-600"
+                          }`}
+                        >
+                          <CalendarRange className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${existingShortStay?.status === "approved" ? "text-white" : existingShortStay?.status === "pending" ? "text-amber-700 dark:text-amber-300" : "text-indigo-600 dark:text-indigo-400"}`} />
+                          <span className="truncate">
+                            {existingShortStay?.status === "approved" ? (
+                              "Short Stay Approved! (View Details)"
+                            ) : existingShortStay?.status === "pending" ? (
+                              "Short Stay Requested (Waiting Review)"
+                            ) : (
+                              <>
+                                <span className="sm:hidden">Need Short Stay? (Daily / 4-5 Days)</span>
+                                <span className="hidden sm:inline">Need a Short Stay? (4–5 Days / Daily Stay)</span>
+                              </>
+                            )}
+                          </span>
+                        </button>
+                      </div>
                     );
                   })()}
 
-                  {/* Inline visit calendar — appears right below the Request a Visit button */}
-                  {showVisitPicker && (
-                    <VisitSchedulePicker
-                      loading={bookingLoading}
-                      onCancel={() => setShowVisitPicker(false)}
-                      onConfirm={handleConfirmVisit}
-                    />
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-0.5 sm:pt-1">
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-3 pt-0.5 sm:pt-1">
                     {/* WhatsApp Button */}
                     <button
                       onClick={handleWhatsAppRedirect}
-                      className="group relative flex flex-col items-center justify-center p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border-2 border-emerald-500/40 dark:border-emerald-500/30 bg-white dark:bg-black hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 hover:border-[#25D366] dark:hover:border-[#25D366] shadow-xs transition-all duration-200 active:scale-[0.98] cursor-pointer"
+                      className="group relative flex flex-col items-center justify-center p-2 sm:p-3.5 rounded-lg sm:rounded-2xl border-2 border-emerald-500/40 dark:border-emerald-500/30 bg-white dark:bg-black hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 hover:border-[#25D366] dark:hover:border-[#25D366] shadow-xs transition-all duration-200 active:scale-[0.98] cursor-pointer"
                     >
-                      <div className="flex items-center gap-1.5 sm:gap-2">
+                      <div className="flex items-center gap-1 sm:gap-2">
                         <img 
                           src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" 
                           alt="WhatsApp" 
-                          className="h-[16px] w-[16px] sm:h-[20px] sm:w-[20px] object-contain shrink-0"
+                          className="h-[14px] w-[14px] sm:h-[20px] sm:w-[20px] object-contain shrink-0"
                           loading="lazy"
                           decoding="async"
                         />
-                        <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white tracking-tight">WhatsApp</span>
+                        <span className="text-[10px] sm:text-xs font-black text-gray-900 dark:text-white tracking-tight">WhatsApp</span>
                       </div>
-                      <span className="mt-0.5 sm:mt-1 text-[10px] sm:text-[11px] font-bold text-[#25D366] truncate max-w-full">
+                      <span className="mt-0.5 sm:mt-1 text-[9px] sm:text-[11px] font-bold text-[#25D366] truncate max-w-full">
                         {displayPhone || "Chat Directly"}
                       </span>
                     </button>
@@ -1016,42 +1318,42 @@ const PgDetails = () => {
                     {/* Call Owner Button */}
                     <button
                       onClick={handleCallRedirect}
-                      className="group relative flex flex-col items-center justify-center p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border-2 border-blue-500/40 dark:border-blue-500/30 bg-white dark:bg-black hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:border-[#0066FF] dark:hover:border-[#0066FF] shadow-xs transition-all duration-200 active:scale-[0.98] cursor-pointer"
+                      className="group relative flex flex-col items-center justify-center p-2 sm:p-3.5 rounded-lg sm:rounded-2xl border-2 border-blue-500/40 dark:border-blue-500/30 bg-white dark:bg-black hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:border-[#0066FF] dark:hover:border-[#0066FF] shadow-xs transition-all duration-200 active:scale-[0.98] cursor-pointer"
                     >
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <span className="flex h-[16px] w-[16px] sm:h-[20px] sm:w-[20px] items-center justify-center rounded-full bg-[#0066FF] text-white shadow-xs shrink-0">
-                          <Phone size={9} className="text-white fill-white sm:hidden" />
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <span className="flex h-[14px] w-[14px] sm:h-[20px] sm:w-[20px] items-center justify-center rounded-full bg-[#0066FF] text-white shadow-xs shrink-0">
+                          <Phone size={8} className="text-white fill-white sm:hidden" />
                           <Phone size={11} className="text-white fill-white hidden sm:inline" />
                         </span>
-                        <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white tracking-tight">Call Owner</span>
+                        <span className="text-[10px] sm:text-xs font-black text-gray-900 dark:text-white tracking-tight">Call Owner</span>
                       </div>
-                      <span className="mt-0.5 sm:mt-1 text-[10px] sm:text-[11px] font-bold text-[#0066FF] dark:text-[#38bdf8] truncate max-w-full">
+                      <span className="mt-0.5 sm:mt-1 text-[9px] sm:text-[11px] font-bold text-[#0066FF] dark:text-[#38bdf8] truncate max-w-full">
                         {displayPhone || "Direct Phone"}
                       </span>
                     </button>
                   </div>
                 </div>
                 
-                <div className="mt-4 sm:mt-6 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-white/[0.04] p-2.5 sm:p-3.5 text-center text-[11px] sm:text-xs font-medium text-gray-500 dark:text-gray-400">
-                  Owner Contact: <span className="font-black text-[#0D3A1D] dark:text-[#93B733]">{displayPhone || "Available upon request"}</span>
+                <div className="mt-2.5 sm:mt-6 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-white/[0.04] p-2 sm:p-3.5 text-center text-[10px] sm:text-xs font-semibold text-gray-600 dark:text-gray-300">
+                  Owner Contact: <span className="font-black text-gray-950 dark:text-[#bbf246]">{displayPhone || "Available upon request"}</span>
                 </div>
 
                 {/* Share / Copy Public Link Section */}
-                <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center gap-2">
+                <div className="mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center gap-1.5 sm:gap-2">
                   <button
                     type="button"
                     onClick={handleShare}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-white/[0.04] hover:bg-gray-100 dark:hover:bg-white/10 py-2 sm:py-2.5 px-2.5 sm:px-3 text-[11px] sm:text-xs font-bold text-gray-800 dark:text-gray-200 transition cursor-pointer active:scale-[0.98]"
+                    className="flex-1 inline-flex items-center justify-center gap-1 sm:gap-2 rounded-lg sm:rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-white/[0.04] hover:bg-gray-100 dark:hover:bg-white/10 py-1.5 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-xs font-bold text-gray-800 dark:text-gray-200 transition cursor-pointer active:scale-[0.98]"
                   >
                     {copiedToast ? (
                       <>
-                        <Check size={12} className="text-[#93B733]" />
-                        <span className="text-[#93B733] font-black">Link Copied!</span>
+                        <Check size={11} className="text-[#355008] dark:text-[#bbf246]" />
+                        <span className="text-[#355008] dark:text-[#bbf246] font-black">Link Copied!</span>
                       </>
                     ) : (
                       <>
-                        <Copy size={12} className="text-gray-500" />
-                        <span>Copy Public Link</span>
+                        <Copy size={11} className="text-gray-500 dark:text-gray-300" />
+                        <span className="text-gray-800 dark:text-white font-bold">Copy Public Link</span>
                       </>
                     )}
                   </button>
@@ -1060,46 +1362,150 @@ const PgDetails = () => {
                     href={`https://wa.me/?text=${encodeURIComponent(`Check out ${pg?.title || 'this PG'} on Dormn: ${window.location.href}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg sm:rounded-xl bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 py-2 sm:py-2.5 px-2.5 sm:px-3.5 text-[11px] sm:text-xs font-bold text-[#128C7E] dark:text-[#25D366] transition cursor-pointer active:scale-[0.98]"
+                    className="inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-lg sm:rounded-xl bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 py-1.5 sm:py-2.5 px-2.5 sm:px-3.5 text-[10px] sm:text-xs font-bold text-[#128C7E] dark:text-[#25D366] transition cursor-pointer active:scale-[0.98]"
                     title="Share via WhatsApp"
                   >
-                    <MessageSquare size={12} />
+                    <MessageSquare size={11} />
                     <span>WhatsApp</span>
                   </a>
                 </div>
               </div>
 
-              {/* What this place offers (Amenities) - Right Column */}
-              <div className="rounded-2xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-4 sm:p-6 shadow-sm md:rounded-[2.5rem] md:p-8 transition-colors">
-                <div className="flex items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-white/10">
+              {/* Rules & Policies Section - Under Payment Section */}
+              <div className="rounded-xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-3 sm:p-6 shadow-sm md:rounded-[2.5rem] md:p-8 flex flex-col justify-start">
+                <div className="flex items-center justify-between gap-2 pb-2 sm:pb-3 border-b border-gray-100 dark:border-white/10">
                   <div>
-                    <h3 className="text-base sm:text-xl font-black text-[#3A2935] dark:text-white tracking-tight">
+                    <h3 className="text-sm sm:text-xl font-black text-[#3A2935] dark:text-white tracking-tight">
+                      Rules & Policies
+                    </h3>
+                    <p className="text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 mt-0.5">
+                      House rules & property guidelines
+                    </p>
+                  </div>
+                  <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9.5px] sm:text-xs font-extrabold bg-[#93B733]/15 text-[#3e5a0c] dark:text-[#93B733] border border-[#93B733]/30 whitespace-nowrap">
+                    {cleanRules.length} {cleanRules.length === 1 ? 'Rule' : 'Rules'}
+                  </span>
+                </div>
+                {cleanRules.length > 0 ? (
+                  <div className="mt-2.5 sm:mt-4 space-y-1.5 sm:space-y-2.5">
+                    {cleanRules.map((rule, index) => (
+                      <div
+                        key={index}
+                        className="flex items-start gap-2 sm:gap-3 rounded-lg sm:rounded-xl border border-gray-100 dark:border-gray-800/80 bg-gray-50 dark:bg-white/[0.04] px-2.5 py-1.5 sm:px-4 sm:py-2.5 text-[11px] sm:text-sm font-medium text-gray-700 dark:text-gray-200"
+                      >
+                        <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-[#93B733] shrink-0 mt-1 sm:mt-1.5"></span>
+                        <span className="leading-snug sm:leading-relaxed">{rule}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 sm:mt-3 text-[11px] sm:text-sm font-medium text-gray-400">
+                    Standard house rules apply.
+                  </p>
+                )}
+              </div>
+
+              {/* Food & Dining Preferences Section */}
+              <div className="rounded-xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-3 sm:p-6 shadow-sm md:rounded-[2.5rem] md:p-8">
+                <div className="flex items-center justify-between gap-2 pb-2 sm:pb-3 border-b border-gray-100 dark:border-white/10">
+                  <div>
+                    <h3 className="text-sm sm:text-xl font-black text-[#3A2935] dark:text-white tracking-tight flex items-center gap-1.5 sm:gap-2">
+                      <UtensilsCrossed className="w-4 h-4 sm:w-5 sm:h-5 text-[#93B733]" />
+                      <span>Food & Diet Policy</span>
+                    </h3>
+                    <p className="text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 mt-0.5">
+                      Meal options and dietary guidelines
+                    </p>
+                  </div>
+                  {(() => {
+                    const food = getPgFoodPreference(pg);
+                    if (food.type === "Veg") {
+                      return (
+                        <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9.5px] sm:text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/50 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                          <span>Veg 🟢</span>
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9.5px] sm:text-xs font-black bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-700"></span>
+                        <span>Non-Veg 🟤</span>
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                <div className="mt-2.5 sm:mt-4 p-2.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-800/80 bg-gray-50/70 dark:bg-white/[0.03] space-y-2">
+                  {(() => {
+                    const food = getPgFoodPreference(pg);
+                    if (food.type === "Veg") {
+                      return (
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                            <UtensilsCrossed size={16} />
+                          </div>
+                          <div>
+                            <h4 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
+                              Pure Vegetarian Premises
+                            </h4>
+                            <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 mt-0.5 leading-relaxed">
+                              This PG serves pure vegetarian meals only. Non-vegetarian food is strictly prohibited on the premises.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                          <UtensilsCrossed size={16} />
+                        </div>
+                        <div>
+                          <h4 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
+                            Non-Vegetarian Food Allowed
+                          </h4>
+                          <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 mt-0.5 leading-relaxed">
+                            Non-vegetarian meals and food are permitted and served in this PG according to the mess schedule.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* What this place offers (Amenities) - Right Column */}
+              <div className="rounded-xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-3 sm:p-6 shadow-sm md:rounded-[2.5rem] md:p-8 transition-colors">
+                <div className="flex items-center justify-between gap-2 sm:gap-3 pb-2 sm:pb-3 border-b border-gray-100 dark:border-white/10">
+                  <div>
+                    <h3 className="text-sm sm:text-xl font-black text-[#3A2935] dark:text-white tracking-tight">
                       What this place offers
                     </h3>
-                    <p className="text-[11px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 mt-0.5">
+                    <p className="text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 mt-0.5">
                       Included amenities & resident perks
                     </p>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-extrabold bg-[#93B733]/15 text-[#3e5a0c] dark:text-[#93B733] border border-[#93B733]/30 whitespace-nowrap">
+                  <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9.5px] sm:text-xs font-extrabold bg-[#93B733]/15 text-[#3e5a0c] dark:text-[#93B733] border border-[#93B733]/30 whitespace-nowrap">
                     {cleanAmenities.length} Perks
                   </span>
                 </div>
 
                 {cleanAmenities.length > 0 ? (
-                  <div className="mt-4 sm:mt-5 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                  <div className="mt-2.5 sm:mt-5 grid grid-cols-2 sm:grid-cols-2 gap-1.5 sm:gap-2.5">
                     {cleanAmenities.map((item, index) => {
                       const cfg = getAmenityConfig(item);
                       const IconComponent = cfg.icon;
                       return (
                         <div
                           key={index}
-                          className="group relative flex items-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border border-gray-200/80 dark:border-neutral-800/90 bg-gray-50/70 dark:bg-neutral-900/60 p-2.5 sm:p-3 transition-all duration-200 hover:border-[#93B733]/40 hover:bg-white dark:hover:bg-neutral-800/80 hover:shadow-xs"
+                          className="group relative flex items-center gap-1.5 sm:gap-3 rounded-lg sm:rounded-2xl border border-gray-200/80 dark:border-neutral-800/90 bg-gray-50/70 dark:bg-neutral-900/60 p-1.5 sm:p-3 transition-all duration-200 hover:border-[#93B733]/40 hover:bg-white dark:hover:bg-neutral-800/80 hover:shadow-xs"
                         >
-                          <div className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border ${cfg.bg} ${cfg.color} ${cfg.border} transition-transform duration-200 group-hover:scale-105`}>
-                            <IconComponent className="h-4 w-4 sm:h-4.5 sm:w-4.5" strokeWidth={2.2} />
+                          <div className={`flex h-6 w-6 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-md sm:rounded-xl border ${cfg.bg} ${cfg.color} ${cfg.border} transition-transform duration-200 group-hover:scale-105`}>
+                            <IconComponent className="h-3 w-3 sm:h-4.5 sm:w-4.5" strokeWidth={2.2} />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs sm:text-sm font-bold tracking-tight text-gray-800 dark:text-gray-100 capitalize">
+                            <p className="text-[10px] sm:text-sm font-bold tracking-tight text-gray-800 dark:text-gray-100 capitalize leading-tight truncate">
                               {item}
                             </p>
                           </div>
@@ -1108,16 +1514,26 @@ const PgDetails = () => {
                     })}
                   </div>
                 ) : (
-                  <p className="mt-4 text-xs sm:text-sm font-medium text-gray-400">
+                  <p className="mt-2 sm:mt-4 text-[11px] sm:text-sm font-medium text-gray-400">
                     Standard verified amenities included.
                   </p>
                 )}
               </div>
 
+              {/* About / Description Card (Mobile) */}
+              <div className="lg:hidden rounded-xl border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-3 sm:p-6 shadow-sm">
+                <h3 className="text-sm font-black text-[#3A2935] dark:text-white tracking-tight mb-1.5">
+                  About this PG
+                </h3>
+                <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300 whitespace-pre-line">
+                  {pg.description || "No description provided for this listing."}
+                </p>
+              </div>
+
               {/* Map / Location Card */}
-              <div className="rounded-2xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-4 sm:p-6 shadow-sm md:rounded-[2.5rem] md:p-8">
-                <h3 className="text-base sm:text-xl font-black text-[#3A2935] dark:text-white">Exact Location</h3>
-                <p className="mt-1.5 sm:mt-3 text-xs sm:text-sm font-medium leading-relaxed text-gray-600 dark:text-gray-300">
+              <div className="rounded-xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-3 sm:p-6 shadow-sm md:rounded-[2.5rem] md:p-8">
+                <h3 className="text-sm sm:text-xl font-black text-[#3A2935] dark:text-white">Exact Location</h3>
+                <p className="mt-1 sm:mt-3 text-[11px] sm:text-sm font-medium leading-relaxed text-gray-600 dark:text-gray-300">
                   {pg.address || `${pg.area || ""}, ${pg.city || ""}`}
                 </p>
 
@@ -1126,7 +1542,7 @@ const PgDetails = () => {
                     href={pg.google_map_link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-3 sm:mt-5 flex w-full items-center justify-center gap-2 rounded-lg sm:rounded-xl bg-gray-900 dark:bg-white dark:text-black px-4 py-2.5 sm:px-5 sm:py-3.5 text-xs sm:text-sm font-bold text-white transition hover:bg-gray-800"
+                    className="mt-2.5 sm:mt-5 flex w-full items-center justify-center gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl bg-gray-900 dark:bg-white dark:text-black px-3 py-2 sm:px-5 sm:py-3.5 text-xs sm:text-sm font-bold text-white transition hover:bg-gray-800"
                   >
                     <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white dark:text-black" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                     Open Google Maps
@@ -1142,32 +1558,97 @@ const PgDetails = () => {
           </div>
 
         </div>
-
-        {/* ── ADVERTISEMENT BANNER (Moved to the very bottom / last of page) ── */}
-        <div className="mt-6 sm:mt-10 rounded-2xl sm:rounded-[2.5rem] border-2 border-dashed border-gray-300 dark:border-gray-800 bg-gray-50/80 dark:bg-[#0d0d0d] p-5 sm:p-8 text-center transition-colors hover:border-gray-400">
-          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-gray-400">
-            Advertisement
-          </p>
-          <h3 className="mt-1 sm:mt-2 text-base sm:text-xl font-black text-[#3A2935] dark:text-white">
-            Promote Your PG
-          </h3>
-          <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-            Reach thousands of students and working professionals looking for verified accommodations.
-          </p>
-          <button className="mt-3 sm:mt-4 rounded-xl border-2 border-[#3A2935] dark:border-white bg-white dark:bg-[#111] px-5 py-2 sm:px-6 sm:py-2.5 text-xs sm:text-sm font-bold text-[#3A2935] dark:text-white transition hover:bg-[#3A2935] hover:text-white cursor-pointer active:scale-95">
-            Learn More
-          </button>
-        </div>
       </section>
 
       {/* ── MODALS ── */}
+      {/* Check In Calendar Modal */}
+      {showCheckInModal && (
+        <CheckInCalendarModal
+          pgId={pg?.id || id}
+          pgTitle={pg?.title}
+          selectedRoom={selectedRoom}
+          loading={bookingLoading}
+          onClose={() => setShowCheckInModal(false)}
+          onConfirm={handleConfirmCheckIn}
+        />
+      )}
+
+      {/* Schedule Visit Modal */}
+      {showVisitModal && (
+        <ScheduleVisitModal
+          pgTitle={pg?.title}
+          pgArea={pg?.area}
+          pgCity={pg?.city}
+          user={user}
+          loading={visitLoading}
+          onClose={() => setShowVisitModal(false)}
+          onConfirm={handleConfirmVisit}
+        />
+      )}
+
+      {/* Visit Success Modal */}
+      {visitSuccessModal && (
+        <VisitSuccessModal
+          pgTitle={pg?.title}
+          visitInfo={scheduledVisitInfo}
+          onClose={() => setVisitSuccessModal(false)}
+        />
+      )}
+
+      {/* Visit Already Requested Modal */}
+      {showAlreadyVisitedModal && (
+        <VisitAlreadyRequestedModal
+          pgTitle={pg?.title}
+          visit={existingVisit}
+          onClose={() => setShowAlreadyVisitedModal(false)}
+          onNavigate={() => navigate("/my-bookings?tab=visits")}
+        />
+      )}
+
+      {/* Short Stay Calendar Range Modal */}
+      {showShortStayModal && (
+        <ShortStayCalendarModal
+          pgTitle={pg?.title}
+          pgPrice={pg?.price}
+          selectedRoom={selectedRoom}
+          availableRooms={availableRooms}
+          user={user}
+          loading={shortStayLoading}
+          onClose={() => setShowShortStayModal(false)}
+          onConfirm={handleConfirmShortStay}
+          onVerifyAccount={() => {
+            setShowShortStayModal(false);
+            setVerificationSource("short_stay");
+            setShowEmailVerificationModal(true);
+          }}
+        />
+      )}
+
+      {/* Short Stay Success Modal */}
+      {shortStaySuccessModal && (
+        <ShortStaySuccessModal
+          data={shortStaySuccessData}
+          onClose={() => setShortStaySuccessModal(false)}
+          onNavigate={() => navigate("/my-short-stays")}
+        />
+      )}
+
+      {/* Short Stay Already Requested Modal */}
+      {showAlreadyRequestedShortStayModal && (
+        <ShortStayAlreadyRequestedModal
+          pgTitle={pg?.title}
+          stay={existingShortStay}
+          onClose={() => setShowAlreadyRequestedShortStayModal(false)}
+          onNavigate={() => navigate("/my-short-stays")}
+        />
+      )}
+
       {bookingSuccessModal && (
         <BookingSuccessModal
           pgTitle={pg.title}
           roomLabel={selectedRoom.label}
           price={currentRoomPrice}
-          visitDate={scheduledVisit.date}
-          visitTime={scheduledVisit.time}
+          checkInDate={chosenCheckInDate}
           onClose={() => setBookingSuccessModal(false)}
           onTrack={() => navigate("/my-bookings")}
         />
@@ -1186,137 +1667,22 @@ const PgDetails = () => {
         isOpen={showEmailVerificationModal}
         onClose={() => setShowEmailVerificationModal(false)}
         userEmail={user?.email}
-        title="Verify your email to book PG"
-        description="Please verify your email with the 6-digit OTP to complete booking this PG."
+        title={verificationSource === "short_stay" ? "Verify your email for Short Stay" : "Verify your email to book PG"}
+        description={verificationSource === "short_stay" ? "Please verify your email with the 6-digit OTP to request a short stay at this PG." : "Please verify your email with the 6-digit OTP to complete booking this PG."}
         onSuccess={() => {
           setShowEmailVerificationModal(false);
-          // Automatically re-trigger booking visit once email is verified!
+          // Automatically reopen appropriate flow once email is verified!
           setTimeout(() => {
-            handleBookVisit();
+            if (verificationSource === "short_stay") {
+              setShowShortStayModal(true);
+            } else {
+              handleCheckInClick();
+            }
           }, 300);
         }}
       />
     </div>
   );
 };
-
-// ── MEMOIZED MODAL SUBCOMPONENTS (Optimized to avoid re-rendering on parent carousel/scroll) ──
-
-const BookingSuccessModal = ({ pgTitle, roomLabel, price, visitDate, visitTime, onClose, onTrack }) => (
-  <div 
-    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
-    onClick={onClose}
-  >
-    <div 
-      className="relative w-full max-w-lg overflow-hidden rounded-[2.5rem] border-2 border-emerald-500/40 bg-white dark:bg-[#111111] p-6 sm:p-8 text-center shadow-2xl animate-in zoom-in-95 duration-200"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <button
-        onClick={onClose}
-        className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition"
-      >
-        <X size={20} />
-      </button>
-
-      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-tr from-emerald-500 to-[#93B733] text-white shadow-lg shadow-emerald-500/25 mb-4">
-        <Sparkles className="w-10 h-10 text-white" />
-      </div>
-
-      <h3 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-        Request Sent Successfully!
-      </h3>
-      <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-300 mt-2 max-w-md mx-auto leading-relaxed">
-        Your visit / booking application for <strong className="text-[#0D3A1D] dark:text-[#93B733]">{pgTitle}</strong> has been received by the property owner.
-      </p>
-
-      <div className="mt-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.03] p-4 text-left space-y-2.5 text-xs">
-        <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-white/10">
-          <span className="font-semibold text-gray-500 dark:text-gray-400">Selected Room</span>
-          <span className="font-black text-gray-900 dark:text-white">{roomLabel || "Base Room"}</span>
-        </div>
-        <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-white/10">
-          <span className="font-semibold text-gray-500 dark:text-gray-400">Monthly Rent</span>
-          <span className="font-black text-[#0D3A1D] dark:text-[#93B733]">₹{price?.toLocaleString()} / mo</span>
-        </div>
-        {visitDate && visitTime && (
-          <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-white/10">
-            <span className="font-semibold text-gray-500 dark:text-gray-400">Visit Scheduled</span>
-            <span className="inline-flex items-center gap-1 font-black text-gray-900 dark:text-white">
-              <Clock size={12} className="text-[#93B733]" />
-              {formatVisitDate(visitDate)} · {visitTime}
-            </span>
-          </div>
-        )}
-        <div className="flex items-center justify-between">
-          <span className="font-semibold text-gray-500 dark:text-gray-400">Application Status</span>
-          <span className="inline-flex items-center gap-1 font-extrabold text-amber-700 dark:text-amber-400 bg-amber-100/80 dark:bg-amber-500/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider text-[10px]">
-            <Clock size={12} /> Under Owner Review
-          </span>
-        </div>
-      </div>
-
-      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-4 leading-relaxed">
-        Once the owner approves your application, you can view your approval and access the resident stay dashboard.
-      </p>
-
-      <div className="mt-6 flex flex-col sm:flex-row gap-3">
-        <button
-          onClick={onTrack}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-[#93B733] hover:bg-[#82a32d] px-6 py-3.5 text-xs sm:text-sm font-bold text-white shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
-        >
-          Track in My Requests <ChevronRight size={16} />
-        </button>
-        <button
-          onClick={onClose}
-          className="inline-flex items-center justify-center rounded-2xl border border-gray-300 dark:border-white/15 bg-white dark:bg-white/5 px-5 py-3.5 text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/10 transition"
-        >
-          Back to Details
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-const AuthPromptModal = ({ onClose, onLogin }) => (
-  <div 
-    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
-    onClick={onClose}
-  >
-    <div 
-      className="relative w-full max-w-md overflow-hidden rounded-[2.5rem] border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-6 sm:p-8 text-center shadow-2xl animate-in zoom-in-95 duration-200"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <button
-        onClick={onClose}
-        className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-white"
-      >
-        <X size={18} />
-      </button>
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#93B733]/15 text-[#93B733] text-2xl mb-4">
-        🔒
-      </div>
-      <h3 className="text-xl font-black text-gray-900 dark:text-white">
-        Login Required
-      </h3>
-      <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
-        Please sign in or create an account to send a visit/booking request to the property owner.
-      </p>
-      <div className="mt-6 flex flex-col gap-2.5">
-        <button
-          onClick={onLogin}
-          className="w-full rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] py-3 text-xs font-bold text-white transition shadow-sm"
-        >
-          Log In / Register
-        </button>
-        <button
-          onClick={onClose}
-          className="w-full rounded-xl border border-gray-200 dark:border-white/10 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 transition"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  </div>
-);
 
 export default PgDetails;

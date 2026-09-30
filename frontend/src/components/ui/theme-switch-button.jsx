@@ -22,27 +22,23 @@ export function ThemeSwitch({ className = '' }) {
     return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
   })
 
-  // Consolidated sync: handles theme-change events, cross-tab storage, and OS changes
+  // Consolidated sync: handles theme-change events and cross-tab storage (defaults to light/white)
   useEffect(() => {
     const sync = (val) => {
-      const next = val || localStorage.getItem('theme') || (document.documentElement.classList.contains('dark') ? 'dark' : 'light')
+      const next = val || localStorage.getItem('theme') || 'light'
       setTheme(next)
       document.documentElement.classList.toggle('dark', next === 'dark')
     }
 
     const onEvent = (e) => sync(e.detail)
     const onStorage = (e) => e.key === 'theme' && sync(e.newValue)
-    const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
-    const onMQ = (e) => !localStorage.getItem('theme') && sync(e.matches ? 'dark' : 'light')
 
     window.addEventListener('theme-change', onEvent)
     window.addEventListener('storage', onStorage)
-    mq?.addEventListener?.('change', onMQ)
 
     return () => {
       window.removeEventListener('theme-change', onEvent)
       window.removeEventListener('storage', onStorage)
-      mq?.removeEventListener?.('change', onMQ)
     }
   }, [])
 

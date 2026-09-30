@@ -62,6 +62,7 @@ export const createPGController = async (req, res) => {
       rules,
       google_map_link,
       sharing_options, // NEW: Added to capture dynamic pricing matrix
+      food_type,
     } = req.body;
 
     // ── 1. Check Owner Payout Details & Subscription ──
@@ -174,6 +175,9 @@ export const createPGController = async (req, res) => {
 
     const finalAmenities = parseStructuredInput(amenities) ?? null;
 
+    const connectedBankAccount = parseStructuredInput(req.body.connected_bank_account) ?? null;
+    const connectedBankAccountId = req.body.connected_bank_account_id || connectedBankAccount?.id || null;
+
     let result;
 
     try {
@@ -193,6 +197,9 @@ export const createPGController = async (req, res) => {
         google_map_link,
         profile_image,
         sharing_options: finalSharingOptions, // NEW: Passed to database model
+        food_type: req.body.food_type || "Veg",
+        connected_bank_account_id: connectedBankAccountId,
+        connected_bank_account: connectedBankAccount,
       });
 
       // Attach the media now that the PG has an id to hang it off.
@@ -323,6 +330,8 @@ export const updatePGController = async (req, res) => {
     // NOTE: If you plan to allow users to update images later, 
     // you can reuse the processImage() utility right here!
     
+    const shouldResubmit = existingPG.status === "rejected" || Boolean(req.body.resubmit);
+
     const updatedData = {
       title: req.body.title ?? existingPG.title,
       description: req.body.description ?? existingPG.description,
@@ -333,35 +342,52 @@ export const updatePGController = async (req, res) => {
       area: req.body.area ?? existingPG.area,
       nearby_college: req.body.nearby_college ?? existingPG.nearby_college,
       available_rooms: req.body.available_rooms ?? existingPG.available_rooms,
-      amenities:
-        req.body.amenities !== undefined
-          ? parseStructuredInput(req.body.amenities)
-          : existingPG.amenities,
+      amenities: req.body.amenities !== undefined ? parseStructuredInput(req.body.amenities) : existingPG.amenities,
       rules: req.body.rules ?? existingPG.rules,
-      google_map_link:
-        req.body.google_map_link ?? existingPG.google_map_link,
+      google_map_link: req.body.google_map_link ?? existingPG.google_map_link,
       profile_image: req.body.profile_image ?? existingPG.profile_image,
-      sharing_options:
-        req.body.sharing_options !== undefined
-          ? parseStructuredInput(req.body.sharing_options)
-          : existingPG.sharing_options,
+      sharing_options: req.body.sharing_options !== undefined ? parseStructuredInput(req.body.sharing_options) : existingPG.sharing_options,
+      food_type: req.body.food_type ?? existingPG.food_type ?? "Veg",
+      ...(req.body.connected_bank_account_id !== undefined ? { connected_bank_account_id: req.body.connected_bank_account_id } : {}),
+      ...(req.body.connected_bank_account !== undefined ? { connected_bank_account: parseStructuredInput(req.body.connected_bank_account) } : {}),
+      ...(shouldResubmit ? { status: "pending", admin_note: null } : {}),
     };
-
-    console.log("Update Data:", updatedData);
 
     await updatePG(id, updatedData);
 
     return res.status(200).json({
       success: true,
-      message: "PG updated successfully",
+      message: shouldResubmit
+        ? "PG updated and re-submitted for admin approval!"
+        : "PG updated successfully",
+      status: updatedData.status || existingPG.status,
     });
   } catch (error) {
     console.log("Update PG Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 
-    return res.status(500).json({
-      success: false,
-      message: error.message,
+// Resubmit PG for Approval
+export const resubmitPGController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pg = await PG.findOne({ _id: Number(id) }).select("owner_id").lean();
+
+    if (!pg) return res.status(404).json({ success: false, message: "PG not found" });
+    if (Number(pg.owner_id) !== Number(req.user.id) && req.user.role !== "admin" && req.user.role !== "superadmin") {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    await PG.updateOne({ _id: Number(id) }, { $set: { status: "pending", admin_note: null } });
+
+    return res.status(200).json({
+      success: true,
+      message: "Property re-submitted for approval successfully!",
     });
+  } catch (error) {
+    console.log("Resubmit PG Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -482,6 +508,8 @@ export const searchPGsController = async (req, res) => {
       max_price,
       amenity,
       keyword,
+      food_type,
+      foodType,
     } = req.query;
 
     const pgs = await searchPGs({
@@ -493,6 +521,7 @@ export const searchPGsController = async (req, res) => {
       max_price,
       amenity,
       keyword,
+      food_type: food_type || foodType,
     });
 
     return res.status(200).json({

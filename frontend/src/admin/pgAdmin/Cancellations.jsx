@@ -135,48 +135,48 @@ export default function Cancellations() {
         </button>
       </div>
 
-      {/* 4 Summary Stat Pills */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] p-4 sm:p-5 shadow-xs">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1">
+      {/* 4 Summary Stat Pills (Compact & Optimized) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] p-2.5 sm:p-3.5 shadow-xs">
+          <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wide text-gray-400 block mb-0.5 truncate">
             Total Requests
           </span>
-          <p className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">
+          <p className="text-base sm:text-lg md:text-xl font-black text-gray-900 dark:text-white">
             {counts.total}
           </p>
         </div>
 
-        <div className="rounded-3xl border border-amber-500/30 bg-amber-500/[0.04] p-4 sm:p-5 shadow-xs">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block mb-1 flex items-center gap-1.5">
-            <Clock size={13} className="animate-spin" style={{ animationDuration: "4s" }} /> Needs Decision
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-2.5 sm:p-3.5 shadow-xs">
+          <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wide text-amber-600 dark:text-amber-400 block mb-0.5 flex items-center gap-1.5 truncate">
+            <Clock size={12} className="animate-spin shrink-0" style={{ animationDuration: "4s" }} /> Needs Decision
           </span>
-          <p className="text-xl sm:text-2xl font-black text-amber-700 dark:text-amber-400">
+          <p className="text-base sm:text-lg md:text-xl font-black text-amber-700 dark:text-amber-400">
             {counts.pending}
           </p>
         </div>
 
-        <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/[0.04] p-4 sm:p-5 shadow-xs">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mb-1 flex items-center gap-1.5">
-            <CheckCircle2 size={13} /> Accepted & Released
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.04] p-2.5 sm:p-3.5 shadow-xs">
+          <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wide text-emerald-600 dark:text-emerald-400 block mb-0.5 flex items-center gap-1.5 truncate">
+            <CheckCircle2 size={12} className="shrink-0" /> Accepted & Released
           </span>
-          <p className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400">
+          <p className="text-base sm:text-lg md:text-xl font-black text-emerald-700 dark:text-emerald-400">
             {counts.approved}
           </p>
         </div>
 
-        <div className="rounded-3xl border border-rose-500/20 bg-rose-500/[0.03] p-4 sm:p-5 shadow-xs">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 block mb-1 flex items-center gap-1.5">
-            <XCircle size={13} /> Declined
+        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.03] p-2.5 sm:p-3.5 shadow-xs">
+          <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wide text-rose-600 dark:text-rose-400 block mb-0.5 flex items-center gap-1.5 truncate">
+            <XCircle size={12} className="shrink-0" /> Declined
           </span>
-          <p className="text-xl sm:text-2xl font-black text-rose-700 dark:text-rose-400">
+          <p className="text-base sm:text-lg md:text-xl font-black text-rose-700 dark:text-rose-400">
             {counts.rejected}
           </p>
         </div>
       </div>
 
-      {/* FILTER TABS & SEARCH BAR */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-3 sm:p-5 shadow-sm">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
+      {/* FILTER TABS & SEARCH BAR (Compact) */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-2.5 sm:p-3 shadow-xs">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
           {[
             { id: "all", label: "All Requests", count: counts.total },
             { id: "pending", label: "Needs Decision", count: counts.pending, isAlert: counts.pending > 0 },
@@ -186,14 +186,14 @@ export default function Cancellations() {
             <button
               key={tab.id}
               onClick={() => setSelectedStatus(tab.id)}
-              className={`flex items-center gap-2.5 rounded-2xl px-3 py-2 sm:px-5 sm:py-3 text-xs sm:text-sm font-black transition-all shrink-0 cursor-pointer ${
+              className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black transition-all shrink-0 cursor-pointer ${
                 selectedStatus === tab.id
-                  ? "bg-rose-600 text-white shadow-lg shadow-rose-600/25"
+                  ? "bg-rose-600 text-white shadow-sm"
                   : "bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10"
               }`}
             >
               <span>{tab.label}</span>
-              <span className={`rounded-xl px-2 sm:px-2.5 py-0.5 text-xs font-black ${
+              <span className={`rounded-lg px-1.5 py-0.5 text-[10px] font-black ${
                 selectedStatus === tab.id
                   ? "bg-white/20 text-white"
                   : tab.isAlert
@@ -206,8 +206,8 @@ export default function Cancellations() {
           ))}
         </div>
 
-        <div className="relative w-full lg:w-80">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+        <div className="relative w-full lg:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
           <input
             type="text"
             placeholder="Search by student, PG or reason..."
