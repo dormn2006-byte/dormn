@@ -13,6 +13,7 @@ import PG from "../schemas/pgSchema.js";
 import User from "../schemas/userSchema.js";
 import Payment from "../schemas/paymentSchema.js";
 import { notifyOwnerNewBooking, notifyStudentBookingStatus } from "../utils/whatsappService.js";
+import { clampMonths } from "../services/feeService.js";
 import { 
   sendBookingRequestToOwnerEmail, 
   sendBookingStatusToStudentEmail,
@@ -47,6 +48,7 @@ export const createBookingController = async (req, res) => {
       visit_date,
       visit_time,
       check_in_date,
+      duration_months,
     } = req.body;
 
     // Validation
@@ -148,6 +150,7 @@ export const createBookingController = async (req, res) => {
       booked_price,
       visit_date: scheduledDate,
       visit_time: scheduledTime,
+      duration_months: clampMonths(duration_months),
     });
 
     // ── Notifications: Notify PG Owner of new booking (WhatsApp & Email) ──
@@ -300,6 +303,15 @@ export const updateBookingStatusController = async (
           });
         }
       }
+    }
+
+    // The owner can confirm or adjust the agreed stay length while approving —
+    // it's what the company's one-time fee is based on.
+    if (status === "approved" && req.body.duration_months != null) {
+      await Booking.updateOne(
+        { _id: toNumericId(id) },
+        { $set: { duration_months: clampMonths(req.body.duration_months) } }
+      );
     }
 
     await updateBookingStatus({

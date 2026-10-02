@@ -250,6 +250,7 @@ export const CheckInCalendarModal = ({ pgId, pgTitle, selectedRoom, loading, onC
   const [validatingPromo, setValidatingPromo] = useState(false);
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [promoError, setPromoError] = useState("");
+  const [durationMonths, setDurationMonths] = useState(1);
 
   const handleApplyPromo = async () => {
     const cleanCode = promoInput.trim().toUpperCase();
@@ -423,7 +424,39 @@ export const CheckInCalendarModal = ({ pgId, pgTitle, selectedRoom, loading, onC
         ))}
       </div>
 
-      <div className="rounded-xl bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 p-2.5 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 shadow-xs">
+      {/* ── STAY DURATION ── */}
+      <div className="mt-2.5 rounded-2xl border border-gray-200/80 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.02] p-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+            <CalendarRange size={13} className="text-[#93B733]" />
+            How many months will you stay?
+          </span>
+          <span className="text-[11px] font-black text-[#0D3A1D] dark:text-[#bbf246]">
+            {durationMonths} month{durationMonths > 1 ? "s" : ""}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setDurationMonths(m)}
+              className={`h-7 w-7 rounded-lg text-[11px] font-black transition cursor-pointer ${
+                durationMonths === m
+                  ? "bg-[#93B733] text-black shadow-sm"
+                  : "bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-[#93B733]/20"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[10px] font-medium text-gray-400">
+          Rent is paid every month. The owner confirms the final duration on approval.
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 p-2.5 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 shadow-xs mt-2.5">
         Planned Check-in: <span className="font-black text-gray-950 dark:text-[#bbf246]">{cal.formattedSelected}</span>
       </div>
 
@@ -437,7 +470,7 @@ export const CheckInCalendarModal = ({ pgId, pgTitle, selectedRoom, loading, onC
         </button>
         <button
           type="button"
-          onClick={() => onConfirm(cal.selectedDate, appliedPromo)}
+          onClick={() => onConfirm(cal.selectedDate, appliedPromo, durationMonths)}
           disabled={loading || !cal.selectedDate}
           className="flex-[2] rounded-xl bg-[#93B733] hover:bg-[#82a32d] py-3 text-xs font-black text-black shadow-md hover:shadow-lg transition active:scale-[0.98] disabled:opacity-60 cursor-pointer"
         >

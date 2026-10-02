@@ -74,8 +74,8 @@ const Gym = lazyWithRetry(() => import("../pages/Gym"), "Gym");
 const MyShortStays = lazyWithRetry(() => import("../pages/MyShortStays"), "MyShortStays");
 const PgVisits = lazyWithRetry(() => import("../admin/pgAdmin/PgVisits"), "PgVisits");
 const PgShortStays = lazyWithRetry(() => import("../admin/pgAdmin/PgShortStays"), "PgShortStays");
-const ManagePromoCodes = lazyWithRetry(() => import("../admin/pgAdmin/ManagePromoCodes"), "ManagePromoCodes");
 const ManageStaff = lazyWithRetry(() => import("../admin/pgAdmin/ManageStaff"), "ManageStaff");
+const PromoCodes = lazyWithRetry(() => import("../admin/pgAdmin/PromoCodes"), "PromoCodes");
 
 
 
@@ -298,12 +298,12 @@ const AppRoutes = () => {
             <Route path="students" element={<Students />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="payments" element={<OwnerPayments />} />
+            <Route path="promo-codes" element={<PromoCodes />} />
             <Route path="kyc-forms" element={<TenantRegistrations />} />
             <Route path="profile" element={<OwnerProfile />} />
             <Route path="settings" element={<OwnerProfile defaultTab="security" />} />
             <Route path="visits" element={<PgVisits />} />
             <Route path="short-stays" element={<PgShortStays />} />
-            <Route path="promo-codes" element={<ManagePromoCodes />} />
             <Route path="staff" element={<ManageStaff />} />
             <Route path="all-staff" element={<Navigate to="/owner/staff" replace />} />
           </Route>

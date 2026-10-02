@@ -180,7 +180,53 @@ const Notifications = () => {
         resolutionNote: r.resolution_note || ""
       }));
 
-      const all = [...mappedRequests, ...mappedBookings];
+      // Persistent payroll notifications: rent received, fee deducted, payout
+      // ready to transfer / transferred / failed.
+      let mappedPayments = [];
+      try {
+        const notifRes = await api.get("/notifications");
+        const rows = Array.isArray(notifRes?.data?.notifications) ? notifRes.data.notifications : [];
+
+        mappedPayments = rows.map((n) => {
+          const d = n.data || {};
+          const statusLabel =
+            n.type === "payout_paid" ? "transferred" : n.type === "payout_failed" ? "failed" : "ready to transfer";
+
+          return {
+            id: `payment-${n._id}`,
+            rawId: n._id,
+            type: "payment",
+            notifType: n.type,
+            title: n.title,
+            category: "Payments",
+            senderName: d.pg_title || "Rent payment",
+            senderEmail: "N/A",
+            senderPhone: "N/A",
+            senderRole: "Rent received",
+            avatarColor:
+              n.type === "payout_failed"
+                ? "from-rose-500 to-pink-500"
+                : n.type === "payout_paid"
+                ? "from-emerald-500 to-teal-500"
+                : "from-amber-500 to-orange-500",
+            pgName: d.pg_title || "Your PG",
+            location: "Current Resident",
+            time: n.created_at ? new Date(n.created_at).toLocaleDateString("en-IN") : "Recent",
+            status: statusLabel,
+            unread: !n.is_read,
+            message: n.message,
+            gross: d.gross,
+            fee: d.fee,
+            net: d.net,
+            settlementId: d.settlement_id || n.action_ref,
+            canTransfer: n.action_type === "approve_payout" && n.type === "payment_settlement",
+          };
+        });
+      } catch (e) {
+        console.error("Payment notifications fetch error:", e);
+      }
+
+      const all = [...mappedPayments, ...mappedRequests, ...mappedBookings];
       setNotifications(all);
     } catch (error) {
       console.error("Notifications Fetch Error:", error);
@@ -210,6 +256,21 @@ const Notifications = () => {
     } catch (error) {
       console.error("Status Update Error:", error);
       alert("Failed to update status in database.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleTransferPayout = async (settlementId) => {
+    try {
+      setProcessingId(settlementId);
+      await api.post(`/settlements/${settlementId}/approve`);
+      alert("Transfer initiated. The money will reach your bank account shortly.");
+      setSelectedNotif(null);
+      fetchLiveNotifications();
+    } catch (error) {
+      console.error("Payout Error:", error);
+      alert(error?.response?.data?.message || "Failed to start the transfer. Please try again.");
     } finally {
       setProcessingId(null);
     }
@@ -285,13 +346,19 @@ const Notifications = () => {
     }
   };
 
-  const markNotificationRead = (notifId) => {
+  const markNotificationRead = (notif) => {
+    const notifId = notif?.id ?? notif;
     try {
       const readIds = new Set(JSON.parse(localStorage.getItem('dormn_read_owner_notifications') || '[]'));
       readIds.add(String(notifId));
       localStorage.setItem('dormn_read_owner_notifications', JSON.stringify([...readIds]));
       setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, unread: false } : n));
       window.dispatchEvent(new CustomEvent('dormn_seen_counts_updated'));
+
+      // Persistent notifications also live server-side, so clear them there too.
+      if (notif?.type === "payment" && notif?.rawId) {
+        api.patch(`/notifications/${notif.rawId}/read`).catch(() => null);
+      }
     } catch {}
   };
 
@@ -301,16 +368,19 @@ const Notifications = () => {
       localStorage.setItem('dormn_read_owner_notifications', JSON.stringify(allIds));
       setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
       window.dispatchEvent(new CustomEvent('dormn_seen_counts_updated'));
+      api.patch('/notifications/read-all').catch(() => null);
     } catch {}
   };
 
   const unreadCount = notifications.filter((n) => n.unread).length;
   const maintenanceCount = notifications.filter((n) => n.type === "maintenance" && n.status === "open").length;
+  const paymentCount = notifications.filter((n) => n.type === "payment" && n.unread).length;
 
   const filteredNotifications = notifications.filter((n) => {
     if (activeFilter === "Unread") return n.unread;
     if (activeFilter === "Maintenance") return n.type === "maintenance";
     if (activeFilter === "Bookings") return n.type === "booking";
+    if (activeFilter === "Payments") return n.type === "payment";
     if (activeFilter === "Pending") return n.status === "pending" || n.status === "open";
     if (activeFilter === "Approved") return n.status === "approved" || n.status === "resolved";
     return true;
@@ -324,7 +394,7 @@ const Notifications = () => {
         
         {/* Category Pills */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          {["All", "Maintenance", "Bookings", "Unread", "Pending", "Approved"].map((tab) => (
+          {["All", "Payments", "Bookings", "Maintenance", "Unread", "Pending", "Approved"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveFilter(tab)}
@@ -335,7 +405,13 @@ const Notifications = () => {
               }`}
             >
               {tab === "Maintenance" && <Wrench size={13} className="text-[#93B733]" />}
+              {tab === "Payments" && <Send size={13} className="text-[#93B733]" />}
               <span>{tab}</span>
+              {tab === "Payments" && paymentCount > 0 && (
+                <span className="rounded-full bg-amber-500 px-1.5 py-0.2 text-[9px] font-black text-white">
+                  {paymentCount}
+                </span>
+              )}
               {tab === "Maintenance" && maintenanceCount > 0 && (
                 <span className="rounded-full bg-amber-500 px-1.5 py-0.2 text-[9px] font-black text-white">
                   {maintenanceCount}
@@ -394,7 +470,7 @@ const Notifications = () => {
               onClick={() => {
                 setSelectedNotif(notif);
                 setResolutionNote(notif.resolutionNote || "");
-                markNotificationRead(notif.id);
+                markNotificationRead(notif);
               }}
               className={`group relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 rounded-3xl border p-5 cursor-pointer transition-all duration-200 ${
                 notif.unread
@@ -418,7 +494,13 @@ const Notifications = () => {
                     <span className="text-xs font-bold text-gray-400">• {notif.senderRole}</span>
                     <span
                       className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-                        notif.status === "approved" || notif.status === "resolved"
+                        notif.type === "payment"
+                          ? notif.status === "transferred"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                            : notif.status === "failed"
+                            ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                            : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                          : notif.status === "approved" || notif.status === "resolved"
                           ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                           : notif.status === "rejected"
                           ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
@@ -560,6 +642,29 @@ const Notifications = () => {
                 </div>
               )}
 
+              {/* Money breakdown for payroll notifications */}
+              {selectedNotif.type === "payment" && (
+                <div>
+                  <h4 className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
+                    Payment Breakdown
+                  </h4>
+                  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 p-4 space-y-1.5 text-xs font-semibold">
+                    <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                      <span>Rent received</span>
+                      <span>₹{Number(selectedNotif.gross || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between text-rose-500">
+                      <span>Company fee</span>
+                      <span>-₹{Number(selectedNotif.fee || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between pt-1.5 border-t border-dashed border-gray-300 dark:border-white/10 text-gray-900 dark:text-white font-black">
+                      <span>Your payout</span>
+                      <span className="text-[#93B733]">₹{Number(selectedNotif.net || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="pt-2 flex flex-wrap gap-2.5 justify-end">
                 
@@ -611,13 +716,29 @@ const Notifications = () => {
                   </>
                 )}
 
-                <a
-                  href={`tel:${selectedNotif.senderPhone}`}
-                  className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-white/15 bg-gray-100 dark:bg-white/10 px-4 py-3 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-white/20 transition"
-                >
-                  <Phone size={16} />
-                  <span>Call {selectedNotif.type === 'maintenance' ? 'Resident' : 'Applicant'}</span>
-                </a>
+                {/* Payroll action: send the net amount to the owner's bank */}
+                {selectedNotif.type === "payment" && selectedNotif.canTransfer && (
+                  <button
+                    disabled={processingId === selectedNotif.settlementId}
+                    onClick={() => handleTransferPayout(selectedNotif.settlementId)}
+                    className="flex items-center gap-2 rounded-xl bg-[#0D3A1D] hover:bg-[#07130B] dark:bg-[#93B733] dark:hover:bg-[#82a32d] px-5 py-3 text-xs font-black text-white dark:text-gray-950 transition shadow-md disabled:opacity-50 cursor-pointer"
+                  >
+                    <Send size={16} />
+                    <span>
+                      {processingId === selectedNotif.settlementId ? "Starting..." : "Transfer to My Bank"}
+                    </span>
+                  </button>
+                )}
+
+                {selectedNotif.type !== "payment" && (
+                  <a
+                    href={`tel:${selectedNotif.senderPhone}`}
+                    className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-white/15 bg-gray-100 dark:bg-white/10 px-4 py-3 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-white/20 transition"
+                  >
+                    <Phone size={16} />
+                    <span>Call {selectedNotif.type === 'maintenance' ? 'Resident' : 'Applicant'}</span>
+                  </a>
+                )}
               </div>
 
             </div>

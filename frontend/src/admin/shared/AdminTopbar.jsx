@@ -23,14 +23,23 @@ const AdminTopbar = ({ sidebarOpen, setSidebarOpen, isCollapsed, toggleCollapse 
         return;
       }
       try {
-        const { data } = await api.get("/bookings/owner-bookings");
-        const pendingList = (data.bookings || []).filter((b) => b.status === "pending");
+        const [bookingsRes, notifRes] = await Promise.all([
+          api.get("/bookings/owner-bookings").catch(() => null),
+          api.get("/notifications").catch(() => null),
+        ]);
+
+        const pendingList = (bookingsRes?.data?.bookings || []).filter((b) => b.status === "pending");
         let seenCounts = {};
         try {
           seenCounts = JSON.parse(localStorage.getItem("dormn_owner_seen_counts") || "{}");
         } catch {}
         const seenPending = seenCounts.pendingBookings || 0;
-        setHasUnread(pendingList.length > seenPending);
+
+        // Unread payroll notifications (e.g. "transfer this rent to your bank")
+        // also light the bell.
+        const unreadNotifications = Number(notifRes?.data?.unreadCount || 0);
+
+        setHasUnread(pendingList.length > seenPending || unreadNotifications > 0);
       } catch {
         setHasUnread(false);
       }

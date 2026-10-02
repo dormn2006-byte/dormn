@@ -261,7 +261,14 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
           ? kycList.filter(k => myPgIds.has(String(k.pg_id)) || myPgTitles.has((k.pg_title || '').toLowerCase().trim()))
           : [];
 
+        // 5. Unread payroll notifications (rent received / payout ready)
+        let unreadNotifications = 0;
+        try {
+          unreadNotifications = Number((await api.get("/notifications")).data?.unreadCount || 0);
+        } catch {}
+
         setCounts({
+          notifications: unreadNotifications,
           myPgs: pgsList.length,
           bookings: visibleB.length,
           pendingBookings: pendingB,
@@ -349,6 +356,12 @@ const AdminSidebar = ({ closeSidebar, toggleCollapse, isCollapsed = false, isMob
       }
       case "All Payments":
       case "Payments": {
+        // A settlement waiting to be transferred is the most actionable state,
+        // so it takes priority over the plain "new paid booking" count.
+        const unreadPayroll = Number(counts.notifications || 0);
+        if (unreadPayroll > 0) {
+          return { count: `${unreadPayroll} New`, color: "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-black animate-pulse" };
+        }
         const unseen = getUnseenCount("payments", counts.payments);
         return unseen > 0 ? { count: unseen, color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" } : null;
       }

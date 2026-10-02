@@ -13,7 +13,7 @@ import {
   Phone, MessageSquare, CheckCircle2, Clock, ChevronRight, ChevronLeft, ChevronDown,
   X, Sparkles, Building2, AlertCircle, ShieldCheck,
   Share2, Copy, Check, ArrowLeft, BedDouble, BedSingle, Snowflake, Wind, Flame,
-  Wifi, Zap, UtensilsCrossed, Shirt, Bath, Car, Droplets, Dumbbell, Tv,
+  Wifi, Zap, UtensilsCrossed, Shirt, Bath, Car, Droplets, Dumbbell, Tv, PlayCircle,
   CalendarClock, KeyRound, CalendarCheck, CalendarRange, Tag, Apple
 } from "lucide-react";
 import {
@@ -564,16 +564,17 @@ const currentActiveIndex = mediaCount > 0
   };
 
   // Confirm Check-in and proceed to booking
-  const handleConfirmCheckIn = async (selectedCheckInDate, promoData = null) => {
+  const handleConfirmCheckIn = async (selectedCheckInDate, promoData = null, durationMonths = 1) => {
     try {
       setBookingLoading(true);
       setChosenCheckInDate(selectedCheckInDate);
       await API.post("/bookings/create", {
         pg_id: Number(id),
-        message: `Interested in checking in on ${selectedCheckInDate} for ${selectedRoom.label}${promoData?.code ? ` (Promo: ${promoData.code})` : ''}`,
+        message: `Interested in checking in on ${selectedCheckInDate} for ${selectedRoom.label} for ${durationMonths} month${durationMonths > 1 ? 's' : ''}${promoData?.code ? ` (Promo: ${promoData.code})` : ''}`,
         selected_room_type: selectedRoom.label,
         booked_price: promoData?.final_amount || selectedRoom.price,
         check_in_date: selectedCheckInDate,
+        duration_months: durationMonths,
         coupon_code: promoData?.code || null,
         discount_amount: promoData?.discount_applied || 0,
       });
@@ -584,6 +585,7 @@ const currentActiveIndex = mediaCount > 0
         coupon_code: promoData?.code || null,
         discount_amount: promoData?.discount_applied || 0,
         booked_price: promoData?.final_amount || selectedRoom.price,
+        duration_months: durationMonths,
       });
       setShowCheckInModal(false);
       setBookingSuccessModal(true);
@@ -924,19 +926,34 @@ const currentActiveIndex = mediaCount > 0
                   <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 animate-pulse z-0" />
                 )}
 
-                <img
-                  src={displayActiveImage}
-                  alt="PG"
-                  onLoad={() => setMainImageLoaded(true)}
-                  className={`h-[190px] sm:h-[360px] md:h-[480px] w-full object-cover transition-all duration-700 hover:scale-105 ${
-                    mainImageLoaded ? "opacity-100" : "opacity-0"
-                  }`}
-                  onError={(e) => {
-                    e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[0];
-                    setMainImageLoaded(true);
-                  }}
-                />
-                {galleryImages.length > 1 && (
+                {activeMedia?.type === "video" ? (
+                  <video
+                    key={activeMedia.url}
+                    src={activeMedia.url}
+                    poster={activeMedia.poster || undefined}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    onLoadedMetadata={() => setMainImageLoaded(true)}
+                    className={`h-[190px] sm:h-[360px] md:h-[480px] w-full bg-black object-contain transition-all duration-700 ${
+                      mainImageLoaded ? "opacity-100" : "opacity-0"
+                    }`}
+                  />
+                ) : (
+                  <img
+                    src={displayActiveImage}
+                    alt="PG"
+                    onLoad={() => setMainImageLoaded(true)}
+                    className={`h-[190px] sm:h-[360px] md:h-[480px] w-full object-cover transition-all duration-700 hover:scale-105 ${
+                      mainImageLoaded ? "opacity-100" : "opacity-0"
+                    }`}
+                    onError={(e) => {
+                      e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[0];
+                      setMainImageLoaded(true);
+                    }}
+                  />
+                )}
+                {mediaCount > 1 && (
                   <>
                     <button
                       type="button"
@@ -957,16 +974,16 @@ const currentActiveIndex = mediaCount > 0
                     </button>
 
                     <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 z-20 rounded-full bg-black/70 backdrop-blur-sm px-2 py-0.5 sm:px-3 sm:py-1 text-[9px] sm:text-xs font-semibold text-white">
-                      {currentActiveIndex + 1} / {galleryImages.length}
+                      {currentActiveIndex + 1} / {mediaCount}
                     </div>
                   </>
                 )}
               </div>
 
               {/* Single Section Thumbnail Strip: Static 4-col when <= 4, infinite loop marquee moving left when > 4 */}
-              {galleryImages.length <= 4 ? (
+              {mediaCount <= 4 ? (
                 <div className="mt-1 sm:mt-2 md:mt-3 grid grid-cols-4 gap-1 sm:gap-2 md:gap-3">
-                  {galleryImages.map((img, index) => (
+                  {mediaItems.map((item, index) => (
                     <button
                       key={index}
                       type="button"
@@ -977,16 +994,7 @@ const currentActiveIndex = mediaCount > 0
                           : "border-transparent opacity-70 hover:opacity-100"
                       }`}
                     >
-                      <img
-                        src={img}
-                        alt={`preview ${index + 1}`}
-                        loading="lazy"
-                        decoding="async"
-                        className="h-10 w-full object-cover sm:h-20 md:h-24"
-                        onError={(e) => {
-                          e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[index % DEFAULT_DETAILS_FALLBACKS.length];
-                        }}
-                      />
+                      <MediaThumbnail item={item} index={index} />
                     </button>
                   ))}
                 </div>
@@ -1002,15 +1010,15 @@ const currentActiveIndex = mediaCount > 0
                     className="thumbnail-marquee-track gap-1 sm:gap-2 md:gap-3 py-0.5"
                     style={{
                       animationPlayState: isGalleryLoopPaused ? "paused" : "running",
-                      animationDuration: `${Math.max(galleryImages.length * 2.2, 16)}s`
+                      animationDuration: `${Math.max(mediaCount * 2.2, 16)}s`
                     }}
                   >
-                    {[...galleryImages, ...galleryImages].map((img, index) => {
-                      const realIndex = index % galleryImages.length;
+                    {[...mediaItems, ...mediaItems].map((item, index) => {
+                      const realIndex = index % mediaCount;
                       const isSelected = currentActiveIndex === realIndex;
                       return (
                         <button
-                          key={`${realIndex}-${index >= galleryImages.length ? 'dup' : 'orig'}`}
+                          key={`${realIndex}-${index >= mediaCount ? 'dup' : 'orig'}`}
                           type="button"
                           onClick={() => setActiveImageIndex(realIndex)}
                           className={`thumbnail-marquee-item overflow-hidden rounded-md sm:rounded-xl border-2 transition-all duration-200 cursor-pointer ${
@@ -1019,16 +1027,7 @@ const currentActiveIndex = mediaCount > 0
                               : "border-transparent opacity-75 hover:opacity-100"
                           }`}
                         >
-                          <img
-                            src={img}
-                            alt={`preview ${realIndex + 1}`}
-                            loading="lazy"
-                            decoding="async"
-                            className="h-10 w-full object-cover sm:h-20 md:h-24 pointer-events-none"
-                            onError={(e) => {
-                              e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[realIndex % DEFAULT_DETAILS_FALLBACKS.length];
-                            }}
-                          />
+                          <MediaThumbnail item={item} index={realIndex} />
                         </button>
                       );
                     })}

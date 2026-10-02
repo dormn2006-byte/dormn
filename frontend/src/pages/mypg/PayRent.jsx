@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, memo, useCallback, useMemo } from 'react';
 import {
   ArrowLeft, IndianRupee, CheckCircle2, Clock,
-  Receipt, FileText, Building2, CreditCard, ShieldCheck
+  Receipt, FileText, Building2, CreditCard, ShieldCheck, Tag
 } from 'lucide-react';
 import api from '../../services/api';
 import { AuthContext } from '../../context/AuthContext';
@@ -19,6 +19,12 @@ const PayRent = memo(({ onBack }) => {
   const [error, setError] = useState(null);
   const [isPaying, setIsPaying] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+
+  // Promo codes, keyed by booking id so each due row keeps its own state.
+  const [promoDrafts, setPromoDrafts] = useState({});
+  const [promoErrors, setPromoErrors] = useState({});
+  const [appliedPromos, setAppliedPromos] = useState({});
+  const [applyingId, setApplyingId] = useState(null);
 
   const fetchLive = useCallback(async () => {
     try {
@@ -90,6 +96,55 @@ const PayRent = memo(({ onBack }) => {
     return Object.values(grouped);
   }, [bookings]);
 
+  const baseAmountOf = (due) => Number(due.booked_price || due.price || 0);
+  const appliedPromoFor = (due) => appliedPromos[due.id] || null;
+  const payableOf = (due) => appliedPromoFor(due)?.final_amount ?? baseAmountOf(due);
+
+  // Preview only — the server recomputes and claims the code when the order is
+  // created, so nothing here is trusted for the actual charge.
+  const applyPromo = async (due) => {
+    const code = (promoDrafts[due.id] || '').trim();
+    if (!code) return;
+
+    setApplyingId(due.id);
+    setPromoErrors((prev) => ({ ...prev, [due.id]: '' }));
+
+    try {
+      const res = await api.post('/promo-codes/validate', {
+        code,
+        pg_id: Number(due.pg_id),
+        amount: baseAmountOf(due),
+      });
+
+      if (res.data?.success) {
+        setAppliedPromos((prev) => ({
+          ...prev,
+          [due.id]: {
+            code: res.data.code,
+            discount: res.data.discount_applied,
+            final_amount: res.data.final_amount,
+          },
+        }));
+      }
+    } catch (err) {
+      setPromoErrors((prev) => ({
+        ...prev,
+        [due.id]: err?.response?.data?.message || 'Could not apply that promo code.',
+      }));
+    } finally {
+      setApplyingId(null);
+    }
+  };
+
+  const removePromo = (dueId) => {
+    setAppliedPromos((prev) => {
+      const next = { ...prev };
+      delete next[dueId];
+      return next;
+    });
+    setPromoDrafts((prev) => ({ ...prev, [dueId]: '' }));
+  };
+
   const handlePay = async (booking) => {
     const amount = Number(booking.booked_price || booking.price || 0);
     if (!amount) return alert('Invalid price details.');
@@ -97,18 +152,27 @@ const PayRent = memo(({ onBack }) => {
     const isLoaded = await loadRazorpayScript();
     if (!isLoaded) return alert('Payment SDK failed to load.');
 
+    const applied = appliedPromoFor(booking);
+
     setIsPaying(true);
     try {
       const orderRes = await api.post('/payments/create-order', {
         booking_id: Number(booking.id || booking.booking_id),
         pg_id: Number(booking.pg_id),
         owner_id: Number(booking.owner_id),
-        amount_in_rupees: amount
+        // The original amount — the server applies the discount from the code.
+        amount_in_rupees: amount,
+        ...(applied ? { coupon_code: applied.code } : {})
       });
 
       const data = orderRes.data;
       if (!data.success) {
         setIsPaying(false);
+        // A rejected code is the common case here, so surface it on the row.
+        if (applied) {
+          setPromoErrors((prev) => ({ ...prev, [booking.id]: data.message || 'Promo code was rejected.' }));
+          removePromo(booking.id);
+        }
         return alert(data.message || 'Failed to initialize payment.');
       }
 
@@ -128,6 +192,8 @@ const PayRent = memo(({ onBack }) => {
               booking_id: data.booking_id || booking.id
             });
             if (verifyRes.data.success) {
+              // The code is spent now, so drop it from the row.
+              removePromo(booking.id);
               await fetchLive();
               setSubTab('history');
             }
@@ -201,10 +267,67 @@ const PayRent = memo(({ onBack }) => {
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-2 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-[#93B733]" /> {due.title || due.pg_name} • {due.selected_room_type || due.room_type || 'Standard Room'}
                 </p>
+
+                {/* Promo code */}
+                <div className="mt-4">
+                  {appliedPromoFor(due) ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-400">
+                        <Tag className="w-3.5 h-3.5" />
+                        {appliedPromoFor(due).code}
+                      </span>
+                      <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                        −₹{Number(appliedPromoFor(due).discount).toLocaleString('en-IN')} off
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removePromo(due.id)}
+                        className="text-[11px] font-bold text-gray-400 underline underline-offset-2 transition hover:text-rose-500 cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={promoDrafts[due.id] || ''}
+                          onChange={(e) => {
+                            const value = e.target.value.toUpperCase();
+                            setPromoDrafts((prev) => ({ ...prev, [due.id]: value }));
+                            if (promoErrors[due.id]) {
+                              setPromoErrors((prev) => ({ ...prev, [due.id]: '' }));
+                            }
+                          }}
+                          placeholder="Promo code"
+                          className="w-40 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-gray-900 outline-none transition focus:border-[#93B733] dark:border-gray-700 dark:bg-[#1a1a1a] dark:text-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => applyPromo(due)}
+                          disabled={applyingId === due.id || !(promoDrafts[due.id] || '').trim()}
+                          className="rounded-xl bg-[#0D3A1D] px-3.5 py-2 text-xs font-bold text-white transition hover:bg-[#16502a] disabled:opacity-40 cursor-pointer"
+                        >
+                          {applyingId === due.id ? 'Checking…' : 'Apply'}
+                        </button>
+                      </div>
+                      {promoErrors[due.id] && (
+                        <p className="mt-1.5 text-[11px] font-semibold text-rose-500">{promoErrors[due.id]}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-              <button onClick={() => handlePay(due)} disabled={isPaying} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-[#93B733] hover:bg-[#82a32d] active:scale-95 text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer disabled:opacity-50">
-                <IndianRupee className="w-4 h-4" /> {isPaying ? 'Processing...' : `Pay ₹${(Number(due.booked_price || due.price || 0)).toLocaleString('en-IN')}`}
-              </button>
+              <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
+                {appliedPromoFor(due) && (
+                  <span className="text-xs font-bold text-gray-400 line-through text-center sm:text-right">
+                    ₹{baseAmountOf(due).toLocaleString('en-IN')}
+                  </span>
+                )}
+                <button onClick={() => handlePay(due)} disabled={isPaying} className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-[#93B733] hover:bg-[#82a32d] active:scale-95 text-white font-bold text-sm shadow-md transition-all cursor-pointer disabled:opacity-50">
+                  <IndianRupee className="w-4 h-4" /> {isPaying ? 'Processing...' : `Pay ₹${payableOf(due).toLocaleString('en-IN')}`}
+                </button>
+              </div>
             </div>
           )) : (
             <div className="bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-200/60 dark:border-emerald-500/20 rounded-2xl sm:rounded-3xl p-6 sm:p-12 text-center">

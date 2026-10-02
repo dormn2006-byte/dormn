@@ -1,15 +1,23 @@
 import Razorpay from "razorpay";
 import dotenv from "dotenv";
 import crypto from "crypto";
-import Coupon from "../schemas/couponSchema.js";
 import Booking from "../schemas/bookingSchema.js";
 import Payment from "../schemas/paymentSchema.js";
 import User from "../schemas/userSchema.js";
 import PG from "../schemas/pgSchema.js";
+import {
+  consumePromoCode,
+  releasePromoCode,
+  reservePromoCode,
+  setReservedOrder,
+  validatePromoCode,
+} from "../services/promoCodeService.js";
 import { notifyOwnerPaymentReceived } from "../utils/whatsappService.js";
 import { sendPaymentReceiptToStudentEmail, sendPaymentAlertToOwnerEmail } from "../utils/emailService.js";
 import { postWelcomeMessageForBooking } from "./pgChatController.js";
 import { pauseOtherBookings } from "../models/bookingModel.js";
+import { createSettlementForPayment } from "../services/settlementService.js";
+import { clampMonths } from "../services/feeService.js";
 
 dotenv.config({ quiet: true });
 
@@ -18,63 +26,31 @@ const razorpayInstance = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// Coupon codes are stored uppercase; MySQL's default collation made the old
-// lookups case-insensitive, so normalize input to keep that behaviour.
-const normalizeCouponCode = (code) => String(code ?? "").toUpperCase();
-
 // ==========================================
 // 1. API: APPLY COUPON (For Frontend Preview)
 // ==========================================
+// Preview only — it computes a discount but never claims the code. The
+// authoritative figure is recomputed when the order is created.
 export const applyCoupon = async (req, res) => {
   try {
-    const { code, original_amount } = req.body;
+    const { code, original_amount, pg_id } = req.body;
 
-    // 1. Find the coupon
-    const coupon = await Coupon.findOne({
-      code: normalizeCouponCode(code),
-      is_active: true,
-    }).lean();
-
-    if (!coupon) {
-      return res.status(404).json({ success: false, message: "Invalid or inactive coupon code." });
-    }
-
-    // 2. Security Checks
-    if (new Date(coupon.expiry_date) < new Date()) {
-      return res.status(400).json({ success: false, message: "This coupon has expired." });
-    }
-    if (coupon.usage_limit && coupon.used_count >= coupon.usage_limit) {
-      return res.status(400).json({ success: false, message: "This coupon usage limit has been reached." });
-    }
-    if (Number(original_amount) < Number(coupon.min_booking_amount)) {
-      return res.status(400).json({ success: false, message: `Requires a minimum booking of ₹${coupon.min_booking_amount}.` });
-    }
-
-    // 3. Calculate Discount
-    let discount = 0;
-    if (coupon.discount_type === 'flat') {
-      discount = Number(coupon.discount_value);
-    } else if (coupon.discount_type === 'percentage') {
-      discount = (Number(original_amount) * Number(coupon.discount_value)) / 100;
-      if (coupon.max_discount_amount && discount > Number(coupon.max_discount_amount)) {
-        discount = Number(coupon.max_discount_amount);
-      }
-    }
-
-    let final_amount = Number(original_amount) - discount;
-
-    // 🚨 RAZORPAY RULE: Amount can never be less than ₹1.00
-    if (final_amount < 1) {
-      final_amount = 1.00;
-    }
-
-    res.status(200).json({
-      success: true,
-      discount_applied: discount,
-      final_amount: final_amount,
-      message: "Coupon applied successfully!"
+    const result = await validatePromoCode({
+      code,
+      pgId: pg_id,
+      amount: Number(original_amount),
     });
 
+    if (!result.ok) {
+      return res.status(400).json({ success: false, message: result.error });
+    }
+
+    return res.status(200).json({
+      success: true,
+      discount_applied: result.discount,
+      final_amount: result.finalAmount,
+      message: "Coupon applied successfully!",
+    });
   } catch (error) {
     console.error("Apply Coupon Error:", error);
     res.status(500).json({ success: false, message: "Failed to apply coupon." });
@@ -85,111 +61,135 @@ export const applyCoupon = async (req, res) => {
 // 2. API: CREATE SECURE ORDER (Updated)
 // ==========================================
 export const createOrder = async (req, res) => {
+  const { pg_id, owner_id, amount_in_rupees, coupon_code, booking_id } = req.body;
+  const user_id = req.user.id;
+
+  // Tracked so a failure after claiming can hand the code back.
+  let reservedCouponId = null;
+
   try {
-    const { pg_id, owner_id, amount_in_rupees, coupon_code, booking_id } = req.body;
-    const user_id = req.user.id;
-    let final_amount = Number(amount_in_rupees);
+    // ── 1. Resolve the booking BEFORE charging, so the amount comes from our
+    //       own records rather than a number the browser chose. ──
+    let booking = null;
 
-    // If frontend sends a coupon, backend MUST re-verify it securely
-    if (coupon_code) {
-      const coupon = await Coupon.findOne({
-        code: normalizeCouponCode(coupon_code),
-        is_active: true,
-      }).lean();
+    if (booking_id) {
+      booking = await Booking.findOne({
+        _id: Number(booking_id),
+        student_id: Number(user_id),
+      })
+        .select("_id pg_id owner_id booked_price")
+        .lean();
 
-      if (coupon) {
-        // Ensure it's valid
-        if (new Date(coupon.expiry_date) >= new Date() && (!coupon.usage_limit || coupon.used_count < coupon.usage_limit)) {
+      if (!booking) {
+        return res.status(404).json({ success: false, message: "Booking record not found or unauthorized." });
+      }
+    } else {
+      booking = await Booking.findOne({
+        student_id: Number(user_id),
+        pg_id: Number(pg_id),
+        status: { $ne: "cancelled" },
+      })
+        .sort({ _id: -1 })
+        .select("_id pg_id owner_id booked_price")
+        .lean();
 
-          let discount = 0;
-          if (coupon.discount_type === 'flat') discount = Number(coupon.discount_value);
-          else if (coupon.discount_type === 'percentage') discount = (final_amount * Number(coupon.discount_value)) / 100;
+      if (!booking) {
+        const created = await Booking.create({
+          student_id: Number(user_id),
+          pg_id: Number(pg_id),
+          owner_id: Number(owner_id),
+          status: "pending",
+          payment_status: "pending",
+        });
 
-          final_amount = final_amount - discount;
-
-          // Force minimum ₹1.00
-          if (final_amount < 1) final_amount = 1.00;
-        }
+        booking = {
+          _id: created._id,
+          pg_id: Number(pg_id),
+          owner_id: Number(owner_id),
+          booked_price: null,
+        };
       }
     }
 
-    // Convert to Paise (Razorpay requirement)
-    // Math.round prevents decimal errors like 100.0000001
-    const amount_in_paise = Math.round(final_amount * 100);
+    const finalBookingId = booking._id;
+    // The booking is the source of truth for who is being paid and where.
+    const resolvedPgId = Number(booking.pg_id);
+    const resolvedOwnerId = Number(booking.owner_id);
 
-    const options = {
-      amount: amount_in_paise,
+    const baseAmount =
+      Number(booking.booked_price) > 0 ? Number(booking.booked_price) : Number(amount_in_rupees);
+
+    if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid payment amount." });
+    }
+
+    // ── 2. Claim the promo code before creating the order. Claiming here (not
+    //       at verification) is what prevents a single-use code being spent
+    //       twice — by verify time the money is already captured. ──
+    let finalAmount = baseAmount;
+    let discountAmount = 0;
+    let appliedCode = null;
+
+    if (coupon_code) {
+      const reservation = await reservePromoCode({
+        code: coupon_code,
+        pgId: resolvedPgId,
+        amount: baseAmount,
+      });
+
+      if (!reservation.ok) {
+        return res.status(400).json({ success: false, message: reservation.error });
+      }
+
+      reservedCouponId = reservation.coupon._id;
+      finalAmount = reservation.finalAmount;
+      discountAmount = reservation.discount;
+      appliedCode = reservation.coupon.code;
+    }
+
+    // ── 3. Create the Razorpay order (amount in paise) ──
+    const order = await razorpayInstance.orders.create({
+      amount: Math.round(finalAmount * 100),
       currency: "INR",
-      receipt: `receipt_pg_${pg_id}_user_${user_id}`
-    };
+      receipt: `receipt_pg_${resolvedPgId}_user_${user_id}`,
+    });
 
-    const order = await razorpayInstance.orders.create(options);
-
-    // ── Link to Existing Booking or Create if None Exists ──
-    let finalBookingId = booking_id ? Number(booking_id) : null;
-
-    if (finalBookingId) {
-      // Validate booking belongs to user and is approved
-      const existingBooking = await Booking.findOne({
-        _id: finalBookingId,
-        student_id: Number(user_id),
-      })
-        .select("_id pg_id owner_id status payment_status")
-        .lean();
-
-      if (!existingBooking) {
-        return res.status(404).json({ success: false, message: "Booking record not found or unauthorized." });
-      }
-
-      if (existingBooking.status !== "approved" && existingBooking.payment_status !== "paid") {
-        return res.status(400).json({
-          success: false,
-          message: "You can only pay for this PG once the owner has approved your booking request.",
-        });
-      }
-    } else {
-      // Find an approved booking for this user and PG
-      const existingBooking = await Booking.findOne({
-        student_id: Number(user_id),
-        pg_id: Number(pg_id),
-        status: "approved",
-      })
-        .sort({ _id: -1 })
-        .select("_id status payment_status")
-        .lean();
-
-      if (existingBooking) {
-        finalBookingId = existingBooking._id;
-      } else {
-        return res.status(400).json({
-          success: false,
-          message: "You can only pay for this accommodation after the owner approves your booking request.",
-        });
-      }
+    if (reservedCouponId) {
+      await setReservedOrder(reservedCouponId, order.id);
     }
 
     await Payment.create({
       booking_id: finalBookingId,
       user_id: Number(user_id),
-      pg_id: Number(pg_id),
-      owner_id: Number(owner_id),
+      pg_id: resolvedPgId,
+      owner_id: resolvedOwnerId,
       razorpay_order_id: order.id,
-      amount: final_amount,
+      amount: finalAmount,
+      original_amount: baseAmount,
+      discount_amount: discountAmount,
+      coupon_id: reservedCouponId,
+      coupon_code: appliedCode,
       status: "created",
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       order_id: order.id,
       amount: order.amount,
       currency: order.currency,
       booking_id: finalBookingId,
+      original_amount: baseAmount,
+      discount_applied: discountAmount,
       key_id: process.env.RAZORPAY_KEY_ID,
     });
-
   } catch (error) {
+    // Never burn a claimed code because the order failed to initialise.
+    if (reservedCouponId) {
+      await releasePromoCode(reservedCouponId).catch(() => {});
+    }
+
     console.error("Razorpay Create Order Error:", error);
-    res.status(500).json({ success: false, message: "Failed to initialize payment" });
+    return res.status(500).json({ success: false, message: "Failed to initialize payment" });
   }
 };
 export const verifyPayment = async (req, res) => {
@@ -204,7 +204,7 @@ export const verifyPayment = async (req, res) => {
 
       // 1. Verify that this payment record exists and belongs to the logged-in student
       const payRecord = await Payment.findOne({ razorpay_order_id })
-        .select("_id booking_id user_id")
+        .select("_id booking_id user_id coupon_id status")
         .lean();
 
       if (!payRecord || (Number(payRecord.user_id) !== Number(userId) && req.user.role !== "superadmin")) {
@@ -240,11 +240,44 @@ export const verifyPayment = async (req, res) => {
           }
         );
 
-        // 5. Update the Bookings table to 'approved' and 'paid'
-        await Booking.updateOne(
-          { _id: verifiedBookingId },
-          { status: "approved", payment_status: "paid" }
-        );
+        // 5. Advance the booking's stay. Rent is paid month by month, so a
+        //    multi-month booking stays in the student's dues until the agreed
+        //    number of months have been settled. Skipped on a replayed verify so
+        //    a retry can't count the same month twice.
+        if (payRecord.status !== "successful") {
+          const bookingDoc = await Booking.findById(verifiedBookingId)
+            .select("duration_months months_paid")
+            .lean();
+
+          const totalMonths = clampMonths(bookingDoc?.duration_months || 1);
+          const monthsPaid = Number(bookingDoc?.months_paid || 0) + 1;
+          const fullyPaid = monthsPaid >= totalMonths;
+
+          await Booking.updateOne(
+            { _id: verifiedBookingId },
+            {
+              status: "approved",
+              payment_status: fullyPaid ? "paid" : "pending",
+              months_paid: monthsPaid,
+            }
+          );
+
+          // 5a. Payroll: deduct the company fee and queue the owner's payout.
+          //     Never allowed to fail the verification — the money is already in.
+          createSettlementForPayment(payRecord._id).catch((err) =>
+            console.error("[Settlement] create error:", err.message)
+          );
+        }
+
+        // 5b. The promo code is now spent for good.
+        if (payRecord.coupon_id) {
+          await consumePromoCode(payRecord.coupon_id, {
+            userId,
+            bookingId: verifiedBookingId,
+          }).catch((promoErr) =>
+            console.error("[Payment] Promo consume error:", promoErr.message)
+          );
+        }
 
         // 6. Auto-pause all other pending bookings by this student
         try {
@@ -324,6 +357,14 @@ export const verifyPayment = async (req, res) => {
           { razorpay_order_id },
           { status: "failed" }
         );
+
+        // Hand the claimed promo code back — no money changed hands.
+        if (payRecord.coupon_id) {
+          await releasePromoCode(payRecord.coupon_id).catch((promoErr) =>
+            console.error("[Payment] Promo release error:", promoErr.message)
+          );
+        }
+
         res.status(400).json({ success: false, message: "Payment verification failed. Invalid signature." });
       }
     } catch (error) {

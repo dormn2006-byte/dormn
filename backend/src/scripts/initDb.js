@@ -23,6 +23,8 @@ import "../schemas/whatsappLogSchema.js";
 import "../schemas/staffSchema.js";
 import "../schemas/visitSchema.js";
 import "../schemas/shortStaySchema.js";
+import "../schemas/settlementSchema.js";
+import "../schemas/notificationSchema.js";
 
 /**
  * Creates every collection's indexes (unique constraints, lookup indexes).

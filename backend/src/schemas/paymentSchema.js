@@ -12,7 +12,13 @@ const paymentSchema = new mongoose.Schema(
     razorpay_order_id: { type: String, default: null },
     razorpay_payment_id: { type: String, default: null },
     razorpay_signature: { type: String, default: null },
+    // Amount actually charged. For a discounted payment `original_amount` is the
+    // pre-discount figure, so a receipt can show the saving.
     amount: { type: Number, required: true },
+    original_amount: { type: Number, default: null },
+    discount_amount: { type: Number, default: 0 },
+    coupon_id: { type: Number, ref: "Coupon", default: null },
+    coupon_code: { type: String, default: null },
     status: {
       type: String,
       enum: ["created", "successful", "failed"],

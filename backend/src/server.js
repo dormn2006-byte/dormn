@@ -31,6 +31,13 @@ import staffRoutes from './routes/staffRoutes.js';
 import visitRoutes from './routes/visitRoutes.js';
 import shortStayRoutes from './routes/shortStayRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
+import promoCodeRoutes from "./routes/promoCodeRoutes.js";
+import settlementRoutes from "./routes/settlementRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+import webhookRoutes from "./routes/webhookRoutes.js";
+
+import { releaseStaleReservations } from "./services/promoCodeService.js";
+import { reconcileProcessingSettlements } from "./services/settlementService.js";
 
 dotenv.config({ quiet: true });
 
@@ -61,6 +68,12 @@ app.use((req, res, next) => {
 });
 
 app.use(cors());
+
+// Razorpay payout webhooks must be mounted before the JSON body parser: the
+// signature is computed over the raw request bytes, which express.json would
+// consume. The router itself applies express.raw for its route.
+app.use("/api/webhooks", webhookRoutes);
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -131,6 +144,9 @@ app.use('/api/staff', staffRoutes);
 app.use('/api/visits', visitRoutes);
 app.use('/api/short-stays', shortStayRoutes);
 app.use('/api/coupons', couponRoutes);
+app.use("/api/promo-codes", promoCodeRoutes);
+app.use("/api/settlements", settlementRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (req, res) => {
   res.send("PG Platform Backend Running");
@@ -200,6 +216,32 @@ setInterval(async () => {
     console.error("[Sub-Expiry] Error:", err.message);
   }
 }, 30 * 60 * 1000);
+
+// Release promo-code reservations whose checkout was never completed, so an
+// abandoned payment doesn't burn a single-use code.
+setInterval(async () => {
+  try {
+    const released = await releaseStaleReservations(30);
+    if (released > 0) {
+      console.log(`[Promo-Sweep] Released ${released} stale promo code reservation(s)`);
+    }
+  } catch (err) {
+    console.error("[Promo-Sweep] Error:", err.message);
+  }
+}, 10 * 60 * 1000);
+
+// Reconcile settlements whose payout webhook never arrived, so an owner isn't
+// left staring at a "processing" transfer forever.
+setInterval(async () => {
+  try {
+    const updated = await reconcileProcessingSettlements(15);
+    if (updated > 0) {
+      console.log(`[Payout-Sweep] Reconciled ${updated} pending settlement(s)`);
+    }
+  } catch (err) {
+    console.error("[Payout-Sweep] Error:", err.message);
+  }
+}, 10 * 60 * 1000);
 
 const PORT = process.env.PORT || 8000;
 

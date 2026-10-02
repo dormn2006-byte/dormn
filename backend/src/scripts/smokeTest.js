@@ -94,6 +94,7 @@ const run = async () => {
     min_booking_amount: 100,
     max_discount_amount: 500,
     expiry_date: new Date(Date.now() + 86400000),
+    status: "active",
     usage_limit: 100,
     used_count: 0,
     is_active: 1,
@@ -292,7 +293,7 @@ const run = async () => {
   check("coupon lookup stays case-insensitive", lowercaseCoupon.status === 200, `status ${lowercaseCoupon.status}`);
 
   const badCoupon = await request("POST", "/payments/apply-coupon", { token: studentToken, body: { code: "NOPE", original_amount: 1000 } });
-  check("invalid coupon returns 404", badCoupon.status === 404);
+  check("invalid coupon returns 400", badCoupon.status === 400);
 
   const ownerPayments = await request("GET", "/payments/owner-payments", { token: ownerTokenLive });
   check("owner payments endpoint responds", ownerPayments.status === 200, `status ${ownerPayments.status}`);

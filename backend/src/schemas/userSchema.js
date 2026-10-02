@@ -56,6 +56,10 @@ const userSchema = new mongoose.Schema(
             ifsc_code: { type: String, required: true },
             upi_id: { type: String, default: null },
             is_primary: { type: Boolean, default: false },
+            // RazorpayX payout linkage, created lazily on the first payout so we
+            // don't hit the API for accounts that never get paid.
+            razorpay_contact_id: { type: String, default: null },
+            razorpay_fund_account_id: { type: String, default: null },
             created_at: { type: Date, default: Date.now },
           },
           { _id: false }

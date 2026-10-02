@@ -12,6 +12,12 @@ const bookingSchema = new mongoose.Schema(
     selected_room_type: { type: String, default: null },
     booked_price: { type: Number, default: null },
 
+    // Agreed length of stay. Drives the company's one-time payroll fee, which is
+    // recovered from monthly rent payments as they arrive.
+    duration_months: { type: Number, default: 1 },
+    months_paid: { type: Number, default: 0 },
+    fee_collected: { type: Number, default: 0 },
+
     // Scheduled physical visit to the PG (student-selected)
     visit_date: { type: String, default: null }, // "YYYY-MM-DD"
     visit_time: { type: String, default: null }, // "10:00 AM"

@@ -13,6 +13,7 @@ export const createBooking = async ({
   booked_price,
   visit_date,
   visit_time,
+  duration_months,
 }) => {
   const booking = await Booking.create({
     student_id,
@@ -23,6 +24,7 @@ export const createBooking = async ({
     booked_price,
     visit_date,
     visit_time,
+    duration_months,
   });
 
   return { insertId: booking._id, affectedRows: 1 };
