@@ -45,6 +45,7 @@ export default function useDormgle() {
   const pendingAnswerRef = useRef(null);
   const signalTimeoutRef = useRef(null);
   const isCleaningUpRef = useRef(false);
+  const statusRef = useRef("idle");
 
   // ── Peer connection ──────────────────────────────────────────
 
@@ -75,6 +76,7 @@ export default function useDormgle() {
           signalTimeoutRef.current = null;
         }
         setStatus("connected");
+        statusRef.current = "connected";
       } else if (
         pc.connectionState === "failed" ||
         pc.connectionState === "disconnected"
@@ -84,6 +86,7 @@ export default function useDormgle() {
           signalTimeoutRef.current = null;
         }
         setStatus("partner-left");
+        statusRef.current = "partner-left";
       }
     };
 
@@ -229,6 +232,24 @@ export default function useDormgle() {
     pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
   }, []);
 
+  // ── WebRTC offer/answer ──────────────────────────────────────
+
+  const createAndSendOffer = useCallback(async () => {
+    const pc = pcRef.current;
+    const socket = socketRef.current;
+    if (!pc || !socket) return;
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit("dormgle:offer", offer);
+    } catch (err) {
+      console.error("[Dormgle] Error creating offer:", err);
+      setError("Failed to start the call. Please try again.");
+      setStatus("error");
+    }
+  }, []);
+
   // ── Socket setup ─────────────────────────────────────────────
 
   const connectSocket = useCallback(() => {
@@ -283,7 +304,7 @@ export default function useDormgle() {
 
       // Set a connection timeout
       signalTimeoutRef.current = setTimeout(() => {
-        if (status === "connecting") {
+        if (statusRef.current === "connecting") {
           console.warn("[Dormgle] Signaling timeout — retrying");
           socketRef.current?.emit("dormgle:skip");
         }
@@ -342,23 +363,7 @@ export default function useDormgle() {
     }
 
     return true;
-  }, [createPeerConnection, cleanupPeerConnection, handleRemoteOffer, handleRemoteAnswer, handleIceCandidate, clearSignalTimeout, fullCleanup]);
-
-  const createAndSendOffer = useCallback(async () => {
-    const pc = pcRef.current;
-    const socket = socketRef.current;
-    if (!pc || !socket) return;
-
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("dormgle:offer", offer);
-    } catch (err) {
-      console.error("[Dormgle] Error creating offer:", err);
-      setError("Failed to start the call. Please try again.");
-      setStatus("error");
-    }
-  }, []);
+  }, [createPeerConnection, cleanupPeerConnection, handleRemoteOffer, handleRemoteAnswer, handleIceCandidate, clearSignalTimeout, fullCleanup, createAndSendOffer]);
 
   // ── Public actions ───────────────────────────────────────────
 
@@ -493,6 +498,28 @@ export default function useDormgle() {
       }
     }
   }, [handleRemoteOffer, handleRemoteAnswer]);
+
+  // Keep statusRef in sync so the signaling timeout closure always sees the
+  // latest state (useCallback doesn't re-create connectSocket on every status change)
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  // Attach remote stream to the video element. This effect runs AFTER React
+  // renders the <video> element (which only mounts when remoteStream is set),
+  // fixing the race where ontrack fires before the ref is attached.
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
+
+  // Attach local stream to the local preview element (same race fix)
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
 
   return {
     status,
