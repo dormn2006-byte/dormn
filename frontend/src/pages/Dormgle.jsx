@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useContext, useState, useEffect, useCallback } from "react";
 import { Navigate } from "react-router-dom";
 import {
   Mic, MicOff, Video, VideoOff, SkipForward, Phone,
@@ -8,14 +8,32 @@ import { AuthContext } from "../context/AuthContext";
 import useDormgle from "../hooks/useDormgle";
 import Navbar from "../components/Navbar";
 
+// Lightweight media-query hook — tracks whether the viewport is below the
+// Tailwind `md` breakpoint (768px). Used to switch between the desktop
+// split-screen layout and the mobile PiP layout.
+const useMediaQuery = (query) => {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const listener = (e) => setMatches(e.matches);
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, [query]);
+
+  return matches;
+};
+
 const Dormgle = () => {
   const { user, token } = useContext(AuthContext);
 
   // Only logged-in users can use Dormgle
-  if (!token || !user) {
-    return <Navigate to="/auth?redirect=/dormgle" replace />;
-  }
+  const notLoggedIn = !token || !user;
 
+  // ── Hooks must run unconditionally ───────────────────────────────
   const {
     status,
     partner,
@@ -33,6 +51,36 @@ const Dormgle = () => {
     toggleCamera,
     retry,
   } = useDormgle();
+
+  // Responsive layout detection
+  const isMobile = useMediaQuery("(max-width: 767px)");
+
+  // Callback refs guarantee srcObject is re-attached whenever the video
+  // element is (re)mounted — e.g. when switching between mobile/desktop layouts
+  // or when the stream first arrives.
+  const localVideoRc = useCallback(
+    (node) => {
+      localVideoRef.current = node;
+      if (node && localStream) {
+        node.srcObject = localStream;
+      }
+    },
+    [localStream, localVideoRef]
+  );
+
+  const remoteVideoRc = useCallback(
+    (node) => {
+      remoteVideoRef.current = node;
+      if (node && remoteStream) {
+        node.srcObject = remoteStream;
+      }
+    },
+    [remoteStream, remoteVideoRef]
+  );
+
+  if (notLoggedIn) {
+    return <Navigate to="/auth?redirect=/dormgle" replace />;
+  }
 
   // ── Idle / Landing / Error screen ─────────────────────────────
   if (status === "idle" || status === "error") {
@@ -75,134 +123,171 @@ const Dormgle = () => {
     );
   }
 
-  // ── Searching / Connecting / Connected ────────────────────────
+  // ── Searching / Connecting / Connected ─────────────────────────
   return (
     <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
       <Navbar />
 
-      <main className="relative flex-1 flex items-center justify-center p-4">
-        {/* Remote video / placeholder */}
-        <div className="relative h-full w-full max-w-5xl rounded-2xl overflow-hidden bg-gray-900">
-          {remoteStream ? (
-            <video
-              ref={remoteVideoRef}
-              autoPlay
-              playsInline
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <div className="text-center">
-                {partner ? (
-                  <>
-                    <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gray-700">
-                      {partner.avatar ? (
-                        <img
-                          src={partner.avatar}
-                          alt={partner.name}
-                          className="h-full w-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <User size={48} className="text-gray-400" />
-                      )}
-                    </div>
-                    <p className="text-lg font-semibold">{partner.name}</p>
-                  </>
+      <main className="flex-1 flex flex-col gap-4 p-4">
+        {/* ── Video area ── */}
+        <div className="flex-1 flex flex-col gap-4 md:flex-row">
+          {/* ── Left panel: remote user ── */}
+          <div className="relative flex-1 rounded-2xl overflow-hidden bg-gray-900">
+            {remoteStream ? (
+              <video
+                ref={remoteVideoRc}
+                autoPlay
+                playsInline
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <div className="text-center">
+                  {partner ? (
+                    <>
+                      <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gray-700">
+                        {partner.avatar ? (
+                          <img
+                            src={partner.avatar}
+                            alt={partner.name}
+                            className="h-full w-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <User size={48} className="text-gray-400" />
+                        )}
+                      </div>
+                      <p className="text-lg font-semibold">{partner.name}</p>
+                    </>
+                  ) : (
+                    <>
+                      <User size={48} className="mx-auto mb-4 text-gray-500" />
+                      <p className="text-gray-400">Waiting for a stranger…</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Local camera PiP — mobile only */}
+            {isMobile && localStream && (
+              <div className="absolute bottom-4 right-4 h-32 w-24 overflow-hidden rounded-xl border-2 border-white/30 shadow-lg">
+                {!isCameraOff ? (
+                  <video
+                    ref={localVideoRc}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="h-full w-full scale-x-[-1] object-cover"
+                  />
                 ) : (
-                  <>
-                    <User size={48} className="mx-auto mb-4 text-gray-500" />
-                    <p className="text-gray-400">Waiting for a stranger…</p>
-                  </>
+                  <div className="flex h-full w-full items-center justify-center bg-gray-800">
+                    <VideoOff size={20} className="text-gray-400" />
+                  </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Local video (picture-in-picture) — shown when camera is on */}
-          {!isCameraOff && localStream && (
-            <div className="absolute bottom-4 right-4 h-28 w-20 overflow-hidden rounded-xl border-2 border-white/30 shadow-lg">
+            {/* Status overlays */}
+            {status === "searching" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                <div className="text-center">
+                  <Loader2 size={36} className="mx-auto animate-spin text-[#93B733]" />
+                  <p className="mt-3 text-lg font-semibold">
+                    Looking for someone…
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {status === "connecting" && partner && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                <div className="text-center">
+                  <Loader2 size={36} className="mx-auto animate-spin text-[#93B733]" />
+                  <p className="mt-3 text-lg font-semibold">
+                    Connecting with {partner.name}…
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {status === "connected" && (
+              <div className="absolute top-4 left-4 rounded-lg bg-black/40 px-3 py-1.5 text-sm font-medium">
+                Connected with {partner?.name || "stranger"}
+              </div>
+            )}
+          </div>
+
+          {/* ── Right panel: own camera (desktop) ── */}
+          <div className="hidden rounded-2xl overflow-hidden bg-gray-900 md:flex md:flex-1">
+            {!isCameraOff && localStream ? (
               <video
-                ref={localVideoRef}
+                ref={localVideoRc}
                 autoPlay
                 playsInline
                 muted
-                className="h-full w-full object-cover scale-x-[-1]"
+                className="h-full w-full scale-x-[-1] object-cover"
               />
-            </div>
-          )}
-
-          {/* Status overlay */}
-          {status === "searching" && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-              <div className="text-center">
-                <Loader2 size={36} className="mx-auto animate-spin text-[#93B733]" />
-                <p className="mt-3 text-lg font-semibold">Looking for someone…</p>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <div className="text-center text-gray-500">
+                  <VideoOff size={48} className="mx-auto mb-4" />
+                  <p>Camera is off</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
 
-          {status === "connecting" && partner && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-              <div className="text-center">
-                <Loader2 size={36} className="mx-auto animate-spin text-[#93B733]" />
-                <p className="mt-3 text-lg font-semibold">
-                  Connecting with {partner.name}…
-                </p>
-              </div>
-            </div>
-          )}
+        {/* ── Controls ───────────────────────────────────────────── */}
+        <div className="flex justify-center">
+          <div className="inline-flex items-center gap-3 rounded-full bg-[#0D3A1D] px-4 py-3 md:px-6 md:py-4">
+            {/* Mute / Unmute */}
+            <button
+              onClick={toggleMute}
+              aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
+              className={`flex h-11 w-12 items-center justify-center rounded-full text-lg transition-colors ${
+                isMuted
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : "bg-white/20 text-white hover:bg-white/30"
+              }`}
+            >
+              {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+            </button>
 
-          {status === "connected" && (
-            <div className="absolute top-4 left-4 rounded-lg bg-black/40 px-3 py-1.5 text-sm font-medium">
-              Connected with {partner?.name || "stranger"}
-            </div>
-          )}
+            {/* Camera on / off */}
+            <button
+              onClick={toggleCamera}
+              aria-label={isCameraOff ? "Turn on camera" : "Turn off camera"}
+              className={`flex h-11 w-12 items-center justify-center rounded-full text-lg transition-colors ${
+                isCameraOff
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : "bg-white/20 text-white hover:bg-white/30"
+              }`}
+            >
+              {isCameraOff ? <VideoOff size={20} /> : <Video size={20} />}
+            </button>
+
+            {/* Skip */}
+            <button
+              onClick={skipPartner}
+              aria-label="Skip to next person"
+              disabled={status !== "connected" && status !== "connecting"}
+              className="flex h-11 w-12 items-center justify-center rounded-full bg-amber-500 text-black shadow transition-colors hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <SkipForward size={22} />
+            </button>
+
+            {/* End session */}
+            <button
+              onClick={endSession}
+              aria-label="End session"
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition-all hover:scale-105 hover:bg-red-700"
+            >
+              <Phone size={24} />
+            </button>
+          </div>
         </div>
       </main>
-
-      {/* Bottom control bar */}
-      <div className="flex items-center justify-center gap-4 sm:gap-6 bg-[#0D3A1D] p-4">
-        <button
-          onClick={toggleMute}
-          aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
-          className={`flex h-12 w-12 items-center justify-center rounded-full text-lg transition-colors ${
-            isMuted
-              ? "bg-red-500 text-white hover:bg-red-600"
-              : "bg-white/20 text-white hover:bg-white/30"
-          }`}
-        >
-          {isMuted ? <MicOff size={22} /> : <Mic size={22} />}
-        </button>
-
-        <button
-          onClick={toggleCamera}
-          aria-label={isCameraOff ? "Turn on camera" : "Turn off camera"}
-          className={`flex h-12 w-12 items-center justify-center rounded-full text-lg transition-colors ${
-            isCameraOff
-              ? "bg-red-500 text-white hover:bg-red-600"
-              : "bg-white/20 text-white hover:bg-white/30"
-          }`}
-        >
-          {isCameraOff ? <VideoOff size={22} /> : <Video size={22} />}
-        </button>
-
-        <button
-          onClick={skipPartner}
-          aria-label="Skip to next person"
-          disabled={status !== "connected" && status !== "connecting"}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500 text-black shadow transition-colors hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <SkipForward size={24} />
-        </button>
-
-        <button
-          onClick={endSession}
-          aria-label="End session"
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition-all hover:scale-105 hover:bg-red-700"
-        >
-          <Phone size={26} />
-        </button>
-      </div>
     </div>
   );
 };
