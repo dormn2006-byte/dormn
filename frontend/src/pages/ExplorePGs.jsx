@@ -18,6 +18,7 @@ import {
   X
 } from "lucide-react";
 import ExploreFilterModal from "../components/ExploreFilterModal";
+import SponsoredShowcase from "../components/sponsors/SponsoredShowcase";
 import { AMENITY_OPTIONS, hasAmenityMatch, matchesFoodPreference } from "../utils/amenities";
 
 const quickFilters = ["All", "Boys", "Girls", "COED", "Veg", "Non-Veg", "Short Stay", "AC Room", "Non AC", "WiFi", "Food Included", "Power Backup", "Attached Bath"];
@@ -179,6 +180,7 @@ const ExplorePGs = () => {
   });
 
   const [pgListings, setPgListings] = useState([]);
+  const [sponsoredPGs, setSponsoredPGs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const minSliderLimit = 0;
@@ -215,8 +217,13 @@ const ExplorePGs = () => {
     const fetchPGs = async () => {
       try {
         setLoading(true);
-        const response = await API.get("/pg/all");
+        const [response, sponsorResponse] = await Promise.all([
+          API.get("/pg/all"),
+          API.get("/sponsors", { params: { placement: "explore" } }).catch(() => ({ data: {} })),
+        ]);
         setPgListings(response.data?.pgs || []);
+        const sponsored = sponsorResponse.data?.pgs || [];
+        setSponsoredPGs(Array.isArray(sponsored) ? sponsored : []);
       } catch (err) {
         console.error("Failed to load PG listings:", err);
       } finally {
@@ -347,7 +354,7 @@ const ExplorePGs = () => {
     return map;
   }, [pgListings]);
 
-  const isDiscoverMode = !search.trim() && !filters.pgType && !filters.city && !filters.area && !filters.landmark && activeFilter === "All" && currentMin <= minSliderLimit && currentMax >= maxSliderLimit;
+  const isDiscoverMode = !search.trim() && !filters.pgType && !filters.foodType && !filters.city && !filters.area && !filters.landmark && !(filters.amenities && filters.amenities.length > 0) && activeFilter === "All" && currentMin <= minSliderLimit && currentMax >= maxSliderLimit;
 
   return (
     <PublicLayout>
@@ -728,6 +735,14 @@ const ExplorePGs = () => {
           ) : (
             <section className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 animate-[fadeIn_0.3s_ease-out_forwards]">
               
+              {/* Sponsored PGs — only in the default view, hidden as soon as the
+                  user searches or applies a filter */}
+              {isDiscoverMode && sponsoredPGs.length > 0 && (
+                <div className="mb-10">
+                  <SponsoredShowcase sponsoredPGs={sponsoredPGs} variant="grid" />
+                </div>
+              )}
+
               {/* Dynamic City Sliders (Shown in default view) */}
               {isDiscoverMode && Object.keys(pgsByCity).length > 0 && (
                 <div className="mb-10 space-y-4">

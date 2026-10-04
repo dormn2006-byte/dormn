@@ -200,6 +200,18 @@ export const getAllPGs = async () => {
   return serialize(rows);
 };
 
+// Get public PG rows for a specific set of ids (used by sponsored listings).
+// Order is not guaranteed here — callers that care reorder by their own list.
+export const getPGsByIds = async (ids = []) => {
+  const pgIds = ids.map(Number).filter(Number.isFinite);
+  if (!pgIds.length) return [];
+
+  const rows = await PG.aggregate(
+    publicListPipeline({ status: "approved", _id: { $in: pgIds } })
+  );
+  return serialize(rows);
+};
+
 // Get Single PG By ID
 export const getPGById = async (id) => {
   const pgId = Number(id);

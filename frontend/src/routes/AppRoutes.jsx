@@ -13,6 +13,7 @@ const ExplorePGs = lazyWithRetry(() => import("../pages/ExplorePGs"), "ExplorePG
 const PgDetails = lazyWithRetry(() => import("../pages/PgDetails"), "PgDetails");
 const GlobalAudioPlayer = lazyWithRetry(() => import("../components/common/GlobalAudioPlayer"), "GlobalAudioPlayer");
 const DrDormn = lazyWithRetry(() => import("../pages/DrDormn"), "DrDormn");
+const Dormgle = lazyWithRetry(() => import("../pages/Dormgle"), "Dormgle");
 
 // Smart role-based dashboard router
 const DashboardRedirect = () => {
@@ -76,6 +77,7 @@ const PgVisits = lazyWithRetry(() => import("../admin/pgAdmin/PgVisits"), "PgVis
 const PgShortStays = lazyWithRetry(() => import("../admin/pgAdmin/PgShortStays"), "PgShortStays");
 const ManageStaff = lazyWithRetry(() => import("../admin/pgAdmin/ManageStaff"), "ManageStaff");
 const PromoCodes = lazyWithRetry(() => import("../admin/pgAdmin/PromoCodes"), "PromoCodes");
+const SponsorPG = lazyWithRetry(() => import("../admin/pgAdmin/SponsorPG"), "SponsorPG");
 
 
 
@@ -138,6 +140,7 @@ const AppRoutes = () => {
           <Route path="/events" element={<Events />} />
           <Route path="/gym" element={<Gym />} />
           <Route path="/dr-dormn" element={<DrDormn />} />
+          <Route path="/dormgle" element={<Dormgle />} />
           <Route path="/my-pg" element={<MyPG />} />
           <Route path="/my-pgs" element={<MyPG />} />
           <Route path="/my-short-stays" element={<MyShortStays />} />
@@ -305,6 +308,7 @@ const AppRoutes = () => {
             <Route path="visits" element={<PgVisits />} />
             <Route path="short-stays" element={<PgShortStays />} />
             <Route path="staff" element={<ManageStaff />} />
+            <Route path="sponsor" element={<SponsorPG />} />
             <Route path="all-staff" element={<Navigate to="/owner/staff" replace />} />
           </Route>
 

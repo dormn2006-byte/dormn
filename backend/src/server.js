@@ -32,6 +32,7 @@ import visitRoutes from './routes/visitRoutes.js';
 import shortStayRoutes from './routes/shortStayRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
 import promoCodeRoutes from "./routes/promoCodeRoutes.js";
+import sponsorRoutes from "./routes/sponsorRoutes.js";
 import settlementRoutes from "./routes/settlementRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import webhookRoutes from "./routes/webhookRoutes.js";
@@ -47,6 +48,20 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 app.disable("x-powered-by");
+
+// ── Process-level safety nets ──
+// Node (>=15) tears the whole process down on the first unhandled rejection or
+// uncaught exception. Under nodemon that surfaces as a random burst of
+// net::ERR_CONNECTION_REFUSED for every in-flight request while it restarts.
+// Log loudly and keep serving instead of dying, so one stray async error can't
+// take the API offline. (Errors are still visible here for debugging.)
+process.on("unhandledRejection", (reason) => {
+  console.error("[UnhandledRejection] server kept alive:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[UncaughtException] server kept alive:", error);
+});
 
 // Behind a reverse proxy (nginx/Cloudflare). Without this, Express reports the
 // proxy's IP as req.ip, so express-rate-limit can't tell users apart (and emits
@@ -129,6 +144,40 @@ app.use("/api/auth", authRoutes);
 app.use("/api/pg", pgRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Misses on /api/uploads fall through to here. Two problems to solve:
+//  1. Chrome's Opaque Response Blocking rejects an HTML 404 for an <img>/<video>
+//     destination (net::ERR_BLOCKED_BY_ORB). So never answer these with HTML.
+//  2. In local development the app often points at the production database,
+//     whose PGs reference files that only exist on the deployed host. When
+//     UPLOADS_FALLBACK_ORIGIN is set, redirect there — but only if the file
+//     actually exists (a HEAD probe), otherwise the redirect just lands on the
+//     deployed 404 HTML page and ORB blocks it anyway.
+const uploadsFallbackOrigin = (process.env.UPLOADS_FALLBACK_ORIGIN || "").replace(/\/+$/, "");
+
+const MEDIA_MIME = {
+  webp: "image/webp", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+  gif: "image/gif", avif: "image/avif", svg: "image/svg+xml", bmp: "image/bmp",
+  mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+  m4v: "video/x-m4v", ogv: "video/ogg", ogg: "video/ogg",
+};
+
+app.use("/api/uploads", async (req, res) => {
+  if (uploadsFallbackOrigin) {
+    const target = `${uploadsFallbackOrigin}${req.originalUrl}`;
+    try {
+      const probe = await fetch(target, { method: "HEAD", signal: AbortSignal.timeout(4000) });
+      if (probe.ok) return res.redirect(302, target);
+    } catch {
+      /* fallback host unreachable — fall through to the media-typed 404 */
+    }
+  }
+
+  const ext = path.extname(req.path).slice(1).toLowerCase();
+  const type = MEDIA_MIME[ext];
+  if (type) res.set("Content-Type", type);
+  return res.status(404).end();
+});
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/superadmin", superAdminRoutes);
 app.use("/api/payments", paymentRoutes);
@@ -147,6 +196,7 @@ app.use('/api/coupons', couponRoutes);
 app.use("/api/promo-codes", promoCodeRoutes);
 app.use("/api/settlements", settlementRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/sponsors", sponsorRoutes);
 
 app.get("/", (req, res) => {
   res.send("PG Platform Backend Running");

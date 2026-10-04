@@ -25,6 +25,7 @@ import {
 } from "../utils/mediaValidation.js";
 import { UPLOAD_DIR } from "../middleware/uploadMiddleware.js";
 import { getOwnerAnalyticsData } from "../models/pgModel.js";
+import { hasActiveSponsorship } from "../services/sponsorService.js";
 
 import User from "../schemas/userSchema.js";
 import PG from "../schemas/pgSchema.js";
@@ -267,7 +268,8 @@ export const getSinglePGController = async (req, res) => {
       });
     }
 
-    
+    // Drives the "Sponsored" badge on the details page.
+    pg.sponsored = await hasActiveSponsorship(pg.id);
 
     return res.status(200).json({
       success: true,

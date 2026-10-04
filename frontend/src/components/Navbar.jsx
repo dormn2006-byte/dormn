@@ -5,7 +5,7 @@ import { AudioContext } from "../context/audioContextValue";
 import { ThemeSwitch } from "./ui/theme-switch-button";
 import {
   ChevronDown, ChevronRight, LayoutDashboard, LogOut, Music, Pause, Play, SkipForward,
-  Building2, Menu, X, Dumbbell, CalendarHeart, Bot, Home, ShieldAlert
+  Building2, Menu, X, Dumbbell, CalendarHeart, Bot, Home, ShieldAlert, Video,
 } from "lucide-react";
 import MacOSDock from "./ui/mac-os-dock";
 import EmailVerificationModal from "./auth/EmailVerificationModal";
@@ -16,6 +16,7 @@ const NAV_TABS = [
   { id: "my-pg", label: "My PG", icon: Home, path: "/my-pg" },
   { id: "events", label: "Events", icon: CalendarHeart, path: "/events" },
   { id: "gym", label: "Gym", icon: Dumbbell, path: "/gym" },
+  { id: "dormgle", label: "Dormgle", icon: Video, path: "/dormgle" },
   { id: "dr-dormn", label: "Dr.Dormn", icon: Bot, path: "/dr-dormn" },
 ];
 
@@ -75,6 +76,7 @@ const Navbar = () => {
     if (p.startsWith("/my-pg")) return "my-pg";
     if (p.startsWith("/events")) return "events";
     if (p.startsWith("/gym")) return "gym";
+    if (p.startsWith("/dormgle")) return "dormgle";
     if (p.startsWith("/dr-dormn")) return "dr-dormn";
     if (p === "/" || /^\/(pgs|about|faqs|contact|blogs)/.test(p)) return "dormn";
     return "";

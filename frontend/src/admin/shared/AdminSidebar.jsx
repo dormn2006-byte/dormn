@@ -24,6 +24,7 @@ import {
   CalendarDays,
   CalendarRange,
   Tag,
+  Megaphone,
 } from "lucide-react";
 import { AuthContext } from "../../context/AuthContext";
 import OwnerProfileModal from "./OwnerProfileModal";
@@ -100,6 +101,11 @@ const navItems = [
     title: "Promo Codes",
     path: "/owner/promo-codes",
     icon: Tag,
+  },
+  {
+    title: "Sponsor",
+    path: "/owner/sponsor",
+    icon: Megaphone,
   },
   {
     title: "All Staff",

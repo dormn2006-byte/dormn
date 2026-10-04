@@ -5,12 +5,21 @@ import {
   IndianRupee, Plus, X, Sparkles, Building2, Check, ArrowRight,
   ArrowLeft, Clock, BedDouble, CheckCircle2, AlertCircle, FileText,
   Home, Phone, User as UserIcon, HelpCircle, ChevronRight, Eye, Users,
-  Copy, ExternalLink, MessageSquare, Share2, CreditCard, Video, PlayCircle
+  Copy, ExternalLink, MessageSquare, Share2, CreditCard, Video, PlayCircle,
+  History, Trash2
 } from "lucide-react";
 import api from "../../services/api";
 import CollegeCombobox from "../../components/ui/CollegeCombobox";
 import BankAccountsSelectorModal from "./components/BankAccountsSelectorModal";
 import BankAccountCard from "./components/BankAccountCard";
+import {
+  loadDraftMeta,
+  saveDraftMeta,
+  loadDraftMedia,
+  saveDraftMedia,
+  clearDraft,
+  hasDraftContent,
+} from "../../utils/pgDraft";
 import {
   formatDuration,
   VIDEO_ACCEPT,
@@ -122,6 +131,32 @@ const STEPS = [
 ];
 
 /* ═══════════════════════════════════════════
+   INITIAL FORM STATE (also used to reset after a submit)
+   ═══════════════════════════════════════════ */
+const DEFAULT_FORM_DATA = {
+  title: "",
+  owner_name: "",
+  mobile: "",
+  price: "",
+  description: "",
+  address: "",
+  google_map_link: "",
+  nearby_college: "",
+  pg_type: "",
+  food_type: "Both",
+  city: "",
+  area: "",
+  available_rooms: "",
+  rules: "",
+};
+
+const freshSharingOptions = () => ({
+  single: { available: false, ac_price: "", non_ac_price: "" },
+  double: { available: false, ac_price: "", non_ac_price: "" },
+  triple: { available: false, ac_price: "", non_ac_price: "" },
+});
+
+/* ═══════════════════════════════════════════
    MAIN ADD PG COMPONENT (BALANCED MEDIUM SIZE)
    ═══════════════════════════════════════════ */
 export default function AddPG() {
@@ -130,8 +165,17 @@ export default function AddPG() {
   const fileInputRef = useRef(null);
   const videoInputRef = useRef(null);
 
+  // Restore any locally-saved draft once, before the form state initialises.
+  const [restoredDraft] = useState(loadDraftMeta);
+  const [draftRestored, setDraftRestored] = useState(() => hasDraftContent(restoredDraft));
+  const skipDraftSaveRef = useRef(false);
+  const [mediaHydrated, setMediaHydrated] = useState(() => !restoredDraft);
+
   // Step state: 0 = Hero, 1-5 = Form Steps, 6 = Verification Screen
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const step = Number(restoredDraft?.currentStep);
+    return step >= 1 && step <= 5 ? step : 0;
+  });
   const [submittedPg, setSubmittedPg] = useState(null);
   const [loading, setLoading] = useState(false);
   const [hasExistingPgs, setHasExistingPgs] = useState(false);
@@ -149,33 +193,25 @@ export default function AddPG() {
   });
 
   // Form Data State
-  const [formData, setFormData] = useState({
-    title: "",
-    owner_name: "",
-    mobile: "",
-    price: "",
-    description: "",
-    address: "",
-    google_map_link: "",
-    nearby_college: "",
-    pg_type: "",
-    food_type: "Both",
-    city: "",
-    area: "",
-    available_rooms: "",
-    rules: "",
-  });
+  const [formData, setFormData] = useState(() => ({
+    ...DEFAULT_FORM_DATA,
+    ...(restoredDraft?.formData || {}),
+  }));
 
-  const [sharingOptions, setSharingOptions] = useState({
-    single: { available: false, ac_price: "", non_ac_price: "" },
-    double: { available: false, ac_price: "", non_ac_price: "" },
-    triple: { available: false, ac_price: "", non_ac_price: "" },
+  const [sharingOptions, setSharingOptions] = useState(() => {
+    const base = freshSharingOptions();
+    const saved = restoredDraft?.sharingOptions || {};
+    return {
+      single: { ...base.single, ...(saved.single || {}) },
+      double: { ...base.double, ...(saved.double || {}) },
+      triple: { ...base.triple, ...(saved.triple || {}) },
+    };
   });
 
   const [selectedImages, setSelectedImages] = useState([]);
   const [selectedVideos, setSelectedVideos] = useState([]);
-  const [selectedAmenities, setSelectedAmenities] = useState([]);
-  const [customAmenities, setCustomAmenities] = useState([]);
+  const [selectedAmenities, setSelectedAmenities] = useState(() => restoredDraft?.selectedAmenities || []);
+  const [customAmenities, setCustomAmenities] = useState(() => restoredDraft?.customAmenities || []);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newAmenityInput, setNewAmenityInput] = useState("");
 
@@ -220,7 +256,7 @@ export default function AddPG() {
           return;
         }
 
-        if (pgs.length > 0 && searchParams.get("start") === "1") {
+        if (pgs.length > 0 && searchParams.get("start") === "1" && !hasDraftContent(restoredDraft)) {
           setCurrentStep(1);
         }
       } catch (err) {
@@ -229,7 +265,55 @@ export default function AddPG() {
       }
     };
     checkStatus();
-  }, [searchParams]);
+  }, [searchParams, restoredDraft]);
+
+  // Pull back the cached photos/videos (IndexedDB) for a restored draft.
+  useEffect(() => {
+    if (!restoredDraft) return;
+
+    let cancelled = false;
+    (async () => {
+      const media = await loadDraftMedia();
+      if (cancelled) return;
+
+      if (media?.images?.length) setSelectedImages(media.images);
+      if (media?.videos?.length) {
+        setSelectedVideos(
+          media.videos.map((v) => ({
+            ...v,
+            previewUrl: v.file ? URL.createObjectURL(v.file) : "",
+          }))
+        );
+      }
+      setMediaHydrated(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [restoredDraft]);
+
+  // Auto-save the scalar form state (debounced) so a reload never loses typing.
+  useEffect(() => {
+    if (skipDraftSaveRef.current) return;
+
+    const meta = { formData, sharingOptions, selectedAmenities, customAmenities, currentStep };
+    if (currentStep >= 6 || !hasDraftContent(meta)) return;
+
+    const timer = setTimeout(() => saveDraftMeta(meta), 500);
+    return () => clearTimeout(timer);
+  }, [formData, sharingOptions, selectedAmenities, customAmenities, currentStep]);
+
+  // Auto-save the selected files whenever they change (waits for hydration so a
+  // restored draft isn't immediately overwritten with the empty initial arrays).
+  useEffect(() => {
+    if (!mediaHydrated || skipDraftSaveRef.current) return;
+
+    saveDraftMedia({
+      images: selectedImages,
+      videos: selectedVideos.map(({ file, name, duration }) => ({ file, name, duration })),
+    });
+  }, [selectedImages, selectedVideos, mediaHydrated]);
 
   const handleChange = (e) => {
     setFormData((prev) => ({
@@ -463,6 +547,38 @@ export default function AddPG() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const revokeVideoPreviews = () => {
+    selectedVideos.forEach((video) => video.previewUrl && URL.revokeObjectURL(video.previewUrl));
+  };
+
+  const resetFormState = () => {
+    revokeVideoPreviews();
+    setFormData({ ...DEFAULT_FORM_DATA });
+    setSharingOptions(freshSharingOptions());
+    setSelectedImages([]);
+    setSelectedVideos([]);
+    setSelectedAmenities([]);
+    setCustomAmenities([]);
+    setDraftRestored(false);
+  };
+
+  // Throw away the stored draft and start over from the overview.
+  const handleDiscardDraft = async () => {
+    skipDraftSaveRef.current = true;
+    await clearDraft();
+    resetFormState();
+    setCurrentStep(0);
+    skipDraftSaveRef.current = false;
+  };
+
+  // Fresh wizard after a successful submit (draft was already cleared then).
+  const handleStartAnother = () => {
+    skipDraftSaveRef.current = false;
+    resetFormState();
+    setCurrentStep(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!payoutStatus.isConfigured) {
@@ -557,6 +673,12 @@ export default function AddPG() {
 
       setSubmittedPg(createdPg);
       setCurrentStep(6);
+
+      // The PG now exists on the server — drop the local draft.
+      skipDraftSaveRef.current = true;
+      clearDraft();
+      setDraftRestored(false);
+
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       console.error("PG Submit Error:", error?.response?.data || error);
@@ -768,16 +890,7 @@ export default function AddPG() {
               Go to Dashboard
             </button>
             <button
-              onClick={() => {
-                setFormData({
-                  title: "", owner_name: "", mobile: "", price: "", description: "",
-                  address: "", google_map_link: "", nearby_college: "", pg_type: "",
-                  city: "", area: "", available_rooms: "", rules: "",
-                });
-                setSelectedImages([]);
-                setSelectedAmenities([]);
-                setCurrentStep(1);
-              }}
+              onClick={handleStartAnother}
               className="inline-flex items-center gap-2 rounded-xl bg-[#93B733] hover:bg-[#82a32d] px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm transition"
             >
               <Plus size={16} />
@@ -817,6 +930,24 @@ export default function AddPG() {
           <span className="w-2 h-2 rounded-full bg-[#93B733] animate-pulse" />
         </div>
       </div>
+
+      {/* Draft restored notice */}
+      {draftRestored && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-2xl border border-[#93B733]/35 bg-[#93B733]/10 px-4 py-3 animate-fadeIn">
+          <div className="flex items-center gap-2.5 text-xs sm:text-sm font-bold text-[#355008] dark:text-[#bbf246]">
+            <History size={18} className="shrink-0" />
+            <span>Draft restored — your last progress was saved locally and picked up right where you left off.</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleDiscardDraft}
+            className="self-start sm:self-auto inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-[#93B733]/40 bg-white/70 dark:bg-transparent px-3.5 py-2 text-xs font-black text-[#355008] dark:text-[#bbf246] hover:bg-[#93B733]/20 transition cursor-pointer"
+          >
+            <Trash2 size={13} />
+            Discard draft
+          </button>
+        </div>
+      )}
 
       {/* Missing Payout Alert Banner */}
       {!payoutStatus.loading && !payoutStatus.isConfigured && (

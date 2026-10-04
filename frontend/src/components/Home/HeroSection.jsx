@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import HeroVisual from "./HeroVisual";
+import SponsoredShowcase from "../sponsors/SponsoredShowcase";
 import Container from "../../layouts/Container";
 
-const HeroSection = ({ pgs = [] }) => {
+const HeroSection = ({ pgs = [], sponsoredPGs = [] }) => {
   const featuredPG = pgs.length > 0 ? pgs[0] : null;
+  const hasSponsors = Array.isArray(sponsoredPGs) && sponsoredPGs.length > 0;
 
   const stats = [
     {
@@ -88,7 +90,13 @@ const HeroSection = ({ pgs = [] }) => {
             </div>
           </div>
 
-          <HeroVisual featuredPG={featuredPG} />
+          {hasSponsors ? (
+            <div className="mt-4 md:mt-0 lg:ml-auto lg:w-full lg:max-w-[520px]">
+              <SponsoredShowcase sponsoredPGs={sponsoredPGs} variant="hero" />
+            </div>
+          ) : (
+            <HeroVisual featuredPG={featuredPG} />
+          )}
         </Container>
       </section>
     </>

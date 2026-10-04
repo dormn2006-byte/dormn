@@ -16,6 +16,7 @@ const Home = () => {
   const navigate = useNavigate();
 
   const [featuredPGs, setFeaturedPGs] = useState([]);
+  const [sponsoredPGs, setSponsoredPGs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDeletedToast, setShowDeletedToast] = useState(false);
   
@@ -111,13 +112,17 @@ const Home = () => {
     const fetchHomeData = async () => {
       try {
         setLoading(true);
-        const [pgResponse, filterResponse] = await Promise.all([
+        const [pgResponse, filterResponse, sponsorResponse] = await Promise.all([
           API.get("/pg/all"),
-          API.get("/pg/filter-options")
+          API.get("/pg/filter-options"),
+          API.get("/sponsors", { params: { placement: "home" } }).catch(() => ({ data: {} }))
         ]);
 
         const pgs = pgResponse.data?.pgs || pgResponse.data?.data || pgResponse.data || [];
         setFeaturedPGs(Array.isArray(pgs) ? pgs : []);
+
+        const sponsored = sponsorResponse.data?.pgs || [];
+        setSponsoredPGs(Array.isArray(sponsored) ? sponsored : []);
 
         if (filterResponse.data?.success) {
           setDynamicOptions({
@@ -154,7 +159,7 @@ const Home = () => {
 
   return (
     <PublicLayout>
-      <HeroSection pgs={featuredPGs} />
+      <HeroSection pgs={featuredPGs} sponsoredPGs={sponsoredPGs} />
 
       <SearchSection
         filters={filters}
