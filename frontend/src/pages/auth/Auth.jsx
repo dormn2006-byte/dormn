@@ -226,7 +226,10 @@ export default function Auth() {
       const isNotFound = err.response?.status === 404 || err.response?.data?.notFound || err.response?.data?.message?.includes("User not found");
       const isAlreadyExists = err.response?.status === 409 || err.response?.data?.alreadyExists;
 
-      if (isNotFound && authMode === "login") {
+      if (isNotFound) {
+        // Account exists but uses a different auth method (password) —
+        // pre-fill the email and switch to password login so the user can
+        // sign in with their credentials.
         const returnedEmail = err.response?.data?.email;
         const returnedName = err.response?.data?.name;
         if (returnedEmail) {
@@ -236,8 +239,8 @@ export default function Auth() {
             full_name: returnedName || prev.full_name,
           }));
         }
-        setAuthMode("signup");
-        setError("User not found, try another way. Please sign up to create your account.");
+        setAuthMode("login");
+        setError("An account with this email already exists. Please log in using your email and password instead of Google.");
       } else if (isAlreadyExists) {
         setError("This email is already in use. Please log in.");
       } else {

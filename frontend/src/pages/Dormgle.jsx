@@ -130,9 +130,9 @@ const Dormgle = () => {
 
       <main className="flex-1 flex flex-col gap-4 p-4">
         {/* ── Video area ── */}
-        <div className="flex-1 flex flex-col gap-4 md:flex-row">
+        <div className="flex-1 grid gap-4 md:grid-cols-2">
           {/* ── Left panel: remote user ── */}
-          <div className="relative flex-1 rounded-2xl overflow-hidden bg-gray-900">
+          <div className="relative h-full rounded-2xl overflow-hidden bg-gray-900 md:aspect-video">
             {remoteStream ? (
               <video
                 ref={remoteVideoRc}
@@ -218,7 +218,7 @@ const Dormgle = () => {
           </div>
 
           {/* ── Right panel: own camera (desktop) ── */}
-          <div className="hidden rounded-2xl overflow-hidden bg-gray-900 md:flex md:flex-1">
+          <div className="hidden h-full rounded-2xl overflow-hidden bg-gray-900 md:aspect-video md:block">
             {!isCameraOff && localStream ? (
               <video
                 ref={localVideoRc}

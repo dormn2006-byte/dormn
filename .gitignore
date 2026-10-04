@@ -4,3 +4,6 @@ node_modules/
 .DS_Store
 PROJECT_UNDERSTANDING.md
 .commandcode
+
+# Google OAuth credentials (downloaded from Google Cloud Console — contains client_secret)
+client_secret_*.json

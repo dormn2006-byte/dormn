@@ -419,6 +419,8 @@ export const googleAuth = async (req, res) => {
       return res.status(404).json({
         success: false,
         notFound: true,
+        email: cleanEmail,
+        name,
         message: "User not found, try another way",
       });
     }
@@ -434,18 +436,6 @@ export const googleAuth = async (req, res) => {
     }
 
     if (!user) {
-      // If user attempted login and no account exists with this Gmail
-      if (mode === "login") {
-        logSecurityAudit({ req, eventType: "LOGIN_FAILED", email: cleanEmail, status: "FAILED", details: "Google login attempted on non-existent account" });
-        return res.status(404).json({
-          success: false,
-          notFound: true,
-          email: cleanEmail,
-          name,
-          message: "User not found, try another way",
-        });
-      }
-
       const assignedRole = ["owner", "student"].includes(role) ? role : "student";
       const cleanGender = ["male", "female"].includes(gender) ? gender : "prefer_not_to_say";
       const cleanedPhone = phone ? String(phone).trim().replace(/\D/g, "") : null;
@@ -453,7 +443,7 @@ export const googleAuth = async (req, res) => {
 
       const result = await createUser({
         full_name: name || "Google User",
-        email,
+        email: cleanEmail,
         password: hashedPassword,
         role: assignedRole,
         phone: cleanedPhone,
@@ -473,14 +463,14 @@ export const googleAuth = async (req, res) => {
       user = {
         id: result.insertId,
         full_name: name || "Google User",
-        email,
+        email: cleanEmail,
         role: assignedRole,
         gender: cleanGender,
         profile_image: picture,
         is_email_verified: 1,
         auth_provider: "google",
       };
-      sendWelcomeEmail(email, user.full_name, assignedRole).catch(() => {});
+      sendWelcomeEmail(cleanEmail, user.full_name, assignedRole).catch(() => {});
     } else {
       // If user exists, mark email as verified since authenticated via Google
       if (!user.is_email_verified) {
