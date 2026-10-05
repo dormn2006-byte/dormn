@@ -130,15 +130,15 @@ const Dormgle = () => {
 
       <main className="flex-1 flex flex-col gap-4 p-4">
         {/* ── Video area ── */}
-        <div className="flex-1 grid gap-4 md:grid-cols-2">
+        <div className="flex-1 grid w-full gap-4 md:grid-cols-2">
           {/* ── Left panel: remote user ── */}
-          <div className="relative h-full rounded-2xl overflow-hidden bg-gray-900 md:aspect-video">
+          <div className="relative h-full w-full rounded-2xl overflow-hidden bg-gray-900 md:h-auto md:aspect-video">
             {remoteStream ? (
               <video
                 ref={remoteVideoRc}
                 autoPlay
                 playsInline
-                className="h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-cover"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
@@ -217,25 +217,27 @@ const Dormgle = () => {
             )}
           </div>
 
-          {/* ── Right panel: own camera (desktop) ── */}
-          <div className="hidden h-full rounded-2xl overflow-hidden bg-gray-900 md:aspect-video md:block">
-            {!isCameraOff && localStream ? (
-              <video
-                ref={localVideoRc}
-                autoPlay
-                playsInline
-                muted
-                className="h-full w-full scale-x-[-1] object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <VideoOff size={48} className="mx-auto mb-4" />
-                  <p>Camera is off</p>
+          {/* ── Right panel: own camera (desktop only) ── */}
+          {!isMobile && (
+            <div className="aspect-video w-full rounded-2xl overflow-hidden bg-gray-900">
+              {!isCameraOff && localStream ? (
+                <video
+                  ref={localVideoRc}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="h-full w-full scale-x-[-1] object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <div className="text-center text-gray-500">
+                    <VideoOff size={48} className="mx-auto mb-4" />
+                    <p>Camera is off</p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Controls ───────────────────────────────────────────── */}

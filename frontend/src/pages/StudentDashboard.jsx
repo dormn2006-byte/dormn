@@ -5,7 +5,7 @@ import { AuthContext } from "../context/AuthContext";
 import { 
   Camera, Pencil, Check, Search, Brain, Clock, CheckCircle, BookOpen, ChevronRight,
   Code, Gamepad2, User, Building2, Lock, Globe, FileText, HeartPulse, Users, Save, Eye, EyeOff, Sparkles, X,
-  Upload, Briefcase, GitBranch, MessageCircle, CheckCircle2, AlertCircle, AlertTriangle,
+  Upload, Briefcase, GitBranch, MessageCircle, CheckCircle2, AlertCircle, AlertTriangle, LogOut,
   CalendarClock, CalendarCheck, Phone, CalendarRange
 } from "lucide-react";
 
@@ -126,7 +126,7 @@ const FOODS = ["Veg", "Non-Veg", "Eggetarian", "Vegan", "Jain"];
 const YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year", "PG 1st Year", "PG 2nd Year"];
 
 const StudentDashboard = () => {
-  const { token, user } = useContext(AuthContext);
+  const { token, user, logout } = useContext(AuthContext);
   const fileRef = useRef(null);
   const menuRef = useRef(null);
   const navigate = useNavigate();
@@ -426,6 +426,17 @@ const StudentDashboard = () => {
                 <div className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-black shadow-lg py-1.5 z-50">
                   <Link to="/my-pg" className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[#0D3A1D] dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900"><Building2 size={16} /> My PG</Link>
                   <Link to="/pgs" className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[#0D3A1D] dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900"><Search size={16} /> Explore PGs</Link>
+                  <div className="my-1.5 border-t border-gray-100 dark:border-gray-800" />
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      logout();
+                      navigate("/");
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                  >
+                    <LogOut size={16} /> Log out
+                  </button>
                 </div>
               )}
             </div>

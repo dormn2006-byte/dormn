@@ -88,6 +88,7 @@ export default function Auth() {
   const roleParam = searchParams.get("role");
   const modeParam = searchParams.get("mode");
   const redirectParam = searchParams.get("redirect");
+  const prefillParam = searchParams.get("prefill");
 
   const [authMode, setAuthMode] = useState(modeParam === "signup" ? "signup" : "login");
   const [userRole, setUserRole] = useState(roleParam === "owner" ? "owner" : "student");
@@ -117,7 +118,8 @@ export default function Auth() {
     }
   }, [searchParams]);
 
-  const [formData, setFormData] = useState({ full_name: "", email: "", phone: "", password: "", gender: "" });
+  // Pre-fill email from the Coming Soon "Pre Register" box
+  const [formData, setFormData] = useState({ full_name: "", email: prefillParam || "", phone: "", password: "", gender: "" });
 
   const passwordRules = checkPasswordRules(formData.password);
   const resetPasswordRules = checkPasswordRules(newPassword);

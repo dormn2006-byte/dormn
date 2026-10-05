@@ -16,10 +16,8 @@ import {
   
 } from "../controllers/pgController.js";
 
-import {
-  protect,
-  ownerOnly,
-} from "../middleware/authMiddleware.js";
+import { protect, ownerOnly, optionalProtect } from "../middleware/authMiddleware.js";
+import { requireFullAccess } from "../utils/accessControl.js";
 
 import upload, { uploadPGMedia } from "../middleware/uploadMiddleware.js";
 
@@ -30,10 +28,11 @@ const router = express.Router();
 // ==========================================
 
 // Get dynamic filter options for the frontend dropdowns
-router.get("/filter-options", getFilterOptionsController);
+// (hidden during pre-launch — only master account / superadmin)
+router.get("/filter-options", optionalProtect, requireFullAccess, getFilterOptionsController);
 
 // Search PGs with advanced filters (price, location, type, landmark)
-router.get("/search", searchPGsController);
+router.get("/search", optionalProtect, requireFullAccess, searchPGsController);
 
 // ==========================================
 // STANDARD CRUD ROUTES
@@ -48,8 +47,8 @@ router.post(
   createPGController
 );
 
-// Get All PGs
-router.get("/all", getAllPGsController);
+// Get All PGs (hidden during pre-launch — only master account / superadmin)
+router.get("/all", optionalProtect, requireFullAccess, getAllPGsController);
 
 // Get Logged In Owner PGs
 router.get(
@@ -67,7 +66,7 @@ router.post("/save", protect, toggleSavePGController);
 router.get("/saved", protect, getSavedPGsController);
 
 // Get Single PG (keep /:id LAST among GET routes)
-router.get("/:id", getSinglePGController);
+router.get("/:id", optionalProtect, requireFullAccess, getSinglePGController);
 
 // Update PG
 router.put(

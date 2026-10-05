@@ -2,13 +2,24 @@ import { Suspense, useContext } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import lazyWithRetry from "../utils/lazyRetry";
+import { hasFullAccess } from "../config/accessControl";
 
 // Core routes
 import ProtectedRoute from "./ProtectedRoute";
 import { AudioProvider } from "../context/AudioContext";
 
+// Pre-launch Coming Soon gate. While Dormn is in "coming soon" state, only the
+// master account (and superadmin) can browse the full public site. Everyone
+// else — logged out, student or owner — sees the Coming Soon page instead.
+const PublicGate = ({ children }) => {
+  const { user } = useContext(AuthContext);
+  if (hasFullAccess(user)) return children;
+  return <ComingSoon />;
+};
+
 // Lazy-loaded routes to keep initial bundle size ultra-light
 const Home = lazyWithRetry(() => import("../pages/Home"), "Home");
+const ComingSoon = lazyWithRetry(() => import("../pages/ComingSoon"), "ComingSoon");
 const ExplorePGs = lazyWithRetry(() => import("../pages/ExplorePGs"), "ExplorePGs");
 const PgDetails = lazyWithRetry(() => import("../pages/PgDetails"), "PgDetails");
 const GlobalAudioPlayer = lazyWithRetry(() => import("../components/common/GlobalAudioPlayer"), "GlobalAudioPlayer");
@@ -118,32 +129,37 @@ const AppRoutes = () => {
         <Suspense fallback={null}><CookieConsent /></Suspense>
         <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/pgs" element={<ExplorePGs />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/faqs" element={<FAQ />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-          <Route path="/terms" element={<TermsConditions />} />
-          <Route path="/terms-and-conditions" element={<TermsConditions />} />
-          <Route path="/cookies" element={<CookiePolicy />} />
-          <Route path="/cookie-policy" element={<CookiePolicy />} />
-          <Route path="/cookies-policy" element={<CookiePolicy />} />
-          <Route path="/pg/:id" element={<PgDetails />} />
-          <Route path="/pgs/:id" element={<PgDetails />} />
-          <Route path="/property/:id" element={<PgDetails />} />
-          <Route path="/blogs" element={<BlogList />} />
-          <Route path="/blogs/pg-near-amity-university-noida" element={<AmityPGGuide />} />
-          <Route path="/blogs/pg-in-sector-62-noida" element={<Sector62Guide />} /> 
-          <Route path="/events/invite/:inviteCode" element={<EventInvite />} />
-          <Route path="/events" element={<Events />} />
-          <Route path="/gym" element={<Gym />} />
-          <Route path="/dr-dormn" element={<DrDormn />} />
+          {/* ── Coming Soon gate: public site hidden until launch ── */}
+          <Route path="/" element={<PublicGate><Home /></PublicGate>} />
+          <Route path="/pgs" element={<PublicGate><ExplorePGs /></PublicGate>} />
+          <Route path="/about" element={<PublicGate><About /></PublicGate>} />
+          <Route path="/faqs" element={<PublicGate><FAQ /></PublicGate>} />
+          <Route path="/contact" element={<PublicGate><Contact /></PublicGate>} />
+          <Route path="/privacy" element={<PublicGate><PrivacyPolicy /></PublicGate>} />
+          <Route path="/privacy-policy" element={<PublicGate><PrivacyPolicy /></PublicGate>} />
+          <Route path="/terms" element={<PublicGate><TermsConditions /></PublicGate>} />
+          <Route path="/terms-and-conditions" element={<PublicGate><TermsConditions /></PublicGate>} />
+          <Route path="/cookies" element={<PublicGate><CookiePolicy /></PublicGate>} />
+          <Route path="/cookie-policy" element={<PublicGate><CookiePolicy /></PublicGate>} />
+          <Route path="/cookies-policy" element={<PublicGate><CookiePolicy /></PublicGate>} />
+          <Route path="/pg/:id" element={<PublicGate><PgDetails /></PublicGate>} />
+          <Route path="/pgs/:id" element={<PublicGate><PgDetails /></PublicGate>} />
+          <Route path="/property/:id" element={<PublicGate><PgDetails /></PublicGate>} />
+          <Route path="/blogs" element={<PublicGate><BlogList /></PublicGate>} />
+          <Route path="/blogs/pg-near-amity-university-noida" element={<PublicGate><AmityPGGuide /></PublicGate>} />
+          <Route path="/blogs/pg-in-sector-62-noida" element={<PublicGate><Sector62Guide /></PublicGate>} /> 
+          <Route path="/events/invite/:inviteCode" element={<PublicGate><EventInvite /></PublicGate>} />
+          <Route path="/events" element={<PublicGate><Events /></PublicGate>} />
+          <Route path="/gym" element={<PublicGate><Gym /></PublicGate>} />
+          <Route path="/dr-dormn" element={<PublicGate><DrDormn /></PublicGate>} />
+
+          {/* ── Dormgle stays LIVE for every logged-in user during Coming Soon ── */}
           <Route path="/dormgle" element={<Dormgle />} />
-          <Route path="/my-pg" element={<MyPG />} />
-          <Route path="/my-pgs" element={<MyPG />} />
-          <Route path="/my-short-stays" element={<MyShortStays />} />
+
+          {/* Resident portal gated during launch (non-master accounts use dashboards only) */}
+          <Route path="/my-pg" element={<PublicGate><MyPG /></PublicGate>} />
+          <Route path="/my-pgs" element={<PublicGate><MyPG /></PublicGate>} />
+          <Route path="/my-short-stays" element={<PublicGate><MyShortStays /></PublicGate>} />
 
           {/* Universal Dashboard & Auth Shortcuts */}
           <Route path="/dashboard" element={<DashboardRedirect />} />

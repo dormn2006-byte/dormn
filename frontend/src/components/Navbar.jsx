@@ -3,6 +3,7 @@ import { useContext, useState, useEffect, useRef, useCallback, useMemo, memo } f
 import { AuthContext } from "../context/AuthContext";
 import { AudioContext } from "../context/audioContextValue";
 import { ThemeSwitch } from "./ui/theme-switch-button";
+import { hasFullAccess } from "../config/accessControl";
 import {
   ChevronDown, ChevronRight, LayoutDashboard, LogOut, Music, Pause, Play, SkipForward,
   Building2, Menu, X, Dumbbell, CalendarHeart, Bot, Home, ShieldAlert, Video,
@@ -54,6 +55,13 @@ const Navbar = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, logout } = useContext(AuthContext);
   const audioContext = useContext(AudioContext);
+
+  // During pre-launch, non-master accounts can only use their dashboard +
+  // Dormgle, so their nav is reduced to just the Dormgle tab.
+  const navTabs = useMemo(() => {
+    if (user && !hasFullAccess(user)) return NAV_TABS.filter((t) => t.id === "dormgle");
+    return NAV_TABS;
+  }, [user]);
   
   const isPgDetailPage = useMemo(() => {
     const p = location.pathname;
@@ -256,7 +264,7 @@ const Navbar = () => {
           {/* Central Area: The Core Navigation Tabs (Big Capsule / Pill Style) */}
           <nav className="hidden sm:flex items-center justify-center flex-1 mx-2 lg:mx-4">
             <div className="flex items-center gap-2.5 sm:gap-3 lg:gap-3.5">
-              {NAV_TABS.map((tab) => {
+              {navTabs.map((tab) => {
                 const isActive = currentActiveTab === tab.id;
                 return (
                   <button
@@ -375,7 +383,7 @@ const Navbar = () => {
                         Dashboard
                       </button>
 
-                      {user.role === "student" && (
+                      {user.role === "student" && hasFullAccess(user) && (
                         <button
                           onClick={() => {
                             setIsProfileMenuOpen(false);
@@ -467,7 +475,7 @@ const Navbar = () => {
             : "bg-white/95 dark:bg-black border-gray-100 dark:border-white/5"
         }`}>
           <div className="flex items-center justify-between gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-            {NAV_TABS.map((tab) => {
+            {navTabs.map((tab) => {
               const isActive = currentActiveTab === tab.id;
               return (
                 <button
