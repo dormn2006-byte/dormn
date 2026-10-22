@@ -55,16 +55,6 @@ const amenitiesSearchText = () => ({
   },
 });
 
-// Only PGs whose owner is on a usable subscription are publicly visible.
-const ownerSubscriptionMatch = () => ({
-  $or: [
-    { "owner.role": { $ne: "owner" } },
-    { "owner.subscription_status": null },
-    { "owner.subscription_status": { $in: ["trial", "active"] } },
-    { "owner.subscription_expires_at": { $gt: new Date() } },
-  ],
-});
-
 const ownerLookup = [
   {
     $lookup: {
@@ -136,7 +126,6 @@ const publicListPipeline = (match = {}) => [
   { $match: match },
   ...ownerLookup,
   ...occupancyLookup,
-  { $match: ownerSubscriptionMatch() },
   {
     $addFields: {
       _spots_available: { $cond: [{ $gt: ["$spots_left", 0] }, 1, 0] },
@@ -335,7 +324,6 @@ export const getSavedPGsByUser = async (userId) => {
     { $match: { status: "approved" } },
     ...ownerLookup,
     ...occupancyLookup,
-    { $match: ownerSubscriptionMatch() },
     {
       $addFields: {
         _spots_available: { $cond: [{ $gt: ["$spots_left", 0] }, 1, 0] },
