@@ -144,8 +144,11 @@ const PGCard = ({ pg }) => {
                 loading="lazy"
                 decoding="async"
                 onError={(e) => {
+                  // A missing/broken image should not be swapped for a fake
+                  // default stock photo. Hide this slide so only real PG media
+                  // (or the neutral bg) is visible.
                   e.target.onerror = null;
-                  e.target.src = fallbackImg;
+                  e.currentTarget.style.display = "none";
                 }}
                 className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 ${
                   spotsLeft === 0 ? "opacity-75 grayscale-[20%]" : "opacity-100"

@@ -106,7 +106,10 @@ const MediaThumbnail = ({ item, index }) => {
       decoding="async"
       className="h-12 w-full object-cover sm:h-20 md:h-24"
       onError={(e) => {
-        e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[index % DEFAULT_DETAILS_FALLBACKS.length];
+        // A thumbnail whose file is missing shouldn't be replaced by a fake
+        // placeholder image — just hide it so it can't render a default stock
+        // photo over a PG that already has real media.
+        e.currentTarget.style.display = "none";
       }}
     />
   );
@@ -373,7 +376,9 @@ const PgDetails = () => {
     if (pg.profile_image) raw.push(pg.profile_image);
     if (pg.image) raw.push(pg.image);
 
-    const formatted = raw.map(formatImageUrl).filter(Boolean);
+    // De-duplicate (a PG's profile_image is often the same file as its first
+    // gallery entry) so the cover isn't rendered twice.
+    const formatted = [...new Set(raw.map(formatImageUrl).filter(Boolean))];
     return formatted.length > 0 ? formatted : DEFAULT_DETAILS_FALLBACKS;
   }, [pg]);
 
@@ -949,8 +954,16 @@ const currentActiveIndex = mediaCount > 0
                       mainImageLoaded ? "opacity-100" : "opacity-0"
                     }`}
                     onError={(e) => {
-                      e.currentTarget.src = DEFAULT_DETAILS_FALLBACKS[0];
-                      setMainImageLoaded(true);
+                      // Don't substitute the default stock placeholder for a
+                      // missing/broken file. Skip to the next gallery item so
+                      // a broken cover is never shown as a fake image.
+                      if (mediaCount > 1) {
+                        e.preventDefault();
+                        setActiveImageIndex((prev) => (prev + 1) % mediaCount);
+                      } else {
+                        e.currentTarget.style.display = "none";
+                        setMainImageLoaded(true);
+                      }
                     }}
                   />
                 )}
