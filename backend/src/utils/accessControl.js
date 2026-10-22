@@ -7,7 +7,14 @@
 // superadmin — can read public data.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const FULL_ACCESS_EMAIL = "mitanshu94paliwal@gmail.com";
+// Accounts that bypass the pre-launch gate (compared case-insensitively):
+//  - the master account, and
+//  - additional early-access accounts (e.g. a test student previewing the
+//    full platform).
+export const FULL_ACCESS_EMAILS = [
+  "mitanshu94paliwal@gmail.com",
+  "sahilvsabai@gmail.com",
+];
 
 /**
  * True when a user may read public platform data. `req.user` is JWT-decoded
@@ -15,8 +22,9 @@ export const FULL_ACCESS_EMAIL = "mitanshu94paliwal@gmail.com";
  */
 export const hasFullAccess = (user) => {
   if (!user) return false;
-  if (user.email && String(user.email).trim().toLowerCase() === FULL_ACCESS_EMAIL) {
-    return true;
+  if (user.email) {
+    const email = String(user.email).trim().toLowerCase();
+    if (FULL_ACCESS_EMAILS.includes(email)) return true;
   }
   if (user.role === "superadmin") return true;
   return false;

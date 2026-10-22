@@ -36,6 +36,7 @@ import sponsorRoutes from "./routes/sponsorRoutes.js";
 import settlementRoutes from "./routes/settlementRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import webhookRoutes from "./routes/webhookRoutes.js";
+import pgAiRoutes from "./routes/pgAiRoutes.js";
 
 import { releaseStaleReservations } from "./services/promoCodeService.js";
 import { reconcileProcessingSettlements } from "./services/settlementService.js";
@@ -138,6 +139,17 @@ app.use("/api/auth/verify-email-otp", otpVerifyLimiter);
 app.use("/api/auth/reset-password", otpVerifyLimiter);
 app.use("/api/dr-dormn/chat", drDormnLimiter);
 
+// PG AI manager also calls a paid LLM per turn (and is open to guests), so it
+// gets its own shared budget per IP.
+const pgAiLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Too many AI requests. Please wait a few minutes and try again." },
+});
+app.use("/api/pg-ai/chat", pgAiLimiter);
+
 // ── Routes ──
 app.use("/api/enrollments", enrollmentRoutes);
 app.use("/api/auth", authRoutes);
@@ -197,6 +209,7 @@ app.use("/api/promo-codes", promoCodeRoutes);
 app.use("/api/settlements", settlementRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/sponsors", sponsorRoutes);
+app.use("/api/pg-ai", pgAiRoutes);
 
 app.get("/", (req, res) => {
   res.send("PG Platform Backend Running");

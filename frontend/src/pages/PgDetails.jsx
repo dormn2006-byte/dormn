@@ -6,6 +6,7 @@ import { AuthContext } from "../context/AuthContext";
 import { formatDuration } from "../config/mediaLimits";
 import AmenitiesModal from "../components/AmenitiesModal";
 import EmailVerificationModal from "../components/auth/EmailVerificationModal";
+import PgAiChat from "../components/common/PgAiChat";
 import { isEmailVerified } from "../utils/verificationStorage";
 import { calcStayDays, calcDailyPrice } from "../utils/shortStayUtils";
 import { getPgFoodPreference } from "../utils/amenities";
@@ -1046,6 +1047,11 @@ const currentActiveIndex = mediaCount > 0
               </p>
             </div>
 
+            {/* AI Manager section (desktop, inline — not sticky) */}
+            <div className="hidden lg:block mt-2.5 sm:mt-6">
+              <PgAiChat pgId={pg.id} pgTitle={pg.title} variant="inline" />
+            </div>
+
           </div>
 
           {/* RIGHT SIDE: Booking, Amenities & Actions */}
@@ -1680,6 +1686,11 @@ const currentActiveIndex = mediaCount > 0
           }, 300);
         }}
       />
+
+      {/* AI Manager chatbot — floating widget only on mobile/tablet */}
+      <div className="lg:hidden">
+        <PgAiChat pgId={pg.id} pgTitle={pg.title} />
+      </div>
     </div>
   );
 };
