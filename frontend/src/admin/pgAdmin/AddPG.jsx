@@ -171,10 +171,10 @@ export default function AddPG() {
   const skipDraftSaveRef = useRef(false);
   const [mediaHydrated, setMediaHydrated] = useState(() => !restoredDraft);
 
-  // Step state: 0 = Hero, 1-5 = Form Steps, 6 = Verification Screen
+  // Step state: 1-5 = Form Steps, 6 = Verification Screen
   const [currentStep, setCurrentStep] = useState(() => {
     const step = Number(restoredDraft?.currentStep);
-    return step >= 1 && step <= 5 ? step : 0;
+    return step >= 1 && step <= 5 ? step : 1;
   });
   const [submittedPg, setSubmittedPg] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -543,7 +543,7 @@ export default function AddPG() {
   };
 
   const handlePrevious = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 0));
+    setCurrentStep((prev) => Math.max(prev - 1, 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -562,12 +562,12 @@ export default function AddPG() {
     setDraftRestored(false);
   };
 
-  // Throw away the stored draft and start over from the overview.
+  // Throw away the stored draft and start over.
   const handleDiscardDraft = async () => {
     skipDraftSaveRef.current = true;
     await clearDraft();
     resetFormState();
-    setCurrentStep(0);
+    setCurrentStep(1);
     skipDraftSaveRef.current = false;
   };
 
@@ -711,198 +711,6 @@ export default function AddPG() {
   const allAmenities = useMemo(() => [...DEFAULT_AMENITIES, ...customAmenities], [customAmenities]);
 
   /* ═══════════════════════════════════════════
-     VIEW 0: BIG ONBOARDING HERO BANNER (CENTERED)
-     ═══════════════════════════════════════════ */
-  if (currentStep === 0) {
-    return (
-      <div className="min-h-[calc(100vh-140px)] flex items-center justify-center py-6 px-4 animate-fadeIn">
-        {/* Big Spacious Hero Banner Centered */}
-        <div className="w-full max-w-5xl relative overflow-hidden rounded-[2.5rem] border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-8 sm:p-14 lg:p-20 text-center shadow-2xl">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733] font-black text-xs sm:text-sm uppercase tracking-widest mb-6">
-            <Sparkles className="w-4 h-4" /> Property Onboarding Portal
-          </div>
-
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-gray-900 dark:text-white tracking-tight leading-tight max-w-3xl mx-auto">
-            List Your PG on Dormn in <span className="text-[#93B733]">5 Easy Steps</span>
-          </h1>
-
-          <p className="mt-5 text-sm sm:text-base lg:text-xl font-medium text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed">
-            Add your property details, photos, and pricing to start accepting student bookings.
-          </p>
-
-          {/* Bank & Payout Warning if not configured */}
-          {!payoutStatus.loading && !payoutStatus.isConfigured && (
-            <div className="mt-8 p-5 sm:p-6 rounded-3xl border-2 border-amber-500/40 bg-amber-500/10 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 max-w-2xl mx-auto animate-fadeIn">
-              <div className="flex items-start gap-3.5">
-                <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                  <CreditCard size={22} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm sm:text-base font-black text-gray-900 dark:text-white">
-                      Bank Account & Payout Details Required
-                    </h4>
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white shadow-xs">
-                      Required
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
-                    Before listing your PG, you must configure your bank account so student rent payments and token bookings can be deposited to your account.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => navigate("/owner/profile?tab=payouts")}
-                className="whitespace-nowrap px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition shadow-md hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5 shrink-0"
-              >
-                <span>Fill Details in Profile</span>
-                <ArrowRight size={14} />
-              </button>
-            </div>
-          )}
-
-          <div className="mt-8 sm:mt-12 flex flex-wrap items-center justify-center gap-4">
-            <button
-              onClick={handleStartOnboarding}
-              className="inline-flex items-center gap-3 rounded-2xl bg-[#0D3A1D] hover:bg-[#16502a] dark:bg-[#93B733] dark:hover:bg-[#82a32d] px-7 sm:px-10 py-4 sm:py-5 text-base sm:text-lg font-black text-white dark:text-[#0D3A1D] shadow-xl hover:shadow-[#93B733]/30 transition active:scale-[0.98] cursor-pointer"
-            >
-              <span>{hasExistingPgs ? "+ Add Another Property" : "Start PG Onboarding"}</span>
-              <ArrowRight className="w-5 h-5" />
-            </button>
-
-            {hasExistingPgs && (
-              <button
-                onClick={() => navigate("/owner/my-pgs")}
-                className="inline-flex items-center gap-2.5 rounded-2xl border-2 border-gray-300 dark:border-white/15 bg-white dark:bg-[#181818] px-6 sm:px-8 py-4 sm:py-5 text-base font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition cursor-pointer"
-              >
-                <Building2 className="w-5 h-5 text-[#93B733]" />
-                View My Properties
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Payout Details Modal */}
-        {showPayoutModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fadeIn">
-            <div className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#141414] p-6 sm:p-7 shadow-2xl text-center space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-500 border border-amber-500/25 flex items-center justify-center mx-auto shadow-sm">
-                <CreditCard size={28} />
-              </div>
-              <div>
-                <h3 className="text-lg sm:text-xl font-black text-gray-900 dark:text-white">
-                  Add Bank Account First
-                </h3>
-                <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 leading-relaxed">
-                  Before onboarding a PG property, you must configure your settlement bank account so student booking tokens and monthly rent payouts can reach you directly.
-                </p>
-              </div>
-
-              <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowPayoutModal(false)}
-                  className="flex-1 rounded-xl border border-gray-300 dark:border-white/15 px-4 py-3 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition cursor-pointer"
-                >
-                  Later
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPayoutModal(false);
-                    navigate("/owner/profile?tab=payouts");
-                  }}
-                  className="flex-1 rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] dark:bg-[#93B733] dark:hover:bg-[#82a32d] text-white dark:text-[#0D3A1D] px-4 py-3 text-xs font-black transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
-                >
-                  <span>Fill Details Now</span>
-                  <ArrowRight size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════
-     VIEW 6: PROPERTY UNDER VERIFICATION STATUS
-     ═══════════════════════════════════════════ */
-  if (currentStep === 6) {
-    return (
-      <div className="max-w-3xl mx-auto py-8 sm:py-12 px-4 space-y-6 animate-fadeIn text-center">
-        <div className="rounded-3xl border-2 border-dashed border-amber-400 dark:border-amber-500/40 bg-white dark:bg-[#111] p-8 sm:p-12 shadow-xl">
-          {/* Animated Status Badge */}
-          <div className="relative mx-auto w-20 h-20 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-white flex items-center justify-center mb-5 shadow-lg shadow-amber-500/20">
-            <Clock className="w-10 h-10 animate-spin-slow" />
-            <span className="absolute -top-1 -right-1 flex h-4 w-4">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500"></span>
-            </span>
-          </div>
-
-          <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold text-xs uppercase tracking-wider mb-3">
-            Status: Under Quality Verification
-          </span>
-
-          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Property Submitted Successfully!
-          </h1>
-
-          <p className="mt-2 text-sm sm:text-base font-medium text-gray-600 dark:text-gray-300 max-w-xl mx-auto leading-relaxed">
-            Your accommodation <strong className="text-[#0D3A1D] dark:text-[#93B733] font-bold">{formData.title || "Your PG"}</strong> is now undergoing administrative verification.
-          </p>
-
-          {/* Timeline Box */}
-          <div className="mt-6 p-5 rounded-2xl bg-gray-50 dark:bg-[#181818] border border-gray-200 dark:border-white/10 text-left space-y-3 shadow-xs max-w-lg mx-auto text-xs">
-            <div className="flex items-center justify-between pb-2.5 border-b border-gray-200 dark:border-white/10">
-              <span className="font-semibold text-gray-500">Property Title</span>
-              <span className="font-bold text-gray-900 dark:text-white">{formData.title}</span>
-            </div>
-            <div className="flex items-center justify-between pb-2.5 border-b border-gray-200 dark:border-white/10">
-              <span className="font-semibold text-gray-500">Location</span>
-              <span className="font-bold text-gray-900 dark:text-white">{formData.area}, {formData.city}</span>
-            </div>
-            <div className="flex items-center justify-between pb-2.5 border-b border-gray-200 dark:border-white/10">
-              <span className="font-semibold text-gray-500">Monthly Rent</span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{Number(formData.price).toLocaleString()} / mo</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-gray-500">Review Timeline</span>
-              <span className="font-bold text-amber-600 dark:text-amber-400">Estimated 2 – 4 hours</span>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <button
-              onClick={() => navigate("/owner/my-pgs")}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] px-6 py-3 text-xs sm:text-sm font-bold text-white shadow-md transition active:scale-[0.98]"
-            >
-              <Building2 size={16} />
-              View in My PGs
-            </button>
-            <button
-              onClick={() => navigate("/owner/dashboard")}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-[#181818] px-5 py-3 text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition"
-            >
-              Go to Dashboard
-            </button>
-            <button
-              onClick={handleStartAnother}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#93B733] hover:bg-[#82a32d] px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-sm transition"
-            >
-              <Plus size={16} />
-              Add Another PG
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ═══════════════════════════════════════════
      VIEW 1-5: MEDIUM-PROPORTION 5-STEP WIZARD
      ═══════════════════════════════════════════ */
   return (
@@ -911,10 +719,10 @@ export default function AddPG() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <button
-            onClick={() => setCurrentStep(0)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-[#0D3A1D] dark:text-gray-400 dark:hover:text-white transition mb-1"
+            onClick={() => navigate("/owner/my-pgs")}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-[#0D3A1D] dark:text-gray-400 dark:hover:text-white transition mb-1 cursor-pointer"
           >
-            <ArrowLeft size={14} /> Back to Overview
+            <ArrowLeft size={14} /> Back to My Properties
           </button>
           <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
             Add New Property
@@ -967,7 +775,7 @@ export default function AddPG() {
       )}
 
       {/* Sleek Step Progress Moving Line */}
-      <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-3 sm:p-4 shadow-xs">
+      <div className="rounded-2xl bg-white dark:bg-[#111] p-3 sm:p-4">
         <div className="flex items-center justify-between gap-2 sm:gap-2.5">
           {[1, 2, 3, 4, 5].map((stepNum) => {
             const isCompleted = currentStep > stepNum;
@@ -997,7 +805,7 @@ export default function AddPG() {
       </div>
 
       {/* ─── SINGLE ACTIVE SECTION CONTAINER (BALANCED MEDIUM) ─── */}
-      <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-6 sm:p-8 lg:p-9 shadow-md min-h-[420px] flex flex-col justify-between">
+      <div className="rounded-3xl bg-white dark:bg-[#111] p-6 sm:p-8 lg:p-9 min-h-[420px] flex flex-col justify-between">
         <div>
           {/* STEP 1: Basic Information & PG Type */}
           {currentStep === 1 && (
@@ -1684,11 +1492,14 @@ export default function AddPG() {
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/10 flex items-center justify-between gap-3">
           <button
             type="button"
-            onClick={handlePrevious}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-[#181818] px-6 py-2.5 text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition active:scale-95"
+            onClick={() => {
+              if (currentStep === 1) navigate("/owner/my-pgs");
+              else handlePrevious();
+            }}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-[#181818] px-6 py-2.5 text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition active:scale-95 cursor-pointer"
           >
             <ArrowLeft size={16} />
-            <span>{currentStep === 1 ? "Overview" : "Previous Step"}</span>
+            <span>{currentStep === 1 ? "Cancel & Exit" : "Previous Step"}</span>
           </button>
 
           {currentStep < 5 ? (

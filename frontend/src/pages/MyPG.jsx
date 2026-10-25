@@ -4,7 +4,8 @@ import {
   IndianRupee, Wrench, Bell, ClipboardList, User,
   Sparkles, ArrowLeft, Compass, CheckCircle2, Clock, Lock, ShieldCheck,
   MapPin, Wifi, Moon, Utensils, Building2, ChevronDown, MessageSquare,
-  AlertTriangle, FileText, Users, Phone, MessageCircle, X, HardHat
+  AlertTriangle, FileText, Users, Phone, MessageCircle, X, HardHat,
+  ChevronRight, Calendar, ExternalLink
 } from 'lucide-react';
 import api, { IMAGE_BASE_URL } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
@@ -56,14 +57,32 @@ const formatUserAvatar = (user) => {
   return `${IMAGE_BASE_URL}/uploads/${raw}`;
 };
 
-
-
 const DEFAULT_PG_IMAGES = [
   "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1400&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?q=80&w=1400&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1400&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1484154218962-a197022b5858?q=80&w=1400&auto=format&fit=crop"
 ];
+
+const formatPgImage = (item, fallbackIdx = 0) => {
+  if (!item) return DEFAULT_PG_IMAGES[fallbackIdx % DEFAULT_PG_IMAGES.length];
+  const raw = item.profile_image || item.pg_image || item.image || (Array.isArray(item.images) && item.images[0]);
+  if (!raw) return DEFAULT_PG_IMAGES[((Number(item.pg_id || item.id || 0)) + fallbackIdx) % DEFAULT_PG_IMAGES.length];
+  if (raw.startsWith('http') || raw.startsWith('data:')) return raw;
+  if (raw.startsWith('/uploads/')) return `${IMAGE_BASE_URL}${raw}`;
+  if (raw.startsWith('/api/uploads/')) return `${IMAGE_BASE_URL}${raw.replace('/api', '')}`;
+  return `${IMAGE_BASE_URL}/uploads/${raw}`;
+};
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return '';
+  }
+};
 
 // Lazy sub-views
 const PayRent = lazy(() => import('./mypg/PayRent'));
@@ -97,6 +116,8 @@ export default function MyPG() {
   const [activeAction, setActiveAction] = useState(actionParam || null);
   const [hasEnrolledPG, setHasEnrolledPG] = useState(false);
   const [pgInfo, setPgInfo] = useState(null);
+  const [pgCardsList, setPgCardsList] = useState([]);
+  const [selectedPg, setSelectedPg] = useState(null);
   const [approvedBookings, setApprovedBookings] = useState([]);
   const [pendingBookings, setPendingBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -154,6 +175,7 @@ export default function MyPG() {
     } catch {}
 
     const updateCounts = async () => {
+      if (!user) return;
       const userKey = user?.id ? `u_${user.id}` : user?.email ? `e_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}` : null;
 
       try {
@@ -194,69 +216,159 @@ export default function MyPG() {
     };
   }, [user]);
 
+  const handleSelectPg = useCallback((card) => {
+    setSelectedPg(card);
+    setPgInfo(card);
+    setActiveBookingId(card.booking_id || card.id || null);
+
+    if (card.cardType === 'enrolled') {
+      setHasEnrolledPG(true);
+      setApprovedBookings([]);
+      setPendingBookings([]);
+    } else if (card.cardType === 'approved') {
+      setHasEnrolledPG(false);
+      setApprovedBookings([card]);
+      setPendingBookings([]);
+    } else {
+      setHasEnrolledPG(false);
+      setApprovedBookings([]);
+      setPendingBookings([card]);
+    }
+
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (card.pg_id || card.id) next.set('pgId', card.pg_id || card.id);
+      return next;
+    });
+
+    try {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } catch {}
+  }, [setSearchParams]);
+
+  const handleBackToCards = useCallback(() => {
+    setSelectedPg(null);
+    setPgInfo(null);
+    setHasEnrolledPG(false);
+    setApprovedBookings([]);
+    setPendingBookings([]);
+    setActiveAction(null);
+    setSearchParams({});
+
+    try {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } catch {}
+  }, [setSearchParams]);
+
   useEffect(() => {
     const fetchStay = async () => {
+      if (!user) {
+        setPgCardsList([]);
+        setLoading(false);
+        return;
+      }
       try {
-        // 1. Primary: Use the dedicated my-pgs endpoint (returns active paid booking)
-        const myPgRes = await api.get('/bookings/my-pgs').catch(() => null);
-        if (myPgRes?.data?.success && myPgRes.data?.booking && myPgRes.data.booking.payment_status === 'paid') {
-          setPgInfo(myPgRes.data.booking);
-          setActiveBookingId(myPgRes.data.booking.booking_id || myPgRes.data.booking.id || null);
-          setHasEnrolledPG(true);
-          setApprovedBookings([]);
-          setPendingBookings([]);
-          setLoading(false);
-          return;
-        }
+        setLoading(true);
+        const [myPgRes, bookRes] = await Promise.all([
+          api.get('/bookings/my-pgs').catch(() => null),
+          api.get('/bookings/my-bookings').catch(() => null),
+        ]);
 
-        // 2. Fallback: Check full bookings list for paid, approved-unpaid, and pending states
-        const bookRes = await api.get('/bookings/my-bookings').catch(() => null);
-        const list = Array.isArray(bookRes?.data?.bookings || bookRes?.data) ? (bookRes?.data?.bookings || bookRes?.data) : [];
+        const paidBookings = Array.isArray(myPgRes?.data?.bookings)
+          ? myPgRes.data.bookings
+          : myPgRes?.data?.booking
+          ? [myPgRes.data.booking]
+          : [];
 
-        // Check if student has any confirmed & paid booking
-        const paidStay = list.find(b => 
-          (b.payment_status === 'paid' || b.status === 'paid') && b.status !== 'cancelled'
-        );
+        const allBookings = Array.isArray(bookRes?.data?.bookings || bookRes?.data)
+          ? (bookRes?.data?.bookings || bookRes?.data)
+          : [];
 
-        if (paidStay) {
-          setPgInfo(paidStay);
-          setActiveBookingId(paidStay.id || paidStay.booking_id || null);
-          setHasEnrolledPG(true);
-          setApprovedBookings([]);
-          setPendingBookings([]);
-        } else {
-          // Check for approved bookings that are awaiting payment
-          const approved = groupLatestBookings(list, b => b.status === 'approved' && b.payment_status !== 'paid');
-          if (approved.length > 0) {
-            setApprovedBookings(approved);
-            setPendingBookings([]);
-            setHasEnrolledPG(false);
-            setPgInfo(null);
-          } else {
-            // Check for pending bookings
-            const pending = groupLatestBookings(list, b => b.status === 'pending');
-            if (pending.length > 0) {
-              setPendingBookings(pending);
-              setApprovedBookings([]);
-              setHasEnrolledPG(false);
-              setPgInfo(null);
-            } else {
-              setHasEnrolledPG(false);
-              setPgInfo(null);
-              setApprovedBookings([]);
-              setPendingBookings([]);
+        const cardsMap = new Map();
+
+        // 1. Paid & Active bookings
+        paidBookings.forEach((b, idx) => {
+          if (b && (b.payment_status === 'paid' || b.status === 'paid') && b.status !== 'cancelled') {
+            const key = String(b.pg_id || b.id || b.title || idx);
+            cardsMap.set(key, {
+              ...b,
+              cardType: 'enrolled',
+              statusBadge: 'Active Resident',
+              statusBadgeColor: 'emerald',
+            });
+          }
+        });
+
+        allBookings.forEach((b, idx) => {
+          if ((b.payment_status === 'paid' || b.status === 'paid') && b.status !== 'cancelled') {
+            const key = String(b.pg_id || b.id || b.title || idx);
+            if (!cardsMap.has(key)) {
+              cardsMap.set(key, {
+                ...b,
+                cardType: 'enrolled',
+                statusBadge: 'Active Resident',
+                statusBadgeColor: 'emerald',
+              });
             }
           }
+        });
+
+        // 2. Approved bookings (awaiting payment)
+        const approved = groupLatestBookings(allBookings, b => b.status === 'approved' && b.payment_status !== 'paid');
+        approved.forEach((b, idx) => {
+          const key = String(b.pg_id || b.id || b.title || idx);
+          if (!cardsMap.has(key)) {
+            cardsMap.set(key, {
+              ...b,
+              cardType: 'approved',
+              statusBadge: 'Approved - Pay Rent',
+              statusBadgeColor: 'blue',
+            });
+          }
+        });
+
+        // 3. Pending bookings
+        const pending = groupLatestBookings(allBookings, b => b.status === 'pending');
+        pending.forEach((b, idx) => {
+          const key = String(b.pg_id || b.id || b.title || idx);
+          if (!cardsMap.has(key)) {
+            cardsMap.set(key, {
+              ...b,
+              cardType: 'pending',
+              statusBadge: 'Application Under Review',
+              statusBadgeColor: 'amber',
+            });
+          }
+        });
+
+        const cards = Array.from(cardsMap.values());
+        setPgCardsList(cards);
+
+        // Check if pgId param is in URL
+        const pgIdParam = searchParams.get('pgId');
+        if (pgIdParam) {
+          const matched = cards.find(c => String(c.pg_id || c.id) === String(pgIdParam));
+          if (matched) {
+            handleSelectPg(matched);
+            return;
+          }
+        }
+
+        // If an action (e.g. chat, rent) is passed without pgId, auto-select first enrolled PG
+        const actionParamVal = searchParams.get('action');
+        if (actionParamVal && cards.length > 0) {
+          const firstEnrolled = cards.find(c => c.cardType === 'enrolled') || cards[0];
+          handleSelectPg(firstEnrolled);
         }
       } catch (err) {
         console.error("Fetch stay error:", err);
-        setHasEnrolledPG(false);
       } finally {
         setLoading(false);
       }
     };
+
     fetchStay();
-  }, [user]);
+  }, [user, handleSelectPg]);
 
 
   useEffect(() => {
@@ -349,20 +461,27 @@ export default function MyPG() {
 
   const handleBack = useCallback(() => {
     setActiveAction(null);
-    setSearchParams({});
-  }, [setSearchParams]);
+    setSearchParams(prev => {
+      const next = new URLSearchParams();
+      if (selectedPg && (selectedPg.pg_id || selectedPg.id)) {
+        next.set('pgId', selectedPg.pg_id || selectedPg.id);
+      }
+      return next;
+    });
+  }, [selectedPg, setSearchParams]);
 
   const handlePaymentKycDone = useCallback(() => setPaymentKycDone(true), []);
 
   // The student's own KYC status — drives the "action required" banner.
   const loadKycStatus = useCallback(async () => {
+    if (!user) return;
     try {
       const res = await api.get('/enrollments/mine');
       setKycInfo(res?.data?.enrollment || null);
     } catch {
       setKycInfo(null);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (user) loadKycStatus();
@@ -540,13 +659,40 @@ export default function MyPG() {
         </div>
       )}
 
+      {/* ── TOP SWITCHER / BACK BAR (When viewing a specific PG) ── */}
+      {selectedPg && (
+        <div className="bg-white/95 dark:bg-[#0c101a]/95 backdrop-blur-md border-b border-gray-200 dark:border-white/10 px-3.5 sm:px-8 py-2 sm:py-2.5 sticky top-12 sm:top-20 z-30 flex items-center justify-between">
+          <button
+            onClick={handleBackToCards}
+            className="inline-flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-black text-gray-700 dark:text-gray-200 hover:text-[#93B733] dark:hover:text-[#93B733] transition cursor-pointer"
+          >
+            <ArrowLeft size={15} />
+            <span>All My PGs ({pgCardsList.length})</span>
+          </button>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400 hidden sm:inline">Accommodation:</span>
+            <span className="text-xs sm:text-sm font-black text-gray-900 dark:text-white truncate max-w-[130px] sm:max-w-[200px]">
+              {selectedPg.title || selectedPg.pg_name || "PG Accommodation"}
+            </span>
+            {pgCardsList.length > 1 && (
+              <button
+                onClick={handleBackToCards}
+                className="text-[11px] sm:text-xs font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-gray-100 dark:bg-white/10 hover:bg-[#93B733]/20 text-[#0D3A1D] dark:text-[#93B733] transition cursor-pointer ml-1"
+              >
+                Switch PG
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── TOP FULL-WIDTH RECTANGULAR HERO BANNER (Edge-to-Edge, Sleek Height) ── */}
-      {hasEnrolledPG && pgInfo && (
-        <div className="relative w-full h-48 sm:h-56 md:h-64 bg-black overflow-hidden group">
+      {selectedPg && (
+        <div className="relative w-full min-h-[175px] sm:h-56 md:h-64 bg-black overflow-hidden group flex flex-col justify-end">
           {/* Background Property Image */}
           <img
-            src={pgHeroImage}
-            alt={pgInfo.title || pgInfo.pg_name || "PG Accommodation"}
+            src={formatPgImage(selectedPg)}
+            alt={selectedPg.title || selectedPg.pg_name || "PG Accommodation"}
             onError={(e) => {
               e.target.onerror = null;
               e.target.src = DEFAULT_PG_IMAGES[0];
@@ -555,36 +701,52 @@ export default function MyPG() {
           />
 
           {/* Dark Gradient Overlays */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-black/20 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-black/30 pointer-events-none" />
           <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/40 to-transparent pointer-events-none" />
 
           {/* Foreground Content aligned to max-w-6xl */}
-          <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-8 md:left-12 right-4 sm:right-8 md:right-12 z-20 max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div className="space-y-1.5 max-w-3xl">
-              <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                <span className="px-2.5 py-1 rounded-md bg-[#93B733] text-black text-[11px] font-black uppercase tracking-wider shadow-md">
-                  Verified Resident
-                </span>
-                <span className="text-xs font-semibold text-emerald-200/95 backdrop-blur-md px-2.5 py-0.5 rounded-md bg-black/60 border border-white/20 shadow-sm">
-                  Welcome home, {user?.name || user?.full_name || 'Resident'}
+          <div className="relative z-20 w-full max-w-6xl mx-auto px-3.5 sm:px-8 md:px-12 pt-2.5 pb-3 sm:pb-5 flex flex-col sm:flex-row sm:items-end justify-between gap-2.5 sm:gap-4">
+            <div className="space-y-1 sm:space-y-1.5 max-w-3xl">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mb-0.5">
+                {selectedPg.cardType === 'enrolled' ? (
+                  <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-[#93B733] text-black text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-md">
+                    Verified Resident
+                  </span>
+                ) : selectedPg.cardType === 'approved' ? (
+                  <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-blue-500 text-white text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-md">
+                    Approved by Owner
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-amber-500 text-white text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-md">
+                    Application Under Review
+                  </span>
+                )}
+                <span className="text-[10px] sm:text-xs font-semibold text-emerald-200/95 backdrop-blur-md px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-md bg-black/60 border border-white/20 shadow-sm truncate max-w-[220px] sm:max-w-none">
+                  {selectedPg.cardType === 'enrolled'
+                    ? `Welcome home, ${user?.name || user?.full_name || 'Resident'}`
+                    : `Application for ${selectedPg.title || selectedPg.pg_name || 'Accommodation'}`}
                 </span>
               </div>
 
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white capitalize drop-shadow-lg leading-tight">
-                {pgInfo.title || pgInfo.pg_name || "Dormn Living Accommodation"}
+              <h1 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tight text-white capitalize drop-shadow-lg leading-tight">
+                {selectedPg.title || selectedPg.pg_name || "Dormn Living Accommodation"}
               </h1>
 
-              <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-200 font-medium">
-                <MapPin size={14} className="text-[#93B733] shrink-0" />
-                <span className="truncate max-w-xl">{pgInfo.address || pgInfo.location || "Sector 62, Noida, Uttar Pradesh"}</span>
+              <div className="flex items-center gap-1 text-[11px] sm:text-sm text-gray-200 font-medium">
+                <MapPin size={13} className="text-[#93B733] shrink-0" />
+                <span className="truncate max-w-xl">{selectedPg.address || selectedPg.location || "Sector 62, Noida, Uttar Pradesh"}</span>
               </div>
             </div>
 
             {/* Right Badges / Chips */}
-            <div className="flex items-center gap-3 self-start sm:self-end flex-wrap">
-              <div className="px-4 py-2 rounded-xl bg-black/70 backdrop-blur-md border border-white/25 text-white shadow-xl text-left">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#93B733]">Room Allocated</p>
-                <p className="text-xs sm:text-sm font-black text-white">{pgInfo.room_no ? `Room ${pgInfo.room_no}` : "Room 204"} • {pgInfo.sharing_type || "Twin Sharing"}</p>
+            <div className="flex items-center gap-2 sm:gap-3 self-start sm:self-end flex-wrap">
+              <div className="px-2.5 py-1 sm:px-4 sm:py-2 rounded-xl bg-black/70 backdrop-blur-md border border-white/25 text-white shadow-xl text-left flex items-center sm:block gap-2 sm:gap-0">
+                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[#93B733]">
+                  {selectedPg.cardType === 'enrolled' ? "Room Allocated" : "Room Choice"}
+                </p>
+                <p className="text-xs sm:text-sm font-black text-white">
+                  {selectedPg.room_no ? `Room ${selectedPg.room_no} • ` : ""}{selectedPg.selected_room_type || selectedPg.sharing_type || "Twin Sharing"}
+                </p>
               </div>
             </div>
           </div>
@@ -592,7 +754,7 @@ export default function MyPG() {
       )}
 
       {/* ── MAIN CONTENT (3 Cards & Features) ── */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-8 pb-28 sm:pb-24">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 md:px-8 py-3.5 sm:py-8 pb-24 sm:pb-24">
         {hasEnrolledPG && pgInfo ? (
           <div className="space-y-4 animate-in fade-in duration-300">
             {/* 3-Card Balanced Single View Grid */}
@@ -914,10 +1076,11 @@ export default function MyPG() {
               </div>
             </div>
           </div>
-        ) : (
-          /* Non-enrolled / Booking Under Review Card (Zero Scroll, compact) */
-          <div className="max-w-2xl mx-auto w-full space-y-4 text-center animate-in fade-in duration-300">
-            {approvedBookings.length > 0 ? (
+        ) : selectedPg ? (
+          /* Detailed view for selected non-enrolled PG */
+          selectedPg.cardType === 'approved' ? (
+            /* Approved Booking Details Card */
+            <div className="max-w-2xl mx-auto w-full space-y-4 text-center animate-in fade-in duration-300">
               <div className="border-2 border-dashed border-emerald-400 dark:border-emerald-500/40 rounded-3xl p-6 sm:p-8 bg-emerald-50/40 dark:bg-emerald-500/[0.04] backdrop-blur-md space-y-4">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-xs">
                   <CheckCircle2 size={24} />
@@ -925,20 +1088,34 @@ export default function MyPG() {
                 <div>
                   <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Booking Approved by Owner!</h2>
                   <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1 max-w-md mx-auto">
-                    Your request for <strong className="text-[#0D3A1D] dark:text-[#93B733]">{approvedBookings[0].title || approvedBookings[0].pg_name || "Accommodation"}</strong> has been accepted.
+                    Your request for <strong className="text-[#0D3A1D] dark:text-[#93B733]">{selectedPg.title || selectedPg.pg_name || "Accommodation"}</strong> has been accepted. Pay rent to confirm your room.
                   </p>
                 </div>
+                <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-black/40 border border-emerald-200/60 dark:border-emerald-500/20 text-xs text-left space-y-1.5 max-w-md mx-auto">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Room Type:</span>
+                    <span className="font-bold text-gray-900 dark:text-white">{selectedPg.selected_room_type || 'Standard'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Monthly Rent:</span>
+                    <span className="font-black text-[#0D3A1D] dark:text-[#93B733]">₹{(Number(selectedPg.booked_price || selectedPg.price || 0)).toLocaleString()}/mo</span>
+                  </div>
+                </div>
                 <div className="flex flex-wrap gap-3 justify-center pt-2">
-                  <button onClick={() => handlePayNow(approvedBookings[0])} disabled={isPaying} className="inline-flex items-center gap-2 rounded-xl bg-[#93B733] hover:bg-[#82a32d] px-6 py-3 text-xs sm:text-sm font-black text-white shadow-md transition active:scale-95 cursor-pointer">
+                  <button onClick={() => handlePayNow(selectedPg)} disabled={isPaying} className="inline-flex items-center gap-2 rounded-xl bg-[#93B733] hover:bg-[#82a32d] px-6 py-3 text-xs sm:text-sm font-black text-white shadow-md transition active:scale-95 cursor-pointer">
                     <IndianRupee size={15} />
-                    {isPaying ? "Processing..." : `Pay ₹${(Number(approvedBookings[0].booked_price || approvedBookings[0].price || 0)).toLocaleString()} & Unlock Portal`}
+                    {isPaying ? "Processing..." : `Pay ₹${(Number(selectedPg.booked_price || selectedPg.price || 0)).toLocaleString()} & Unlock Portal`}
                   </button>
-                  <button onClick={() => navigate('/my-bookings')} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#111] px-5 py-3 text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 transition cursor-pointer">
-                    View Requests
+                  <button onClick={() => navigate('/pg/' + (selectedPg.pg_id || selectedPg.id))} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#111] px-5 py-3 text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 transition cursor-pointer">
+                    <ExternalLink size={14} />
+                    View PG Listing
                   </button>
                 </div>
               </div>
-            ) : pendingBookings.length > 0 ? (
+            </div>
+          ) : (
+            /* Pending Booking Details Card */
+            <div className="max-w-2xl mx-auto w-full space-y-4 text-center animate-in fade-in duration-300">
               <div className="border-2 border-dashed border-amber-300 dark:border-amber-500/30 rounded-3xl p-6 sm:p-8 bg-amber-50/40 dark:bg-amber-500/[0.03] backdrop-blur-md space-y-4">
                 <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
                   <Clock size={24} />
@@ -946,41 +1123,229 @@ export default function MyPG() {
                 <div>
                   <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Booking Request Under Verification</h2>
                   <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1 max-w-md mx-auto">
-                    Your request for <strong className="text-[#0D3A1D] dark:text-[#93B733]">{pendingBookings[0].title || pendingBookings[0].pg_name || "Accommodation"}</strong> is being reviewed by the owner.
+                    Your request for <strong className="text-[#0D3A1D] dark:text-[#93B733]">{selectedPg.title || selectedPg.pg_name || "Accommodation"}</strong> is being reviewed by the owner.
                   </p>
                 </div>
+                <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-black/40 border border-amber-200/60 dark:border-amber-500/20 text-xs text-left space-y-1.5 max-w-md mx-auto">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Room Type:</span>
+                    <span className="font-bold text-gray-900 dark:text-white">{selectedPg.selected_room_type || 'Standard'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Monthly Rent:</span>
+                    <span className="font-black text-gray-900 dark:text-white">₹{(Number(selectedPg.booked_price || selectedPg.price || 0)).toLocaleString()}/mo</span>
+                  </div>
+                  {selectedPg.visit_date && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Visit Scheduled:</span>
+                      <span className="font-bold text-amber-600">{selectedPg.visit_date} {selectedPg.visit_time || ''}</span>
+                    </div>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-3 justify-center pt-2">
-                  <button onClick={() => navigate('/my-bookings')} className="inline-flex items-center gap-2 rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] px-6 py-3 text-xs sm:text-sm font-bold text-white shadow-md transition cursor-pointer">
-                    Track My Requests
+                  <button onClick={() => navigate('/pg/' + (selectedPg.pg_id || selectedPg.id))} className="inline-flex items-center gap-2 rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] px-6 py-3 text-xs sm:text-sm font-bold text-white shadow-md transition cursor-pointer">
+                    <ExternalLink size={14} />
+                    View PG Listing
                   </button>
                   <button onClick={() => navigate('/pgs')} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#111] px-5 py-3 text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 cursor-pointer">
                     Explore Other PGs
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="p-8 sm:p-10 rounded-3xl bg-white dark:bg-[#10141e] border border-gray-200/80 dark:border-white/10 shadow-lg text-center space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-[#93B733]/15 text-[#4E700F] dark:text-[#93B733] flex items-center justify-center mx-auto shadow-xs">
-                  <Lock size={26} />
-                </div>
+            </div>
+          )
+        ) : (
+          /* Cards Grid View (when no PG is selected) */
+          pgCardsList.length > 0 ? (
+            <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Welcome to Dormn Resident Hub</h2>
-                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-md mx-auto">
-                    Enroll into your PG or track your booking to manage rent, maintenance requests, meal notices, and KYC records directly here.
+                  <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
+                    <span className="px-2 py-0.5 rounded-md bg-[#93B733]/15 text-[#4E700F] dark:text-[#93B733] text-[10px] sm:text-[11px] font-black uppercase tracking-wider">
+                      Student Portal
+                    </span>
+                    <span className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
+                      • {pgCardsList.length} {pgCardsList.length === 1 ? 'Accommodation' : 'Accommodations'}
+                    </span>
+                  </div>
+                  <h1 className="text-xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+                    My PG Accommodations
+                  </h1>
+                  <p className="text-[11px] sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                    Manage your enrolled stays and track all your applications in one place.
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-3 justify-center pt-2">
-                  <button onClick={() => navigate('/pgs')} className="inline-flex items-center gap-2 rounded-xl bg-[#93B733] hover:bg-[#82a32d] px-6 py-3 text-xs sm:text-sm font-black text-white shadow-md transition cursor-pointer">
-                    <Compass size={16} />
-                    <span>Explore Available PGs</span>
-                  </button>
-                  <button onClick={() => navigate('/my-bookings')} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#151515] px-5 py-3 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer">
-                    Track Requests
-                  </button>
-                </div>
+
+                <button
+                  onClick={() => navigate('/pgs')}
+                  className="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl bg-[#0D3A1D] dark:bg-[#93B733] hover:bg-[#16502a] dark:hover:bg-[#82a32d] px-3.5 py-2 text-xs font-bold text-white dark:text-black shadow-md transition active:scale-95 cursor-pointer self-start sm:self-auto"
+                >
+                  <Compass size={14} />
+                  <span>Explore More PGs</span>
+                </button>
               </div>
-            )}
-          </div>
+
+              {/* Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5">
+                {pgCardsList.map((card, idx) => {
+                  const cardImg = formatPgImage(card, idx);
+                  const isEnrolled = card.cardType === 'enrolled';
+                  const isApproved = card.cardType === 'approved';
+
+                  return (
+                    <div
+                      key={card.booking_id || card.id || idx}
+                      onClick={() => handleSelectPg(card)}
+                      className="group relative rounded-2xl sm:rounded-3xl bg-white dark:bg-[#10141e] border border-gray-200/80 dark:border-white/10 overflow-hidden shadow-xs sm:shadow-sm hover:shadow-xl hover:border-[#93B733]/60 transition-all duration-300 flex flex-col cursor-pointer"
+                    >
+                      {/* Card Image */}
+                      <div className="relative h-32 sm:h-44 w-full overflow-hidden bg-gray-100 dark:bg-black/40">
+                        <img
+                          src={cardImg}
+                          alt={card.title || card.pg_name || "PG Accommodation"}
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = DEFAULT_PG_IMAGES[idx % DEFAULT_PG_IMAGES.length];
+                          }}
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent pointer-events-none" />
+
+                        {/* Badges */}
+                        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5">
+                          {isEnrolled ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-600/90 text-white text-[10px] sm:text-[11px] font-black backdrop-blur-md shadow-md">
+                              <CheckCircle2 size={11} /> Active Resident
+                            </span>
+                          ) : isApproved ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-600/90 text-white text-[10px] sm:text-[11px] font-black backdrop-blur-md shadow-md">
+                              <Sparkles size={11} /> Approved
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/90 text-white text-[10px] sm:text-[11px] font-black backdrop-blur-md shadow-md">
+                              <Clock size={11} /> Under Review
+                            </span>
+                          )}
+
+                          {card.selected_room_type && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-black/60 text-white/90 text-[9px] sm:text-[10px] font-bold backdrop-blur-md border border-white/20 truncate max-w-[120px]">
+                              {card.selected_room_type}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Title over image bottom */}
+                        <div className="absolute bottom-2.5 left-2.5 right-2.5">
+                          <h3 className="text-sm sm:text-lg font-black text-white capitalize drop-shadow-md truncate">
+                            {card.title || card.pg_name || "Dormn Living Accommodation"}
+                          </h3>
+                        </div>
+                      </div>
+
+                      {/* Card Content */}
+                      <div className="p-3 sm:p-5 flex-1 flex flex-col justify-between space-y-2.5 sm:space-y-4">
+                        <div className="space-y-1.5 sm:space-y-2">
+                          <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-600 dark:text-gray-300">
+                            <MapPin size={12} className="text-[#93B733] shrink-0" />
+                            <span className="truncate">
+                              {card.city || card.area ? `${card.area ? card.area + ', ' : ''}${card.city}` : card.address || "Sector 62, Noida"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-white/5 text-[11px] sm:text-xs">
+                            <span className="text-gray-500 dark:text-gray-400">Monthly Rent</span>
+                            <span className="font-black text-[#0D3A1D] dark:text-[#93B733] text-xs sm:text-sm">
+                              ₹{(Number(card.booked_price || card.price || 0)).toLocaleString()}/mo
+                            </span>
+                          </div>
+
+                          {(card.booking_date || card.created_at) && (
+                            <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-gray-400">
+                              <Calendar size={11} />
+                              <span>Applied {formatDate(card.booking_date || card.created_at)}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action CTA */}
+                        <div className="pt-1 sm:pt-2">
+                          {isEnrolled ? (
+                            <button
+                              type="button"
+                              className="w-full py-2 sm:py-2.5 px-3 rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition active:scale-98 cursor-pointer"
+                            >
+                              <span>Open Resident Portal</span>
+                              <ChevronRight size={13} />
+                            </button>
+                          ) : isApproved ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePayNow(card);
+                              }}
+                              className="w-full py-2.5 px-3 rounded-xl bg-[#93B733] hover:bg-[#82a32d] text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md transition active:scale-98 cursor-pointer"
+                            >
+                              <IndianRupee size={13} />
+                              <span>Pay Rent & Confirm</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="w-full py-2.5 px-3 rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-800 dark:text-gray-200 font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-98 cursor-pointer"
+                            >
+                              <span>View Details</span>
+                              <ChevronRight size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Empty State */
+            <div className="p-8 sm:p-10 rounded-3xl bg-white dark:bg-[#10141e] border border-gray-200/80 dark:border-white/10 shadow-lg text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-[#93B733]/15 text-[#4E700F] dark:text-[#93B733] flex items-center justify-center mx-auto shadow-xs">
+                <Lock size={26} />
+              </div>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Welcome to Dormn Resident Hub</h2>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-md mx-auto">
+                  {user 
+                    ? "Enroll into your PG or track your booking to manage rent, maintenance requests, meal notices, and KYC records directly here."
+                    : "Sign up to Dormn to get resident access, track your bookings, manage rent, and view all accommodation details here."
+                  }
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3 justify-center pt-2">
+                {!user ? (
+                  <>
+                    <button onClick={() => navigate('/auth')} className="inline-flex items-center gap-2 rounded-xl bg-[#0D3A1D] hover:bg-[#15532a] px-6 py-3 text-xs sm:text-sm font-black text-white shadow-md transition cursor-pointer">
+                      <span>Sign Up / Log In</span>
+                    </button>
+                    <button onClick={() => navigate('/pgs')} className="inline-flex items-center gap-2 rounded-xl bg-[#93B733] hover:bg-[#82a32d] px-6 py-3 text-xs sm:text-sm font-black text-white shadow-md transition cursor-pointer">
+                      <Compass size={16} />
+                      <span>Explore Available PGs</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => navigate('/pgs')} className="inline-flex items-center gap-2 rounded-xl bg-[#93B733] hover:bg-[#82a32d] px-6 py-3 text-xs sm:text-sm font-black text-white shadow-md transition cursor-pointer">
+                      <Compass size={16} />
+                      <span>Explore Available PGs</span>
+                    </button>
+                    <button onClick={() => navigate('/my-bookings')} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#151515] px-5 py-3 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer">
+                      Track Requests
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )
         )}
       </main>
 

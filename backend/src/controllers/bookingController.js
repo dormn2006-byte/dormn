@@ -123,22 +123,6 @@ export const createBookingController = async (req, res) => {
       }
     }
 
-    // ── Guard 2: Block booking if student already has an active confirmed PG stay elsewhere ──
-    const activeStay = await Booking.findOne(activeStayFilter(student_id))
-      .sort({ _id: -1 })
-      .lean();
-
-    if (activeStay) {
-      const stayPg = await PG.findById(activeStay.pg_id).select("title").lean();
-
-      return res.status(400).json({
-        success: false,
-        message: `You already have an active PG stay at "${stayPg?.title}". Please request a cancellation from your current PG owner before booking a new one.`,
-        code: "ACTIVE_STAY_EXISTS",
-        activePgTitle: stayPg?.title,
-        activeBookingId: activeStay._id,
-      });
-    }
 
     // Create Booking
     const result = await createBooking({
@@ -380,52 +364,67 @@ export const getMyPgs = async (req, res) => {
   try {
     const student_id = req.user.id; // From the protect middleware
 
-    const booking = await Booking.findOne({
+    const bookings = await Booking.find({
       student_id: Number(student_id),
       status: { $ne: "cancelled" },
-      payment_status: "paid",
+      $or: [{ payment_status: "paid" }, { status: "approved" }],
     })
       .sort({ booking_date: -1 })
       .lean();
 
-    if (!booking) {
-      return res.status(200).json({ success: true, booking: null });
+    if (!bookings || bookings.length === 0) {
+      return res.status(200).json({ success: true, booking: null, bookings: [] });
     }
 
-    const [pg, payment] = await Promise.all([
-      PG.findById(booking.pg_id).lean(),
-      Payment.findOne({ booking_id: booking._id, status: "successful" })
+    const pgIds = bookings.map(b => b.pg_id);
+    const bookingIds = bookings.map(b => b._id);
+
+    const [pgList, payments] = await Promise.all([
+      PG.find({ _id: { $in: pgIds } }).lean(),
+      Payment.find({ booking_id: { $in: bookingIds }, status: "successful" })
         .sort({ _id: -1 })
         .lean(),
     ]);
 
-    const row = {
-      booking_id: booking._id,
-      booking_status: booking.status,
-      payment_status: booking.payment_status,
-      booking_date: booking.booking_date,
-      selected_room_type: booking.selected_room_type,
-      cancellation_status: booking.cancellation_status,
-      cancellation_reason: booking.cancellation_reason,
-      cancellation_requested_at: booking.cancellation_requested_at,
-      pg_id: pg?._id,
-      title: pg?.title,
-      city: pg?.city,
-      area: pg?.area,
-      address: pg?.address,
-      profile_image: pg?.profile_image,
-      amount_paid: payment?.amount,
-      razorpay_payment_id: payment?.razorpay_payment_id,
-      payment_date: payment?.created_at,
-    };
+    const pgMap = new Map(pgList.map(p => [String(p._id), p]));
+    const payMap = new Map(payments.map(p => [String(p.booking_id), p]));
+
+    const rows = bookings.map(booking => {
+      const pg = pgMap.get(String(booking.pg_id));
+      const payment = payMap.get(String(booking._id));
+      return {
+        booking_id: booking._id,
+        id: booking._id,
+        booking_status: booking.status,
+        status: booking.status,
+        payment_status: booking.payment_status,
+        booking_date: booking.booking_date,
+        selected_room_type: booking.selected_room_type,
+        cancellation_status: booking.cancellation_status,
+        cancellation_reason: booking.cancellation_reason,
+        cancellation_requested_at: booking.cancellation_requested_at,
+        pg_id: pg?._id,
+        title: pg?.title,
+        city: pg?.city,
+        area: pg?.area,
+        address: pg?.address,
+        profile_image: pg?.profile_image,
+        images: pg?.images,
+        price: booking.booked_price || pg?.price,
+        amount_paid: payment?.amount,
+        razorpay_payment_id: payment?.razorpay_payment_id,
+        payment_date: payment?.created_at,
+      };
+    });
 
     res.status(200).json({ 
       success: true, 
-      booking: row
+      booking: rows[0],
+      bookings: rows
     });
   } catch (error) {
     console.error("Fetch My Pgs Error:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch your enrolled PG" });
+    res.status(500).json({ success: false, message: "Failed to fetch your enrolled PGs" });
   }
 };
 

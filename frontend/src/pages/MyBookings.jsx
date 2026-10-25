@@ -14,39 +14,54 @@ import { formatVisitDate } from "../utils/visitDate";
 
 const StatusBadge = memo(({ status, paymentStatus }) => {
   const isPaid = paymentStatus === "paid" || status === "paid";
-  const cls = isPaid ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-    : status === "approved" ? "bg-amber-50 text-amber-700 border-amber-200"
-    : status === "rejected" ? "bg-rose-50 text-rose-700 border-rose-200"
-    : status === "cancelled" ? "bg-gray-50 text-gray-500 border-gray-200"
-    : status === "paused" ? "bg-blue-50 text-blue-500 border-blue-200"
-    : "bg-amber-50 text-amber-700 border-amber-200";
+  const cls = isPaid
+    ? "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-500/50"
+    : status === "approved"
+    ? "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-500/50"
+    : status === "rejected"
+    ? "bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-500/50"
+    : status === "cancelled"
+    ? "bg-gray-100 text-gray-700 border-gray-300 dark:bg-white/10 dark:text-gray-300 dark:border-white/15"
+    : status === "paused"
+    ? "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/70 dark:text-blue-300 dark:border-blue-500/50"
+    : "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-500/50";
 
-  const label = isPaid ? "Confirmed & Paid"
-    : status === "approved" ? "Approved (Awaiting Payment)"
-    : status || "pending";
+  const label = isPaid
+    ? "Confirmed & Paid"
+    : status === "approved"
+    ? "Approved (Awaiting Payment)"
+    : status || "Pending";
 
-  return <span className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wider ${cls}`}>{label}</span>;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wider shadow-2xs ${cls}`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0"></span>
+      <span>{label}</span>
+    </span>
+  );
 });
 StatusBadge.displayName = "StatusBadge";
 
 const VisitStatusBadge = memo(({ status }) => {
   const isConfirmed = status === "confirmed", isCompleted = status === "completed", isCancelled = status === "cancelled";
-  const cls = isConfirmed ? "bg-blue-50 text-blue-700 border-blue-200"
-    : isCompleted ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-    : isCancelled ? "bg-rose-50 text-rose-700 border-rose-200"
-    : "bg-amber-50 text-amber-700 border-amber-200";
+  const cls = isConfirmed
+    ? "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/70 dark:text-blue-300 dark:border-blue-500/50"
+    : isCompleted
+    ? "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-500/50"
+    : isCancelled
+    ? "bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-500/50"
+    : "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-500/50";
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-wider ${cls}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wider shadow-2xs ${cls}`}>
       {isConfirmed ? <CalendarCheck size={13} /> : isCompleted ? <CheckCircle size={13} /> : isCancelled ? <XCircle size={13} /> : <Clock size={13} />}
-      {isConfirmed ? "Confirmed by Owner" : isCompleted ? "Completed" : isCancelled ? "Cancelled" : "Pending Verification"}
+      <span>{isConfirmed ? "Confirmed by Owner" : isCompleted ? "Completed" : isCancelled ? "Cancelled" : "Pending Verification"}</span>
     </span>
   );
 });
 VisitStatusBadge.displayName = "VisitStatusBadge";
 
 const SectionCard = memo(({ children, className = "" }) => (
-  <div className={`rounded-2xl border border-gray-100/80 bg-white shadow-[0_2px_16px_rgba(0,0,0,0.03)] ${className}`}>{children}</div>
+  <div className={`rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#0e0e0e] shadow-[0_2px_16px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5)] ${className}`}>{children}</div>
 ));
 SectionCard.displayName = "SectionCard";
 
@@ -263,26 +278,26 @@ const MyBookings = () => {
   }, [isVisitsTab, visits, bookings]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#f8f9f3] to-[#f0f1eb] pb-28 font-sans selection:bg-[#93B733]/20">
+    <div className="min-h-screen bg-gradient-to-b from-[#f8f9f3] to-[#f0f1eb] dark:from-[#050505] dark:to-[#0a0a0a] pb-36 sm:pb-44 font-sans selection:bg-[#93B733]/20">
       <header className="sticky top-0 z-40 border-b border-gray-200/40 dark:border-gray-800/40 bg-white/70 dark:bg-black/70 backdrop-blur-2xl">
         <div className="mx-auto flex max-w-[1600px] h-14 items-center justify-between px-4 sm:px-6">
           <Link to="/" className="flex items-center gap-2">
             <img src="/logo-sm.webp" alt="Dormn" className="h-7 w-7 object-contain" />
-            <span className="text-base font-black text-[#0D3A1D] dark:text-gray-200 tracking-tight">Dormn</span>
+            <span className="text-base font-black text-[#0D3A1D] dark:text-white tracking-tight">Dormn</span>
           </Link>
           <div className="flex items-center gap-3">
             <ThemeSwitch />
             <div className="relative" ref={menuRef}>
-              <button onClick={() => setShowMenu(v => !v)} className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-900 overflow-hidden hover:border-[#93B733] transition-all">
-                <span className="text-sm font-bold text-[#0D3A1D] dark:text-gray-200">{(user?.name || "S").charAt(0).toUpperCase()}</span>
+              <button onClick={() => setShowMenu(v => !v)} className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-[#151515] overflow-hidden hover:border-[#93B733] transition-all cursor-pointer">
+                <span className="text-sm font-black text-[#0D3A1D] dark:text-white">{(user?.name || "S").charAt(0).toUpperCase()}</span>
               </button>
               {showMenu && (
-                <div className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-black shadow-lg py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <Link to="/my-pg" onClick={() => setShowMenu(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium text-[#0D3A1D] dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-                    <Building2 size={16} /> My PG
+                <div className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-100 dark:border-white/10 bg-white dark:bg-[#111625] shadow-lg py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <Link to="/my-pg" onClick={() => setShowMenu(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-bold text-[#0D3A1D] dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                    <Building2 size={16} className="text-[#93B733]" /> My PG
                   </Link>
-                  <Link to="/pgs" onClick={() => setShowMenu(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium text-[#0D3A1D] dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-                    <Search size={16} /> Explore PGs
+                  <Link to="/pgs" onClick={() => setShowMenu(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-bold text-[#0D3A1D] dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                    <Search size={16} className="text-[#93B733]" /> Explore PGs
                   </Link>
                 </div>
               )}
@@ -295,63 +310,71 @@ const MyBookings = () => {
         <SectionCard className="p-4 sm:p-6 md:p-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2 text-xs sm:text-sm font-bold uppercase tracking-wider text-[#93B733] mb-1.5">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-bold uppercase tracking-wider text-[#93B733] dark:text-[#bbf246] mb-1.5">
                 <Building2 size={16} /> Student Stay Portal
               </div>
-              <h1 className="text-xl sm:text-3xl font-black text-[#0D3A1D] tracking-tight">My Requests</h1>
-              <p className="text-xs sm:text-sm font-medium text-gray-500 mt-1 max-w-xl leading-relaxed">
+              <h1 className="text-xl sm:text-3xl font-black text-[#0D3A1D] dark:text-white tracking-tight">My Requests</h1>
+              <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 mt-1 max-w-xl leading-relaxed">
                 Track all your PG visit requests, booking approvals, payment statuses, and stay details in one place.
               </p>
             </div>
-            <Link to="/pgs" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#93B733] px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-[#82a32d] transition-all self-start sm:self-auto shrink-0">
+            <Link to="/pgs" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#93B733] hover:bg-[#82a32d] px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-black shadow-sm transition-all self-start sm:self-auto shrink-0 active:scale-95">
               <Search size={16} /> Explore More PGs
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-100">
-            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-2.5 sm:p-4 text-center shadow-2xs">
-              <p className="text-xl sm:text-2xl font-black text-[#0D3A1D]">{stats.total}</p>
-              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400 mt-0.5 sm:mt-1">{isVisitsTab ? "Total Visits" : "Total Requests"}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-100 dark:border-white/10">
+            <div className="rounded-xl border border-gray-200/80 dark:border-white/10 bg-gray-50/80 dark:bg-white/[0.04] p-3 sm:p-4 text-center shadow-xs">
+              <p className="text-xl sm:text-2xl font-black text-[#0D3A1D] dark:text-white">{stats.total}</p>
+              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-0.5 sm:mt-1">{isVisitsTab ? "Total Visits" : "Total Requests"}</p>
             </div>
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-2.5 sm:p-4 text-center shadow-2xs">
-              <p className="text-xl sm:text-2xl font-black text-emerald-700">{stats.approved}</p>
-              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-emerald-600 mt-0.5 sm:mt-1">{isVisitsTab ? "Confirmed" : "Approved"}</p>
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-950/30 p-3 sm:p-4 text-center shadow-xs">
+              <p className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400">{stats.approved}</p>
+              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 mt-0.5 sm:mt-1">{isVisitsTab ? "Confirmed" : "Approved"}</p>
             </div>
-            <div className="rounded-xl border border-amber-100 bg-amber-50/30 p-2.5 sm:p-4 text-center shadow-2xs">
-              <p className="text-xl sm:text-2xl font-black text-amber-700">{stats.pending}</p>
-              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-amber-600 mt-0.5 sm:mt-1">Pending</p>
+            <div className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-950/30 p-3 sm:p-4 text-center shadow-xs">
+              <p className="text-xl sm:text-2xl font-black text-amber-700 dark:text-amber-400">{stats.pending}</p>
+              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 mt-0.5 sm:mt-1">Pending</p>
             </div>
-            <div className="rounded-xl border border-rose-100 bg-rose-50/30 p-2.5 sm:p-4 text-center shadow-2xs">
-              <p className="text-xl sm:text-2xl font-black text-rose-700">{stats.rejected}</p>
-              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-rose-600 mt-0.5 sm:mt-1">{isVisitsTab ? "Cancelled" : "Rejected"}</p>
+            <div className="rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50/60 dark:bg-rose-950/30 p-3 sm:p-4 text-center shadow-xs">
+              <p className="text-xl sm:text-2xl font-black text-rose-700 dark:text-rose-400">{stats.rejected}</p>
+              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 mt-0.5 sm:mt-1">{isVisitsTab ? "Cancelled" : "Rejected"}</p>
             </div>
           </div>
         </SectionCard>
 
         {/* Tabs Switcher */}
-        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-gray-100/80 border border-gray-200/60 w-full sm:w-auto self-start">
+        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-gray-100/90 dark:bg-white/[0.06] border border-gray-200/80 dark:border-white/10 w-full sm:w-auto self-start shadow-xs">
           <button
             type="button"
             onClick={() => { setActiveTab("bookings"); setSearchParams({}); }}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-              activeTab === "bookings" ? "bg-white text-[#0D3A1D] shadow-xs font-black" : "text-gray-500 hover:text-gray-900"
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95 ${
+              activeTab === "bookings"
+                ? "bg-white dark:bg-[#1a2234] text-[#0D3A1D] dark:text-white shadow-xs font-black ring-1 ring-black/5 dark:ring-white/10"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
             }`}
           >
             <Home size={15} />
             <span>Room Bookings</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === "bookings" ? "bg-[#93B733]/20 text-[#3d5a08]" : "bg-gray-200 text-gray-600"}`}>{bookings.length}</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              activeTab === "bookings" ? "bg-[#93B733]/20 text-[#3d5a08] dark:text-[#bbf246]" : "bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400"
+            }`}>{bookings.length}</span>
           </button>
 
           <button
             type="button"
             onClick={() => { setActiveTab("visits"); setSearchParams({ tab: "visits" }); }}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-              activeTab === "visits" ? "bg-white text-[#0D3A1D] shadow-xs font-black" : "text-gray-500 hover:text-gray-900"
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95 ${
+              activeTab === "visits"
+                ? "bg-white dark:bg-[#1a2234] text-[#0D3A1D] dark:text-white shadow-xs font-black ring-1 ring-black/5 dark:ring-white/10"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
             }`}
           >
             <CalendarClock size={15} />
             <span>Scheduled PG Visits</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === "visits" ? "bg-[#93B733]/20 text-[#3d5a08]" : "bg-gray-200 text-gray-600"}`}>{visits.length}</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              activeTab === "visits" ? "bg-[#93B733]/20 text-[#3d5a08] dark:text-[#bbf246]" : "bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400"
+            }`}>{visits.length}</span>
           </button>
         </div>
 
@@ -424,7 +447,7 @@ const MyBookings = () => {
 
                           <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
                             {visit.pg_id && (
-                              <Link to={`/pg/${visit.pg_id}`} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-4 py-2 text-xs sm:text-sm font-bold text-gray-600 hover:border-[#93B733] hover:text-[#0D3A1D] transition-colors">
+                              <Link to={`/pg/${visit.pg_id}`} className="inline-flex items-center gap-1 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-4 py-2 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:border-[#93B733] hover:text-[#0D3A1D] dark:hover:text-[#bbf246] transition-colors active:scale-95 shadow-2xs">
                                 View PG Details <ChevronRight size={14} />
                               </Link>
                             )}
@@ -432,7 +455,7 @@ const MyBookings = () => {
                               <button
                                 onClick={() => handleCancelVisit(visit.id)}
                                 disabled={cancellingVisitId === visit.id}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs sm:text-sm font-bold text-rose-600 hover:bg-rose-100 hover:border-rose-300 transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-950/40 px-4 py-2 text-xs sm:text-sm font-bold text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50 hover:border-rose-300 transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-2xs"
                               >
                                 <XCircle size={14} />
                                 {cancellingVisitId === visit.id ? "Cancelling..." : "Cancel Visit"}
@@ -442,18 +465,35 @@ const MyBookings = () => {
                         </div>
 
                         {/* Status Callout Banner */}
-                        <div className={`mt-5 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
-                          isConfirmed ? "bg-blue-50/80 border border-blue-200/80" : isPending ? "bg-amber-50/80 border border-amber-200/80" : isCancelled ? "bg-rose-50/80 border border-rose-200/80" : "bg-gray-50 border border-gray-200"
+                        <div className={`mt-5 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                          isConfirmed ? "bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/30"
+                            : isPending ? "bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-500/30"
+                            : isCancelled ? "bg-rose-50/90 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-500/30"
+                            : "bg-gray-50 dark:bg-white/[0.04] border border-gray-200 dark:border-white/10"
                         }`}>
                           <div className="flex items-start gap-3">
-                            <div className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 mt-0.5 ${isConfirmed ? "bg-blue-600 text-white" : isPending ? "bg-amber-500 text-white" : "bg-gray-400 text-white"}`}>
+                            <div className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 mt-0.5 ${
+                              isConfirmed ? "bg-blue-600 text-white shadow-xs"
+                                : isPending ? "bg-amber-500 text-white shadow-xs"
+                                : "bg-gray-400 text-white"
+                            }`}>
                               {isConfirmed ? <CalendarCheck size={18} /> : isPending ? <Clock size={18} /> : <AlertCircle size={18} />}
                             </div>
                             <div>
-                              <p className={`text-xs font-black uppercase tracking-wider ${isConfirmed ? "text-blue-900" : isPending ? "text-amber-900" : isCancelled ? "text-rose-900" : "text-gray-700"}`}>
+                              <p className={`text-xs font-black uppercase tracking-wider ${
+                                isConfirmed ? "text-blue-900 dark:text-blue-300"
+                                  : isPending ? "text-amber-900 dark:text-amber-300"
+                                  : isCancelled ? "text-rose-900 dark:text-rose-300"
+                                  : "text-gray-700 dark:text-gray-300"
+                              }`}>
                                 {isConfirmed ? "Visit Confirmed by Owner! 🎉" : isPending ? "Pending Verification by Owner ⏳" : isCancelled ? "Visit Request Cancelled" : "Visit Status"}
                               </p>
-                              <p className={`text-xs font-medium mt-0.5 leading-relaxed ${isConfirmed ? "text-blue-800/90" : isPending ? "text-amber-800/90" : isCancelled ? "text-rose-800/90" : "text-gray-600"}`}>
+                              <p className={`text-xs font-medium mt-0.5 leading-relaxed ${
+                                isConfirmed ? "text-blue-800/90 dark:text-blue-200/90"
+                                  : isPending ? "text-amber-800/90 dark:text-amber-200/90"
+                                  : isCancelled ? "text-rose-800/90 dark:text-rose-200/90"
+                                  : "text-gray-600 dark:text-gray-400"
+                              }`}>
                                 {isConfirmed ? `The property owner has confirmed your visit for ${visitDateStr} (${visit.visit_time_slot}). They are expecting you at the PG!`
                                   : isPending ? `Your visit request for ${visitDateStr} (${visit.visit_time_slot}) is awaiting owner confirmation. You will be notified once confirmed.`
                                   : "This visit was cancelled."}
@@ -514,22 +554,22 @@ const MyBookings = () => {
             {!loading && !error && bookings.length > 0 && (
               <div className="space-y-5">
                 {bookings.map((booking) => (
-                  <SectionCard key={booking.id} className="p-0 overflow-hidden transition-all hover:shadow-md">
-                    <div className="p-4 sm:p-6 md:p-8 bg-white">
+                    <SectionCard key={booking.id} className="p-0 overflow-hidden transition-all hover:shadow-md">
+                    <div className="p-4 sm:p-6 md:p-8 bg-white dark:bg-[#0e0e0e]">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
                           <div className="flex flex-wrap items-center gap-2.5">
-                            <h3 className="text-lg sm:text-xl font-black text-[#0D3A1D] leading-tight">{booking.pg_name || booking.title || `Accommodation #${booking.pg_id}`}</h3>
+                            <h3 className="text-lg sm:text-xl font-black text-[#0D3A1D] dark:text-white leading-tight">{booking.pg_name || booking.title || `Accommodation #${booking.pg_id}`}</h3>
                             <StatusBadge status={booking.status} paymentStatus={booking.payment_status} />
                           </div>
 
-                          <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm font-semibold text-gray-500 mt-2.5">
+                          <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm font-semibold text-gray-500 dark:text-gray-400 mt-2.5">
                             {booking.owner_name && (
-                              <span className="flex items-center gap-1.5"><User size={14} className="text-gray-400 shrink-0" />Owner: <strong className="text-[#0D3A1D]">{booking.owner_name}</strong></span>
+                              <span className="flex items-center gap-1.5"><User size={14} className="text-gray-400 shrink-0" />Owner: <strong className="text-[#0D3A1D] dark:text-white">{booking.owner_name}</strong></span>
                             )}
-                            <span className="flex items-center gap-1.5"><Calendar size={14} className="text-gray-400 shrink-0" />Requested: <strong className="text-[#0D3A1D]">{new Date(booking.booking_date || booking.created_at).toLocaleDateString()}</strong></span>
+                            <span className="flex items-center gap-1.5"><Calendar size={14} className="text-gray-400 shrink-0" />Requested: <strong className="text-[#0D3A1D] dark:text-white">{new Date(booking.booking_date || booking.created_at).toLocaleDateString()}</strong></span>
                             {booking.visit_date && booking.visit_time && (
-                              <span className="flex items-center gap-1.5"><CalendarClock size={14} className="text-[#93B733] shrink-0" />Visit: <strong className="text-[#0D3A1D]">{formatVisitDate(booking.visit_date)} at {booking.visit_time}</strong></span>
+                              <span className="flex items-center gap-1.5"><CalendarClock size={14} className="text-[#93B733] shrink-0" />Visit: <strong className="text-[#0D3A1D] dark:text-[#bbf246]">{formatVisitDate(booking.visit_date)} at {booking.visit_time}</strong></span>
                             )}
                             {booking.pg_address && (
                               <span className="flex items-center gap-1.5"><MapPin size={14} className="text-gray-400 shrink-0" />{booking.pg_address}</span>
@@ -539,7 +579,7 @@ const MyBookings = () => {
 
                         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
                           {booking.pg_id && (
-                            <Link to={`/pg/${booking.pg_id}`} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-4 py-2 text-xs sm:text-sm font-bold text-gray-600 hover:border-[#93B733] hover:text-[#0D3A1D] transition-colors">
+                            <Link to={`/pg/${booking.pg_id}`} className="inline-flex items-center gap-1 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] px-4 py-2 text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-200 hover:border-[#93B733] hover:text-[#0D3A1D] dark:hover:text-[#bbf246] transition-colors active:scale-95 shadow-2xs">
                               View PG Details <ChevronRight size={14} />
                             </Link>
                           )}
@@ -547,7 +587,7 @@ const MyBookings = () => {
                             <button
                               onClick={() => handleCancelBooking(booking.id)}
                               disabled={cancellingBookingId === booking.id}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs sm:text-sm font-bold text-rose-600 hover:bg-rose-100 hover:border-rose-300 transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-950/40 px-4 py-2 text-xs sm:text-sm font-bold text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50 hover:border-rose-300 transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-2xs"
                             >
                               <XCircle size={14} />
                               {cancellingBookingId === booking.id ? "Cancelling..." : "Cancel Request"}
@@ -557,29 +597,29 @@ const MyBookings = () => {
                       </div>
 
                       {booking.message && (
-                        <div className="mt-5 rounded-xl bg-gray-50 border border-gray-100 p-4 text-xs sm:text-sm font-medium text-gray-600 leading-relaxed">
-                          <strong className="text-[#0D3A1D] block mb-1">Request Note / Message:</strong>
+                        <div className="mt-5 rounded-xl bg-gray-50/80 dark:bg-white/[0.03] border border-gray-200/80 dark:border-white/10 p-4 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-300 leading-relaxed">
+                          <strong className="text-[#0D3A1D] dark:text-[#bbf246] block mb-1 font-bold">Request Note / Message:</strong>
                           {booking.message}
                         </div>
                       )}
                     </div>
 
                     {booking.status === "paused" && (
-                      <div className="border-t border-blue-100 bg-blue-50/60 p-4 sm:p-5 flex items-start gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600 shrink-0 mt-0.5"><AlertCircle size={18} /></div>
+                      <div className="border-t border-blue-200 dark:border-blue-500/30 bg-blue-50/80 dark:bg-blue-950/40 p-4 sm:p-5 flex items-start gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 shrink-0 mt-0.5"><AlertCircle size={18} /></div>
                         <div>
-                          <p className="text-xs font-black text-blue-900 uppercase tracking-wider">Request Paused</p>
-                          <p className="text-xs text-blue-800/80 font-medium mt-0.5 leading-relaxed">This request is paused because another PG booking was approved.</p>
+                          <p className="text-xs font-black text-blue-900 dark:text-blue-300 uppercase tracking-wider">Request Paused</p>
+                          <p className="text-xs text-blue-800/80 dark:text-blue-200/80 font-medium mt-0.5 leading-relaxed">This request is paused because another PG booking was approved.</p>
                         </div>
                       </div>
                     )}
 
                     {booking.status === "pending" && (
-                      <div className="border-t border-amber-100 bg-amber-50/50 p-4 sm:p-5 flex items-start gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600 shrink-0 mt-0.5"><Clock size={18} /></div>
+                      <div className="border-t border-amber-200 dark:border-amber-500/30 bg-amber-50/80 dark:bg-amber-950/40 p-4 sm:p-5 flex items-start gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5"><Clock size={18} /></div>
                         <div>
-                          <p className="text-xs font-black text-amber-900 uppercase tracking-wider">Awaiting Owner Approval ⏳</p>
-                          <p className="text-xs text-amber-800/80 font-medium mt-0.5 leading-relaxed">
+                          <p className="text-xs font-black text-amber-900 dark:text-amber-300 uppercase tracking-wider">Awaiting Owner Approval ⏳</p>
+                          <p className="text-xs text-amber-800/90 dark:text-amber-200/90 font-medium mt-0.5 leading-relaxed">
                             Your booking request is being reviewed by the PG owner. Once the owner approves your application, the payment button will unlock here so you can confirm your stay and activate your resident portal.
                           </p>
                         </div>
@@ -587,30 +627,30 @@ const MyBookings = () => {
                     )}
 
                     {(booking.payment_status === "paid" || booking.status === "paid") && (
-                      <div className="border-t border-emerald-100 bg-emerald-50/50 p-5">
+                      <div className="border-t border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-950/40 p-5">
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 shrink-0"><CheckCircle size={18} /></div>
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 shrink-0"><CheckCircle size={18} /></div>
                             <div>
-                              <p className="text-xs font-black text-emerald-800 uppercase tracking-wider">Stay Confirmed & Paid! 🎉</p>
-                              <p className="text-xs text-emerald-700/80 font-medium mt-0.5">Your room is reserved and your full resident portal is activated.</p>
+                              <p className="text-xs font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">Stay Confirmed & Paid! 🎉</p>
+                              <p className="text-xs text-emerald-800/90 dark:text-emerald-200/90 font-medium mt-0.5">Your room is reserved and your full resident portal is activated.</p>
                             </div>
                           </div>
-                          <Link to="/my-pg" className="inline-flex items-center gap-2 rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all active:scale-[0.98]">
-                            Open Resident Portal <ChevronRight size={14} />
+                          <Link to="/my-pg" className="inline-flex items-center gap-2 rounded-xl bg-[#0D3A1D] hover:bg-[#16502a] dark:bg-[#93B733] dark:hover:bg-[#82a32d] dark:text-black px-5 py-2.5 text-xs font-black text-white shadow-sm transition-all active:scale-[0.98]">
+                            <span>Open Resident Portal</span> <ChevronRight size={14} />
                           </Link>
                         </div>
                       </div>
                     )}
 
                     {booking.status === "approved" && booking.payment_status !== "paid" && (
-                      <div className="border-t border-emerald-200 bg-emerald-50/70 p-5">
+                      <div className="border-t border-emerald-300 dark:border-emerald-500/40 bg-emerald-50/90 dark:bg-emerald-950/50 p-5">
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shrink-0 shadow-sm"><CheckCircle size={18} /></div>
                             <div>
-                              <p className="text-xs font-black text-emerald-800 uppercase tracking-wider">Booking Approved by Owner! 🎉</p>
-                              <p className="text-xs text-emerald-700 font-medium mt-0.5 leading-relaxed">
+                              <p className="text-xs font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">Booking Approved by Owner! 🎉</p>
+                              <p className="text-xs text-emerald-800 dark:text-emerald-200 font-medium mt-0.5 leading-relaxed">
                                 The owner accepted your request for {booking.selected_room_type || "accommodation"}. Pay now to confirm your stay and unlock your resident portal.
                               </p>
                             </div>
@@ -618,7 +658,7 @@ const MyBookings = () => {
                           <button
                             onClick={() => handlePayNow(booking)}
                             disabled={payingBookingId === booking.id}
-                            className="inline-flex items-center gap-2 rounded-xl bg-[#93B733] hover:bg-[#82a32d] px-6 py-2.5 text-xs sm:text-sm font-black text-white shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 shrink-0"
+                            className="inline-flex items-center gap-2 rounded-xl bg-[#93B733] hover:bg-[#82a32d] px-6 py-2.5 text-xs sm:text-sm font-black text-black shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 shrink-0"
                           >
                             <IndianRupee size={15} />
                             {payingBookingId === booking.id ? "Processing Payment..." : `Pay ₹${(Number(booking.booked_price || booking.price || 0)).toLocaleString()} Now`}

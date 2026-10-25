@@ -1,6 +1,6 @@
 import { useState, useRef, memo } from "react";
 import { Link } from "react-router-dom";
-import { IMAGE_BASE_URL } from "../../services/api";
+import api, { IMAGE_BASE_URL } from "../../services/api";
 import { getPgFoodPreference } from "../../utils/amenities";
 
 const PGCard = ({ pg }) => {

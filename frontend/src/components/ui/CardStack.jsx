@@ -130,10 +130,19 @@ export function CardStack({
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      {/* Stage */}
+      {/* Stage: Height adapts dynamically to the number of items */}
       <div
         className="relative w-full"
-        style={{ height: Math.max(380, cardHeight + 80) }}
+        style={{
+          height:
+            len <= 1
+              ? cardHeight + 16
+              : len === 2
+              ? cardHeight + 36
+              : len === 3
+              ? cardHeight + 52
+              : Math.min(360, cardHeight + 72),
+        }}
         tabIndex={0}
         onKeyDown={onKeyDown}
       >
@@ -252,9 +261,9 @@ export function CardStack({
         </div>
       </div>
 
-      {/* Dots navigation centered at bottom */}
-      {showDots ? (
-        <div className="mt-6 flex items-center justify-center gap-3">
+      {/* Dots navigation centered at bottom: only visible if more than 1 item */}
+      {showDots && len > 1 ? (
+        <div className="mt-4 sm:mt-6 flex items-center justify-center gap-3">
           <div className="flex items-center gap-2">
             {items.map((it, idx) => {
               const on = idx === active;
@@ -295,12 +304,11 @@ function DefaultFanCard({ item, active }) {
   // Ensure we have a valid rating (fallback to 5 if undefined)
   const rating = item.rating || 5;
 
-
   return (
-    <div className="relative flex h-full w-full flex-col justify-between rounded-3xl bg-white p-6 sm:p-8">
+    <div className="relative flex h-full w-full flex-col justify-between rounded-3xl bg-white p-5 sm:p-6 md:p-7">
       
       {/* Top Row: Dynamic Stars & Badges */}
-      <div className="flex items-center justify-between mb-4 z-10">
+      <div className="flex items-center justify-between mb-2 sm:mb-3 z-10">
         
         {/* Dynamic Stars */}
         <div className="flex gap-1">
@@ -308,7 +316,7 @@ function DefaultFanCard({ item, active }) {
             <Star
               key={star}
               className={cn(
-                "h-4 w-4 sm:h-5 sm:w-5 transition-colors",
+                "h-3.5 w-3.5 sm:h-4 sm:w-4 transition-colors",
                 star <= rating
                   ? "fill-[#93B733] text-[#93B733]" // Colored star
                   : "fill-gray-100 text-gray-200"   // Empty star
@@ -319,65 +327,65 @@ function DefaultFanCard({ item, active }) {
 
         {/* Dynamic Badges based on Score */}
         {rating === 5 && (
-          <span className="px-3 py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider text-green-700 bg-green-100 border border-green-200 rounded-full shadow-sm">
+          <span className="px-2.5 py-0.5 text-[9px] sm:text-xs font-black uppercase tracking-wider text-green-700 bg-green-100 border border-green-200 rounded-full shadow-xs">
             Exceptional 🌟
           </span>
         )}
         {rating === 4 && (
-          <span className="px-3 py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider text-blue-700 bg-blue-100 border border-blue-200 rounded-full shadow-sm">
+          <span className="px-2.5 py-0.5 text-[9px] sm:text-xs font-black uppercase tracking-wider text-blue-700 bg-blue-100 border border-blue-200 rounded-full shadow-xs">
             Great Stay ✨
           </span>
         )}
         {rating === 3 && (
-          <span className="px-3 py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider text-yellow-700 bg-yellow-100 border border-yellow-200 rounded-full shadow-sm">
+          <span className="px-2.5 py-0.5 text-[9px] sm:text-xs font-black uppercase tracking-wider text-yellow-700 bg-yellow-100 border border-yellow-200 rounded-full shadow-xs">
             Average 😐
           </span>
         )}
         {rating <= 2 && (
-          <span className="px-3 py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider text-red-700 bg-red-100 border border-red-200 rounded-full shadow-sm">
+          <span className="px-2.5 py-0.5 text-[9px] sm:text-xs font-black uppercase tracking-wider text-red-700 bg-red-100 border border-red-200 rounded-full shadow-xs">
             Needs Work 🚩
           </span>
         )}
       </div>
 
       {/* Middle: Review Description */}
-      <div className="flex-grow z-10">
+      <div className="flex-grow z-10 overflow-hidden">
         {item.description ? (
-          <p className="text-sm sm:text-base font-medium text-gray-700 line-clamp-4 leading-relaxed italic">
+          <p className="text-xs sm:text-sm font-medium text-gray-700 line-clamp-3 sm:line-clamp-4 leading-relaxed italic">
             "{item.description}"
           </p>
         ) : (
-          <p className="text-sm font-medium text-gray-400 italic">
+          <p className="text-xs sm:text-sm font-medium text-gray-400 italic">
             No description provided by user.
           </p>
         )}
       </div>
 
       {/* Bottom: User Info (Verified from Database) */}
-      <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-3.5 z-10">
+      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-3 z-10">
         {item.imageSrc ? (
           <img
             src={item.imageSrc}
             alt={item.title}
-            width={44}
-            height={44}
-            className="h-11 w-11 rounded-full object-cover shadow-sm border-2 border-white"
+            width={38}
+            height={38}
+            className="h-9 w-9 sm:h-10 sm:w-10 rounded-full object-cover shadow-xs border-2 border-white"
             draggable={false}
             loading="lazy"
             decoding="async"
           />
         ) : (
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#93B733]/15 text-lg font-black text-[#0D3A1D]">
+          <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-[#93B733]/15 text-sm sm:text-base font-black text-[#0D3A1D]">
             {item.title ? item.title.charAt(0).toUpperCase() : "U"}
           </div>
         )}
         
-        <div className="flex flex-col">
-          <h3 className="text-sm font-black text-[#0D3A1D] leading-tight">
+        <div className="flex flex-col min-w-0">
+          <h3 className="text-xs sm:text-sm font-black text-[#0D3A1D] leading-tight truncate">
             {item.title || "Verified User"}
           </h3>
           {item.tag && (
-            <span className="text-xs font-semibold text-gray-500 mt-0.5">
+            <span className="text-[10px] sm:text-xs font-semibold text-gray-500 truncate mt-0.5">
               {item.tag}
             </span>
           )}
@@ -386,7 +394,7 @@ function DefaultFanCard({ item, active }) {
 
       {/* Giant Decorative Background Quote Mark */}
       {item.description && (
-        <div className="absolute bottom-12 right-6 text-8xl text-gray-50 opacity-70 font-serif leading-none select-none pointer-events-none">
+        <div className="absolute bottom-8 right-5 text-7xl sm:text-8xl text-gray-50 opacity-60 font-serif leading-none select-none pointer-events-none">
           "
         </div>
       )}

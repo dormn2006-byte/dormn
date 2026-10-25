@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import api from "../../services/api";
 import CustomSelect from "../../components/ui/CustomSelect";
+import FilterTabs from "./components/FilterTabs";
 
 const formatVisitDate = (dateStr) => {
   if (!dateStr) return "Not specified";
@@ -120,29 +121,7 @@ export default function PgVisits() {
   }, [visits, activeTab, selectedPgId, searchQuery]);
 
   return (
-    <div className="min-h-screen bg-[#FAF9F5] dark:bg-[#0A0A0A] p-3 sm:p-5 md:p-8 space-y-4 sm:space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-[#121212] p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-200/80 dark:border-white/5 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-[#93B733]/15 text-[#93B733]">
-            <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <div>
-            <h1 className="text-lg sm:text-2xl font-black tracking-tight text-gray-900 dark:text-white">PG Scheduled Visits</h1>
-            <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Track prospective tenants visiting your properties, time slots, and connect directly.</p>
-          </div>
-        </div>
-
-        <button
-          onClick={() => fetchVisits(true)}
-          disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-gray-200 transition active:scale-95 cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-          <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
-        </button>
-      </div>
-
+    <div className="space-y-6 w-full pb-12">
       {/* KPI Stats Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
         {[
@@ -152,7 +131,7 @@ export default function PgVisits() {
           { label: "Pending Action", val: stats.pending, cls: "text-amber-500" },
           { label: "Completed", val: stats.completed, cls: "text-gray-900 dark:text-white", full: true },
         ].map((s, idx) => (
-          <div key={idx} className={`bg-white dark:bg-[#121212] p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-200/80 dark:border-white/5 shadow-xs ${s.full ? "col-span-2 lg:col-span-1" : ""}`}>
+          <div key={idx} className={`bg-white dark:bg-[#121212] p-3.5 sm:p-4 rounded-xl sm:rounded-2xl ${s.full ? "col-span-2 lg:col-span-1" : ""}`}>
             <div className="text-[11px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
               {s.pulse && <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />}
               {s.label}
@@ -163,27 +142,20 @@ export default function PgVisits() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white dark:bg-[#121212] p-3 sm:p-4 rounded-2xl border border-gray-200/80 dark:border-white/5 shadow-xs flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-          {[
-            { key: "all", label: "All Visits" },
-            { key: "today", label: `Today (${stats.today})` },
-            { key: "upcoming", label: `Upcoming (${stats.upcoming})` },
-            { key: "pending", label: `Pending (${stats.pending})` },
-            { key: "completed", label: "Completed" },
-            { key: "cancelled", label: "Cancelled" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
-                activeTab === tab.key ? "bg-[#93B733] text-white shadow-xs" : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      <div className="bg-white dark:bg-[#121212] p-3 sm:p-4 rounded-2xl flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+        {/* Responsive Filter Tabs (Mobile Dropdown + Desktop Segmented Pills) */}
+        <FilterTabs
+          tabs={[
+            { id: "all", label: "All Visits" },
+            { id: "today", label: "Today", count: stats.today },
+            { id: "upcoming", label: "Upcoming", count: stats.upcoming },
+            { id: "pending", label: "Pending", count: stats.pending },
+            { id: "completed", label: "Completed" },
+            { id: "cancelled", label: "Cancelled" },
+          ]}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+        />
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           {uniquePgs.length > 1 && (
@@ -196,7 +168,7 @@ export default function PgVisits() {
             />
           )}
 
-          <div className="relative min-w-[220px]">
+          <div className="relative min-w-[200px] flex-1">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -206,17 +178,27 @@ export default function PgVisits() {
               className="w-full pl-8 pr-3 py-2 rounded-xl text-xs font-medium border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#93B733]"
             />
           </div>
+
+          <button
+            onClick={() => fetchVisits(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition shrink-0 cursor-pointer"
+            title="Refresh visits"
+          >
+            <RefreshCw size={13} className={refreshing ? "animate-spin text-[#93B733]" : "text-[#93B733]"} />
+            <span>Refresh</span>
+          </button>
         </div>
       </div>
 
       {/* Visits List */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-[#121212] rounded-3xl border border-gray-200/80 dark:border-white/5">
+        <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-[#121212] rounded-3xl">
           <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#93B733] border-t-transparent mb-3" />
           <p className="text-xs font-bold text-gray-500">Loading visit requests...</p>
         </div>
       ) : filteredVisits.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-[#121212] rounded-3xl border border-gray-200/80 dark:border-white/5">
+        <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-[#121212] rounded-3xl">
           <div className="p-4 rounded-3xl bg-gray-100 dark:bg-white/5 text-gray-400 mb-3"><CalendarDays size={36} /></div>
           <h3 className="text-base font-black text-gray-900 dark:text-white">No Visits Found</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-sm">
@@ -234,62 +216,62 @@ export default function PgVisits() {
             return (
               <div
                 key={visit.id}
-                className={`bg-white dark:bg-[#121212] rounded-2xl sm:rounded-3xl border transition-all hover:shadow-md p-4 sm:p-5 ${
-                  isToday ? "border-emerald-500/40 dark:border-emerald-500/30 bg-emerald-500/[0.01]" : "border-gray-200/80 dark:border-white/5"
+                className={`bg-white dark:bg-[#121212] rounded-2xl sm:rounded-3xl transition-all p-3.5 sm:p-5 ${
+                  isToday ? "bg-emerald-500/[0.04]" : ""
                 }`}
               >
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 flex-1">
-                    <div className="h-11 w-11 sm:h-13 sm:w-13 rounded-2xl bg-gradient-to-br from-[#93B733]/20 to-[#0D3A1D]/20 text-[#0D3A1D] dark:text-[#93B733] font-black text-sm sm:text-base flex items-center justify-center shrink-0 border border-gray-200/50 dark:border-white/10">
-                      {visit.student_name ? visit.student_name.slice(0, 2).toUpperCase() : <User size={20} />}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-2.5 sm:gap-4 flex-1">
+                    <div className="h-9 w-9 sm:h-13 sm:w-13 rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#93B733]/20 to-[#0D3A1D]/20 text-[#0D3A1D] dark:text-[#93B733] font-black text-xs sm:text-base flex items-center justify-center shrink-0 border border-gray-200/50 dark:border-white/10">
+                      {visit.student_name ? visit.student_name.slice(0, 2).toUpperCase() : <User size={16} className="sm:w-5 sm:h-5" />}
                     </div>
 
-                    <div className="flex-1 min-w-0 space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm sm:text-base font-black text-gray-900 dark:text-white truncate">{visit.student_name || "Interested Student"}</span>
+                    <div className="flex-1 min-w-0 space-y-1 sm:space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        <span className="text-xs sm:text-base font-black text-gray-900 dark:text-white truncate">{visit.student_name || "Interested Student"}</span>
                         <VisitStatusBadge status={visit.status} />
-                        {isToday && <span className="rounded-full bg-emerald-500 text-white text-[10px] font-black px-2 py-0.5 animate-pulse">TODAY</span>}
+                        {isToday && <span className="rounded-full bg-emerald-500 text-white text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.2 sm:py-0.5 animate-pulse">TODAY</span>}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                      <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-0.5 sm:gap-y-1 text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
                         {visit.student_phone && (
                           <span className="flex items-center gap-1 text-gray-700 dark:text-gray-300 font-bold">
-                            <Phone size={12} className="text-[#93B733]" />
+                            <Phone size={11} className="text-[#93B733] sm:w-3 sm:h-3" />
                             {visit.student_phone}
                           </span>
                         )}
                         {visit.student_email && (
-                          <span className="flex items-center gap-1 truncate max-w-[240px]">
-                            <Mail size={12} className="text-gray-400" />
+                          <span className="flex items-center gap-1 truncate max-w-[200px] sm:max-w-[240px]">
+                            <Mail size={11} className="text-gray-400 sm:w-3 sm:h-3" />
                             {visit.student_email}
                           </span>
                         )}
                       </div>
 
-                      <div className="pt-1 flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 font-bold">
-                        <Building2 size={13} className="text-[#93B733] shrink-0" />
+                      <div className="pt-0.5 sm:pt-1 flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-600 dark:text-gray-300 font-bold">
+                        <Building2 size={12} className="text-[#93B733] shrink-0 sm:w-3 sm:h-3" />
                         <span className="text-gray-900 dark:text-white font-extrabold truncate">{visit.pg_title}</span>
                         {(visit.pg_area || visit.pg_city) && (
-                          <span className="text-gray-400 text-[11px] font-normal truncate">• {[visit.pg_area, visit.pg_city].filter(Boolean).join(", ")}</span>
+                          <span className="text-gray-400 text-[10px] sm:text-[11px] font-normal truncate">• {[visit.pg_area, visit.pg_city].filter(Boolean).join(", ")}</span>
                         )}
                       </div>
 
                       {visit.notes && (
-                        <div className="mt-2 rounded-xl bg-gray-50 dark:bg-white/[0.03] p-2 sm:p-2.5 text-xs text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-white/5">
+                        <div className="mt-1.5 sm:mt-2 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-white/[0.03] p-1.5 sm:p-2.5 text-[11px] sm:text-xs text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-white/5">
                           <span className="font-bold text-gray-700 dark:text-gray-200">Note: </span>"{visit.notes}"
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-1.5 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-white/5 pt-3 lg:pt-0 lg:pl-6 shrink-0">
-                    <div className="text-right">
-                      <div className="flex items-center gap-1 text-xs font-black text-gray-900 dark:text-white">
-                        <CalendarDays size={14} className="text-[#93B733]" />
+                  <div className="flex lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-1.5 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-white/5 pt-2 sm:pt-3 lg:pt-0 lg:pl-6 shrink-0">
+                    <div className="text-left lg:text-right">
+                      <div className="flex items-center gap-1 text-[11px] sm:text-xs font-black text-gray-900 dark:text-white">
+                        <CalendarDays size={12} className="text-[#93B733] sm:w-3.5 sm:h-3.5" />
                         <span>{formatVisitDate(visit.visit_date)}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5 justify-end">
-                        <Clock size={12} className="text-gray-400" />
+                      <div className="flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5 justify-start lg:justify-end">
+                        <Clock size={11} className="text-gray-400 sm:w-3 sm:h-3" />
                         <span>{visit.visit_time_slot || "10:00 AM - 01:00 PM"}</span>
                       </div>
                     </div>

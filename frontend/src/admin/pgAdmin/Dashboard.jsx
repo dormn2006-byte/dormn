@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from "react";
 import {
   TrendingUp, Building2, Users, IndianRupee,
   BookOpenCheck, Plus, ArrowRight, PieChart as PieChartIcon,
-  ChevronDown, Wrench, RotateCcw, AlertTriangle
+  ChevronDown, Wrench, RotateCcw, AlertTriangle,
+  CalendarDays, CalendarRange, UserMinus
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
@@ -93,7 +94,7 @@ const ALL_MONTHS = [
   "July", "August", "September", "October", "November", "December"
 ];
 
-const CARD_CLS = "bg-white dark:bg-[#111] p-3.5 sm:p-4 md:p-5 lg:p-6 rounded-xl sm:rounded-2xl lg:rounded-3xl border border-gray-200/80 dark:border-white/5 shadow-xs flex flex-col justify-between min-h-[96px] sm:h-28 md:h-36 lg:h-40 relative overflow-hidden group";
+const CARD_CLS = "bg-white dark:bg-[#111] p-3.5 sm:p-4 md:p-5 lg:p-6 rounded-xl sm:rounded-2xl lg:rounded-3xl flex flex-col justify-between min-h-[96px] sm:h-28 md:h-36 lg:h-40 relative overflow-hidden group";
 const MINI_WRAP = "w-10 sm:w-14 md:w-16 lg:w-20 h-5 sm:h-7 md:h-9 lg:h-10 opacity-70 group-hover:opacity-100 transition-opacity shrink-0";
 
 const Dashboard = () => {
@@ -109,15 +110,26 @@ const Dashboard = () => {
   const [donutMonth, setDonutMonth] = useState("October");
   const [recentBookings, setRecentBookings] = useState([]);
   const [recentRequests, setRecentRequests] = useState([]);
+  const [hubStats, setHubStats] = useState({
+    visits: 0,
+    visitsPending: 0,
+    shortStays: 0,
+    shortStaysPending: 0,
+    cancellations: 0,
+    cancellationsPending: 0,
+  });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [pgsRes, analyticsRes, bookingsRes, reqsRes] = await Promise.all([
+        const [pgsRes, analyticsRes, bookingsRes, reqsRes, visitsRes, shortStaysRes, cancelsRes] = await Promise.all([
           api.get("/pg/owner/my-pgs").catch(() => ({ data: { pgs: [] } })),
           api.get("/pg/owner/analytics").catch(() => ({ data: { success: false } })),
           api.get("/bookings/owner-bookings").catch(() => ({ data: { bookings: [] } })),
-          api.get("/maintenance/owner").catch(() => ({ data: { requests: [] } }))
+          api.get("/maintenance/owner").catch(() => ({ data: { requests: [] } })),
+          api.get("/visits/owner").catch(() => null),
+          api.get("/short-stays/owner").catch(() => null),
+          api.get("/bookings/owner-cancellations").catch(() => null),
         ]);
         const pgsList = pgsRes.data?.pgs || [];
         setPgs(pgsList);
@@ -135,6 +147,28 @@ const Dashboard = () => {
           if (!bGrouped[key] || bTime > gTime) bGrouped[key] = b;
         });
         setRecentBookings(Object.values(bGrouped));
+
+        // Hub operations stats
+        const rawVisits = visitsRes?.data?.visits || visitsRes?.data?.data || (Array.isArray(visitsRes?.data) ? visitsRes.data : []);
+        const visitsList = Array.isArray(rawVisits) ? rawVisits : [];
+        const visitsPending = visitsList.filter(v => (v.status || '').toLowerCase() === 'pending').length;
+
+        const rawShortStays = shortStaysRes?.data?.shortStays || [];
+        const shortStaysList = Array.isArray(rawShortStays) ? rawShortStays : [];
+        const shortStaysPending = shortStaysList.filter(s => (s.status || '').toLowerCase() === 'pending').length;
+
+        const rawCancels = cancelsRes?.data?.cancellations || [];
+        const cancelsList = Array.isArray(rawCancels) ? rawCancels : [];
+        const cancelsPending = cancelsRes?.data?.counts?.pending || cancelsList.filter(c => (c.status || '').toLowerCase() === 'pending').length;
+
+        setHubStats({
+          visits: visitsList.length,
+          visitsPending,
+          shortStays: shortStaysList.length,
+          shortStaysPending,
+          cancellations: cancelsList.length,
+          cancellationsPending,
+        });
 
         // Merge localStorage maintenance requests
         const myPgIds = new Set(pgsList.map(p => String(p.id)));
@@ -253,12 +287,7 @@ const Dashboard = () => {
 
   /* ── Chart Data Generators (Memoized) ── */
   const chartData = useMemo(() => {
-    let m = 0;
-    if (chartMetric === "Revenue") {
-      m = estimatedMonthlyRevenue;
-    } else {
-      m = totalStudents || bookingStats.approved;
-    }
+    const m = chartMetric === "Revenue" ? estimatedMonthlyRevenue : (totalStudents || bookingStats.approved);
 
     if (m <= 0) {
       if (chartGranularity === "Weekly") return [{ label: "Week 1", value: 0 }, { label: "Week 2", value: 0 }, { label: "Week 3", value: 0 }, { label: "Week 4", value: 0 }];
@@ -355,7 +384,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto space-y-4 sm:space-y-6 md:space-y-8 pb-10 transition-colors">
+    <div className="w-full space-y-4 sm:space-y-6 md:space-y-8 pb-10 transition-colors">
       
       {/* ══════ ACTION REQUIRED ALERTS (REVISION & DELISTED) ══════ */}
       {statusAlertPGs.length > 0 && (
@@ -421,6 +450,153 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* ══════ KEY OPERATIONS (CORE FEATURES HUB) ══════ */}
+      <div>
+        <div className="flex items-center justify-between mb-2.5 sm:mb-3">
+          <h2 className="text-sm sm:text-base md:text-lg font-black text-gray-900 dark:text-white tracking-tight">
+            Key Operations
+          </h2>
+          <span className="text-[11px] font-bold text-gray-400">Quick Access</span>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 md:gap-4">
+          {/* Scheduled Visits */}
+          <div
+            onClick={() => navigate("/owner/visits")}
+            className="group p-3 sm:p-4 rounded-2xl bg-white dark:bg-[#111] transition-all cursor-pointer flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#93B733]/15 text-[#93B733] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <CalendarDays size={18} />
+              </div>
+              {hubStats.visitsPending > 0 ? (
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                  {hubStats.visitsPending} Pending
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold text-gray-400 group-hover:text-[#93B733] transition-colors flex items-center gap-0.5">
+                  View <ArrowRight size={11} />
+                </span>
+              )}
+            </div>
+            <div className="mt-2.5 sm:mt-3">
+              <div className="flex items-baseline justify-between">
+                <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white truncate">
+                  Scheduled Visits
+                </h3>
+                <span className="text-xs sm:text-sm font-black text-gray-500 dark:text-gray-400">
+                  {hubStats.visits}
+                </span>
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-gray-400 font-medium truncate mt-0.5">
+                Prospective tenant visits
+              </p>
+            </div>
+          </div>
+
+          {/* Short Stay Bookings */}
+          <div
+            onClick={() => navigate("/owner/short-stays")}
+            className="group p-3 sm:p-4 rounded-2xl bg-white dark:bg-[#111] transition-all cursor-pointer flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <CalendarRange size={18} />
+              </div>
+              {hubStats.shortStaysPending > 0 ? (
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                  {hubStats.shortStaysPending} Pending
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold text-gray-400 group-hover:text-indigo-500 transition-colors flex items-center gap-0.5">
+                  View <ArrowRight size={11} />
+                </span>
+              )}
+            </div>
+            <div className="mt-2.5 sm:mt-3">
+              <div className="flex items-baseline justify-between">
+                <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white truncate">
+                  Short Stays
+                </h3>
+                <span className="text-xs sm:text-sm font-black text-gray-500 dark:text-gray-400">
+                  {hubStats.shortStays}
+                </span>
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-gray-400 font-medium truncate mt-0.5">
+                Daily & temporary stays
+              </p>
+            </div>
+          </div>
+
+          {/* Cancellations */}
+          <div
+            onClick={() => navigate("/owner/cancellations")}
+            className="group p-3 sm:p-4 rounded-2xl bg-white dark:bg-[#111] transition-all cursor-pointer flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <UserMinus size={18} />
+              </div>
+              {hubStats.cancellationsPending > 0 ? (
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                  {hubStats.cancellationsPending} Pending
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold text-gray-400 group-hover:text-rose-500 transition-colors flex items-center gap-0.5">
+                  View <ArrowRight size={11} />
+                </span>
+              )}
+            </div>
+            <div className="mt-2.5 sm:mt-3">
+              <div className="flex items-baseline justify-between">
+                <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white truncate">
+                  Cancellations
+                </h3>
+                <span className="text-xs sm:text-sm font-black text-gray-500 dark:text-gray-400">
+                  {hubStats.cancellations}
+                </span>
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-gray-400 font-medium truncate mt-0.5">
+                Move-out approvals
+              </p>
+            </div>
+          </div>
+
+          {/* All Bookings */}
+          <div
+            onClick={() => navigate("/owner/bookings")}
+            className="group p-3 sm:p-4 rounded-2xl bg-white dark:bg-[#111] transition-all cursor-pointer flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <BookOpenCheck size={18} />
+              </div>
+              {bookingStats.pending > 0 ? (
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                  {bookingStats.pending} Pending
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold text-gray-400 group-hover:text-blue-500 transition-colors flex items-center gap-0.5">
+                  View <ArrowRight size={11} />
+                </span>
+              )}
+            </div>
+            <div className="mt-2.5 sm:mt-3">
+              <div className="flex items-baseline justify-between">
+                <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white truncate">
+                  All Bookings
+                </h3>
+                <span className="text-xs sm:text-sm font-black text-gray-500 dark:text-gray-400">
+                  {totalBookings}
+                </span>
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-gray-400 font-medium truncate mt-0.5">
+                Resident admissions
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ══════ HIGHLIGHTS ══════ */}
       <div>
         <h2 className="text-sm sm:text-base md:text-lg font-black text-gray-900 dark:text-white tracking-tight">Highlights</h2>
@@ -451,7 +627,7 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3.5 sm:gap-6">
         
         {/* Progress Overview (Area Chart) */}
-        <div className="bg-white dark:bg-[#111] p-3.5 sm:p-5 md:p-6 lg:p-7 rounded-2xl sm:rounded-3xl border border-gray-200/80 dark:border-white/5 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#111] p-3.5 sm:p-5 md:p-6 lg:p-7 rounded-2xl sm:rounded-3xl flex flex-col justify-between">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 sm:mb-6 gap-2">
             <div>
               <h3 className="text-sm sm:text-base md:text-lg font-black text-gray-900 dark:text-white">Progress Overview</h3>
@@ -503,7 +679,7 @@ const Dashboard = () => {
         </div>
 
         {/* Booking Status Split (Donut Chart) - Distinct Standalone Section */}
-        <div className="bg-white dark:bg-[#111] p-3.5 sm:p-5 md:p-6 lg:p-7 rounded-2xl sm:rounded-3xl border border-gray-200/80 dark:border-white/5 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#111] p-3.5 sm:p-5 md:p-6 lg:p-7 rounded-2xl sm:rounded-3xl flex flex-col justify-between">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 sm:mb-5 gap-2.5">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -572,7 +748,7 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-3.5 sm:gap-6">
         
         {/* Recent Properties */}
-        <div className="bg-white dark:bg-[#111] p-3.5 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl border border-gray-200/80 dark:border-white/5 shadow-xs overflow-hidden">
+        <div className="bg-white dark:bg-[#111] p-3.5 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl overflow-hidden">
           <div className="flex items-center justify-between mb-3 sm:mb-5 gap-3">
             <h3 className="text-sm sm:text-base md:text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5">
               <Building2 size={16} className="text-gray-400" />
@@ -634,14 +810,14 @@ const Dashboard = () => {
         </div>
 
         {/* Quick Actions Panel */}
-        <div className="bg-gray-50/70 dark:bg-[#0a0a0a] p-3.5 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl border border-gray-200/80 dark:border-white/5 shadow-xs flex flex-col">
+        <div className="bg-gray-50/70 dark:bg-[#0a0a0a] p-3.5 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl flex flex-col">
           <div className="mb-3 sm:mb-4">
             <h3 className="text-sm sm:text-base md:text-lg font-black text-gray-900 dark:text-white">Quick Actions</h3>
             <p className="text-[11px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 mt-0.5">Manage your listings in seconds</p>
           </div>
           <div className="space-y-2.5 sm:space-y-3.5">
             {quickActions.map((qa, idx) => (
-              <div key={idx} className="bg-white dark:bg-[#111] rounded-xl sm:rounded-2xl border border-gray-200/80 dark:border-white/10 p-3 sm:p-3.5 shadow-xs">
+              <div key={idx} className="bg-white dark:bg-[#111] rounded-xl sm:rounded-2xl p-3 sm:p-3.5">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${qa.iconBg}`}>{qa.icon}</div>

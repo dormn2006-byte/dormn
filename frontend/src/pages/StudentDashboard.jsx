@@ -4,7 +4,7 @@ import api from "../services/api";
 import { AuthContext } from "../context/AuthContext";
 import { 
   Camera, Pencil, Check, Search, Brain, Clock, CheckCircle, BookOpen, ChevronRight,
-  Code, Gamepad2, User, Building2, Lock, Globe, FileText, HeartPulse, Users, Save, Eye, EyeOff, Sparkles, X,
+  Code, Gamepad2, User, Building2, Lock, Globe, FileText, HeartPulse, Users, Save, Eye, EyeOff, Sparkles, X, UtensilsCrossed,
   Upload, Briefcase, GitBranch, MessageCircle, CheckCircle2, AlertCircle, AlertTriangle, LogOut,
   CalendarClock, CalendarCheck, Phone, CalendarRange
 } from "lucide-react";
@@ -20,6 +20,7 @@ import { buildStudentDockApps } from "../constants/studentDockConfig";
 import EmailVerificationModal from "../components/auth/EmailVerificationModal";
 import VerifyEmailPromptPopup from "../components/auth/VerifyEmailPromptPopup";
 import { isEmailVerified, isVerificationSnoozed, snoozeVerification } from "../utils/verificationStorage";
+import { compressImageToWebP } from "../utils/imageCompressor";
 
 const Card = ({ children, className = "" }) => (
   <div className={`rounded-2xl border border-gray-100 dark:border-[#1a1a1a] bg-white dark:bg-[#0a0a0a] shadow-sm ${className}`}>
@@ -126,32 +127,37 @@ const FOODS = ["Veg", "Non-Veg", "Eggetarian", "Vegan", "Jain"];
 const YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year", "PG 1st Year", "PG 2nd Year"];
 
 const StudentDashboard = () => {
-  const { token, user, logout } = useContext(AuthContext);
+  const { token, user, updateUser, logout } = useContext(AuthContext);
   const fileRef = useRef(null);
   const menuRef = useRef(null);
   const navigate = useNavigate();
 
   const userKey = user?.id ? `u_${user.id}` : user?.email ? `e_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}` : null;
 
-  const cleanPassport = (p) => (typeof p === "string" && !/googleusercontent|lh3\.google/i.test(p) ? p : null);
+  const cleanPassport = (p) => (typeof p === "string" && p.trim() ? p : null);
 
   const [profile, setProfile] = useState(() => {
     try {
       const p1 = userKey ? JSON.parse(localStorage.getItem(`dormn_student_profile_${userKey}`) || "{}") : {};
       const p2 = userKey ? JSON.parse(localStorage.getItem(`dormn_registration_form_${userKey}`) || "{}") : {};
+      const initialPhoto = cleanPassport(p1.photo || p1.passportPhoto || p2.photo || p2.passportPhoto || user?.profile_image);
       return {
         name: user?.full_name || user?.name || "",
         email: user?.email || "",
         phone: user?.phone || "",
         ...p2,
         ...p1,
-        passportPhoto: cleanPassport(p1.passportPhoto || p2.passportPhoto)
+        photo: initialPhoto,
+        passportPhoto: initialPhoto
       };
     } catch {
+      const initialPhoto = cleanPassport(user?.profile_image);
       return {
         name: user?.full_name || user?.name || "",
         email: user?.email || "",
-        phone: user?.phone || ""
+        phone: user?.phone || "",
+        photo: initialPhoto,
+        passportPhoto: initialPhoto
       };
     }
   });
@@ -212,9 +218,11 @@ const StudentDashboard = () => {
       if (profRes.data?.profile) {
         const f = profRes.data.profile;
         setProfile(prev => {
+          const fetchedPhoto = cleanPassport(f.photo || f.passportPhoto || prev.photo || prev.passportPhoto || user?.profile_image);
           const updated = {
             ...prev, ...f,
-            passportPhoto: cleanPassport(f.passportPhoto !== undefined ? f.passportPhoto : prev.passportPhoto),
+            photo: fetchedPhoto,
+            passportPhoto: fetchedPhoto,
             name: f.name || prev.name || user?.full_name || "",
             email: f.email || prev.email || user?.email || "",
             phone: f.phone || prev.phone || user?.phone || "",
@@ -236,7 +244,9 @@ const StudentDashboard = () => {
       const map = new Map();
       const bPrio = { approved: 4, pending: 3, paused: 2, rejected: 1, cancelled: 0 };
       raw.forEach(item => {
-        const k = item.pg_id || item.id;
+        if (!item) return;
+        const k = item.pg_id || item.id || item._id;
+        if (!k) return;
         if (!map.has(k)) {
           map.set(k, item);
         } else {
@@ -266,7 +276,9 @@ const StudentDashboard = () => {
       const rawVisits = Array.isArray(visitRes.data?.visits || visitRes.data) ? (visitRes.data?.visits || visitRes.data) : [];
       const vMap = new Map();
       rawVisits.forEach((v) => {
-        const k = v.id;
+        if (!v) return;
+        const k = v.id || v._id;
+        if (!k) return;
         vMap.set(k, v);
       });
       const dedupedVisits = Array.from(vMap.values());
@@ -282,7 +294,9 @@ const StudentDashboard = () => {
       const sMap = new Map();
       const sPrio = { approved: 4, pending: 3, completed: 2, rejected: 1, cancelled: 0 };
       rawStays.forEach((s) => {
-        const k = s.pg_id || s.id;
+        if (!s) return;
+        const k = s.pg_id || s.id || s._id;
+        if (!k) return;
         if (!sMap.has(k)) {
           sMap.set(k, s);
         } else {
@@ -314,14 +328,71 @@ const StudentDashboard = () => {
     return () => window.removeEventListener("dormn_profile_updated", fetchProfile);
   }, [token, fetchProfile]);
 
-  const handleFileUpload = (e, fieldKey) => {
+  const [isCompressingImage, setIsCompressingImage] = useState(false);
+
+  const handleFileUpload = async (e, fieldKey) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const r = new FileReader();
-    r.onloadend = () => {
-      up(fieldKey, r.result);
-    };
-    r.readAsDataURL(f);
+
+    try {
+      setIsCompressingImage(true);
+      // Run uploaded image through WebP image compressor!
+      const webpDataUrl = await compressImageToWebP(f, {
+        maxWidth: fieldKey === "photo" || fieldKey === "passportPhoto" ? 1000 : 1400,
+        maxHeight: fieldKey === "photo" || fieldKey === "passportPhoto" ? 1000 : 1400,
+        quality: 0.82,
+      });
+
+      if (fieldKey === "photo" || fieldKey === "passportPhoto") {
+        setProfile((prev) => ({
+          ...prev,
+          photo: webpDataUrl,
+          passportPhoto: webpDataUrl,
+        }));
+
+        // Instantly auto-save the profile picture to database and sync AuthContext
+        try {
+          const autoSavePayload = {
+            ...profile,
+            photo: webpDataUrl,
+            passportPhoto: webpDataUrl,
+            socials,
+            name: profile.name || profile.fullName || user?.full_name || "",
+            fullName: profile.name || profile.fullName || user?.full_name || "",
+            isPublic: profile.isPublic ?? true,
+          };
+          const res = await api.post("/student/profile", autoSavePayload);
+          const savedPhoto = res.data?.photo || res.data?.passportPhoto || res.data?.profile_image || webpDataUrl;
+
+          if (updateUser) {
+            updateUser({
+              ...(savedPhoto ? { profile_image: savedPhoto } : {}),
+            });
+          }
+
+          if (userKey) {
+            try {
+              localStorage.setItem(`dormn_student_profile_${userKey}`, JSON.stringify({ ...autoSavePayload, photo: savedPhoto, passportPhoto: savedPhoto }));
+              localStorage.setItem(`dormn_registration_form_${userKey}`, JSON.stringify({ ...autoSavePayload, photo: savedPhoto, passportPhoto: savedPhoto }));
+            } catch {}
+          }
+          window.dispatchEvent(new Event("dormn_profile_updated"));
+          showToast("success", "Profile image saved successfully!", "Saved");
+        } catch (autoErr) {
+          console.error("Auto-save photo error:", autoErr);
+          setIsEditing(true);
+        }
+      } else {
+        up(fieldKey, webpDataUrl);
+        setIsEditing(true);
+      }
+    } catch (err) {
+      console.error("Image upload/compression failed:", err);
+      showToast("error", err.message || "Failed to process image. Please try another file.", "Upload Failed");
+    } finally {
+      setIsCompressingImage(false);
+      if (e.target) e.target.value = "";
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -353,8 +424,12 @@ const StudentDashboard = () => {
         return;
       }
 
+      const activePhoto = cleanPassport(profile.photo || profile.passportPhoto || user?.profile_image);
+
       const payload = {
         ...profile,
+        photo: activePhoto,
+        passportPhoto: activePhoto,
         socials,
         name: profile.name || profile.fullName || user?.full_name || "",
         fullName: profile.name || profile.fullName || user?.full_name || "",
@@ -366,16 +441,34 @@ const StudentDashboard = () => {
         guardianPhone,
         isPublic: profile.isPublic ?? true,
       };
-      await api.post("/student/profile", payload);
-      if (userKey) {
-        localStorage.setItem(`dormn_student_profile_${userKey}`, JSON.stringify(payload));
-        localStorage.setItem(`dormn_registration_form_${userKey}`, JSON.stringify(payload));
+
+      const res = await api.post("/student/profile", payload);
+      const savedPhoto = res.data?.photo || res.data?.passportPhoto || res.data?.profile_image || activePhoto;
+
+      // Update AuthContext user so navbar and entire app receive the updated profile image instantly
+      if (updateUser) {
+        updateUser({
+          full_name: payload.fullName,
+          phone: payload.phone,
+          ...(savedPhoto ? { profile_image: savedPhoto } : {}),
+        });
       }
-      localStorage.removeItem("dormn_student_profile");
-      localStorage.removeItem("dormn_registration_form");
+
+      if (userKey) {
+        try {
+          localStorage.setItem(`dormn_student_profile_${userKey}`, JSON.stringify({ ...payload, photo: savedPhoto, passportPhoto: savedPhoto }));
+          localStorage.setItem(`dormn_registration_form_${userKey}`, JSON.stringify({ ...payload, photo: savedPhoto, passportPhoto: savedPhoto }));
+        } catch {
+          /* ignore storage quota error */
+        }
+      }
+      try {
+        localStorage.removeItem("dormn_student_profile");
+        localStorage.removeItem("dormn_registration_form");
+      } catch {}
       window.dispatchEvent(new Event("dormn_profile_updated"));
       setIsEditing(false);
-      showToast("success", "Profile saved & synced with registration forms!", "Saved Successfully");
+      showToast("success", "Profile saved & synced successfully!", "Saved Successfully");
     } catch (err) {
       console.error("Save Profile Error:", err);
       const msg = err.response?.data?.message || err.message || "Failed to save profile. Please try again.";
@@ -383,29 +476,28 @@ const StudentDashboard = () => {
     } finally { setIsSaving(false); }
   };
 
-  const togglePrivacy = async () => {
-    const nextVal = !(profile.isPublic ?? true);
-    up("isPublic", nextVal);
+  const updatePreference = async (key, val) => {
+    const updated = { ...profile, [key]: val };
+    setProfile(updated);
+    if (userKey) {
+      try {
+        localStorage.setItem(`dormn_student_profile_${userKey}`, JSON.stringify(updated));
+        localStorage.setItem(`dormn_registration_form_${userKey}`, JSON.stringify(updated));
+      } catch {}
+    }
     try {
-      await api.post("/student/profile", { ...profile, isPublic: nextVal });
-      if (userKey) {
-        localStorage.setItem(`dormn_student_profile_${userKey}`, JSON.stringify({ ...profile, isPublic: nextVal }));
-        localStorage.setItem(`dormn_registration_form_${userKey}`, JSON.stringify({ ...profile, isPublic: nextVal }));
-      }
-      localStorage.removeItem("dormn_student_profile");
-      localStorage.removeItem("dormn_registration_form");
+      await api.post("/student/profile", updated);
       window.dispatchEvent(new Event("dormn_profile_updated"));
-      showToast("success", nextVal ? "Profile is now visible to PG owners." : "Profile is now private and hidden.", nextVal ? "Set to Public" : "Set to Private");
+      showToast("success", `${key === "foodPreference" ? "Food preference" : "Gender"} updated to ${val}`, "Preference Saved");
     } catch (e) {
-      console.error(e);
-      showToast("error", "Failed to update profile privacy.", "Error");
+      console.error("Failed to save preference:", e);
+      showToast("error", "Failed to update preference.", "Error");
     }
   };
 
   const name = profile.name || profile.fullName || user?.full_name || "Student";
   const initial = name.charAt(0).toUpperCase();
   const DOCK_APPS = useMemo(() => buildStudentDockApps(user?.id), [user?.id]);
-  const isPublic = profile.isPublic ?? true;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#f8f9f3] to-[#f0f1eb] dark:from-[#0a0a0a] dark:to-[#050505] pb-28">
@@ -487,8 +579,18 @@ const StudentDashboard = () => {
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
                 <div className="relative shrink-0">
                   <button onClick={() => fileRef.current?.click()} className="group relative flex h-28 w-28 sm:h-32 sm:w-32 items-center justify-center rounded-full border-4 border-white dark:border-black bg-gray-100 dark:bg-gray-900 shadow-lg overflow-hidden transition-transform hover:scale-105">
-                    {profile.photo ? <img src={profile.photo} alt="Profile" className="h-full w-full object-cover" /> : <span className="text-4xl font-black text-[#0D3A1D]/20 dark:text-gray-200/20">{initial}</span>}
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full"><Camera size={22} className="text-white" /></div>
+                    {profile.photo || profile.passportPhoto || user?.profile_image ? (
+                      <img src={profile.photo || profile.passportPhoto || user?.profile_image} alt="Profile" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-4xl font-black text-[#0D3A1D]/20 dark:text-gray-200/20">{initial}</span>
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                      {isCompressingImage ? (
+                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      ) : (
+                        <Camera size={22} className="text-white" />
+                      )}
+                    </div>
                   </button>
                   <input ref={fileRef} type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "photo")} className="hidden" />
                 </div>
@@ -539,19 +641,51 @@ const StudentDashboard = () => {
                 </div>
               </div>
 
-              {/* Privacy Banner */}
-              <div className={`mt-6 rounded-2xl border p-4 transition-all ${isPublic ? "border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/20" : "border-purple-200 dark:border-purple-800/40 bg-purple-50/50 dark:bg-purple-950/20"}`}>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-xl shrink-0 ${isPublic ? "bg-emerald-500/15 text-emerald-600" : "bg-purple-500/15 text-purple-600"}`}>{isPublic ? <Globe size={18} /> : <Lock size={18} />}</div>
+              {/* Food Preference Card */}
+              <div className="mt-6 rounded-2xl border border-gray-100/90 dark:border-gray-800 bg-gradient-to-br from-gray-50/90 to-white/60 dark:from-[#121811] dark:to-[#0a0f09] p-4 sm:p-5 shadow-xs">
+                <div className="flex items-center justify-between gap-3 mb-3.5 pb-3 border-b border-gray-100 dark:border-gray-800/60">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-[#93B733]/15 text-[#93B733]">
+                      <UtensilsCrossed size={16} />
+                    </div>
                     <div>
-                      <h4 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white">Profile Privacy: <span className={isPublic ? "text-emerald-600 dark:text-emerald-400" : "text-purple-600 dark:text-purple-400"}>{isPublic ? "Public" : "Private"}</span></h4>
-                      <p className="text-[11px] sm:text-xs text-gray-600 dark:text-gray-300 mt-0.5">{isPublic ? "When Public: Owner only sees Name, Phone, and College / Workplace info. KYC docs and home address stay protected." : "When Private: No owner or user can view your personal details."}</p>
+                      <h4 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-gray-100">
+                        Food Preference
+                      </h4>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                        Used to match PG meal plans & mess menus
+                      </p>
                     </div>
                   </div>
-                  <button type="button" onClick={togglePrivacy} className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black shadow-sm text-white ${isPublic ? "bg-emerald-600 hover:bg-emerald-500" : "bg-purple-600 hover:bg-purple-500"}`}>
-                    {isPublic ? <Eye size={13} /> : <EyeOff size={13} />} Switch to {isPublic ? "Private" : "Public"}
-                  </button>
+                  <span className="hidden xs:inline-flex text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#93B733]/10 text-[#0D3A1D] dark:text-[#93B733]">
+                    {profile.foodPreference || "Veg"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  {[
+                    { val: "Veg", label: "Pure Veg", icon: "🌱" },
+                    { val: "Non-Veg", label: "Non-Veg", icon: "🍗" },
+                    { val: "Both", label: "Both / Any", icon: "🍽️" }
+                  ].map(({ val, label, icon }) => {
+                    const active = (profile.foodPreference || "Veg") === val;
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => updatePreference("foodPreference", val)}
+                        className={`flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 rounded-xl py-2.5 px-2 sm:px-4 text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95 ${
+                          active
+                            ? "bg-[#93B733] text-white shadow-md shadow-[#93B733]/25 ring-2 ring-[#93B733]/40"
+                            : "border border-gray-200/80 dark:border-gray-700/80 text-gray-700 dark:text-gray-300 hover:border-[#93B733]/40 hover:bg-gray-100/50 dark:hover:bg-gray-800 bg-white dark:bg-gray-800/60 shadow-xs"
+                        }`}
+                      >
+                        <span className="text-sm sm:text-base leading-none">{icon}</span>
+                        <span className="truncate">{label}</span>
+                        {active && <Check size={14} className="hidden sm:inline-block stroke-[3]" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </Card>
@@ -838,7 +972,16 @@ const StudentDashboard = () => {
             <Card className="p-4 sm:p-6 md:p-8">
               <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#0D3A1D] dark:text-gray-200 mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2.5"><FileText size={15} className="text-emerald-500" /> 5. KYC Verification Documents</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <DocUpload label="Passport Photo" value={profile.passportPhoto} onUpload={e => handleFileUpload(e, "passportPhoto")} onRemove={() => up("passportPhoto", null)} isEditing={isEditing} />
+                <DocUpload
+                  label="Passport Photo"
+                  value={profile.passportPhoto || profile.photo || user?.profile_image}
+                  onUpload={e => handleFileUpload(e, "passportPhoto")}
+                  onRemove={() => {
+                    up("passportPhoto", null);
+                    up("photo", null);
+                  }}
+                  isEditing={isEditing}
+                />
                 <DocUpload label="Aadhaar (Front)" value={profile.aadharFront} onUpload={e => handleFileUpload(e, "aadharFront")} onRemove={() => up("aadharFront", null)} isEditing={isEditing} />
                 <DocUpload label="Aadhaar (Back)" value={profile.aadharBack} onUpload={e => handleFileUpload(e, "aadharBack")} onRemove={() => up("aadharBack", null)} isEditing={isEditing} />
               </div>
@@ -930,19 +1073,36 @@ const StudentDashboard = () => {
 
             {/* Sticky Save Bar */}
             {isEditing && (
-              <div className="sticky bottom-20 z-30 flex items-center justify-between gap-4 rounded-2xl bg-[#0D3A1D] text-white p-4 shadow-2xl border border-[#93B733]/40 animate-fade-in">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={18} className="text-[#93B733]" />
-                  <div>
-                    <p className="text-xs font-black">Unsaved Changes</p>
-                    <p className="text-[10px] text-gray-300">Syncs immediately with Registration & KYC Form</p>
+              <div className="sticky bottom-20 sm:bottom-24 z-30 flex items-center justify-between gap-3 rounded-2xl bg-[#0D3A1D] text-white px-4 py-3 sm:px-5 sm:py-3.5 shadow-2xl border border-[#93B733]/40 backdrop-blur-xl animate-fade-in">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-xl bg-[#93B733]/20 flex items-center justify-center shrink-0 text-[#93B733]">
+                    <Sparkles size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm font-black text-white truncate">Unsaved Changes</p>
+                    <p className="text-[10px] sm:text-[11px] text-gray-300 truncate hidden xs:block">Syncs with Registration & KYC Form</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-300 hover:text-white">Cancel</button>
-                  <button onClick={handleSaveProfile} disabled={isSaving} className="flex items-center gap-1 px-4 py-1.5 rounded-xl bg-[#93B733] hover:bg-[#83a42d] text-white text-xs font-black shadow">
-                    {isSaving ? <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Save size={13} />}
-                    <span>{isSaving ? "Saving..." : "Save & Sync"}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-gray-300 hover:text-white hover:bg-white/10 transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    disabled={isSaving}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#93B733] hover:bg-[#83a42d] text-white text-xs sm:text-sm font-black shadow-md transition-all whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-60"
+                  >
+                    {isSaving ? (
+                      <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent shrink-0" />
+                    ) : (
+                      <Save size={14} className="shrink-0" />
+                    )}
+                    <span className="whitespace-nowrap">{isSaving ? "Saving..." : "Save & Sync"}</span>
                   </button>
                 </div>
               </div>

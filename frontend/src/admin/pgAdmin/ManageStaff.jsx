@@ -257,47 +257,10 @@ export default function ManageStaff() {
   };
 
   return (
-    <div className="space-y-3 sm:space-y-4 max-w-7xl mx-auto pb-10">
-      
-      {/* ── Top Header Bar (Compact on Mobile) ── */}
-      <div className="flex items-center justify-between gap-2 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121622] p-3 sm:p-5 shadow-xs">
-        <div>
-          <div className="flex items-center gap-1.5">
-            <span className="rounded-md bg-[#93B733]/15 text-[#93B733] px-2 py-0.5 text-[10px] font-black uppercase">
-              Staff
-            </span>
-            <span className="text-[10px] sm:text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              {stats.active} on Duty
-            </span>
-          </div>
-          <h1 className="text-base sm:text-xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-1.5 mt-0.5">
-            <Users className="text-[#93B733] shrink-0" size={18} />
-            All Property Staff
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={loadData}
-            className="p-2 sm:p-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 transition"
-            title="Refresh"
-          >
-            <RefreshCw size={15} className={loading ? "animate-spin text-[#93B733]" : ""} />
-          </button>
-          
-          <button
-            onClick={handleOpenAdd}
-            className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-[#93B733] hover:bg-[#82a32d] text-black font-black text-xs shadow-xs transition active:scale-95 cursor-pointer"
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            <span>Add Staff</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ── Compact 3-in-a-row Stat Cards (Mobile Optimized: minimal vertical space) ── */}
+    <div className="space-y-6 w-full pb-12">
+      {/* ── Compact 3-in-a-row Stat Cards ── */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3.5">
-        <div className="rounded-xl sm:rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121622] p-2.5 sm:p-3.5 flex items-center gap-2 sm:gap-3">
+        <div className="rounded-xl sm:rounded-2xl bg-white dark:bg-[#121622] p-2.5 sm:p-3.5 flex items-center gap-2 sm:gap-3">
           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#93B733]/15 text-[#93B733] flex items-center justify-center shrink-0">
             <Users size={16} />
           </div>
@@ -307,7 +270,7 @@ export default function ManageStaff() {
           </div>
         </div>
 
-        <div className="rounded-xl sm:rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121622] p-2.5 sm:p-3.5 flex items-center gap-2 sm:gap-3">
+        <div className="rounded-xl sm:rounded-2xl bg-white dark:bg-[#121622] p-2.5 sm:p-3.5 flex items-center gap-2 sm:gap-3">
           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
             <UserCheck size={16} />
           </div>
@@ -317,7 +280,7 @@ export default function ManageStaff() {
           </div>
         </div>
 
-        <div className="rounded-xl sm:rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121622] p-2.5 sm:p-3.5 flex items-center gap-2 sm:gap-3">
+        <div className="rounded-xl sm:rounded-2xl bg-white dark:bg-[#121622] p-2.5 sm:p-3.5 flex items-center gap-2 sm:gap-3">
           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-purple-500/15 text-purple-500 flex items-center justify-center shrink-0">
             <Building2 size={16} />
           </div>
@@ -328,8 +291,8 @@ export default function ManageStaff() {
         </div>
       </div>
 
-      {/* ── Search & Filter Controls (Compact on Mobile) ── */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121622] p-2.5 sm:p-3.5">
+      {/* ── Search & Filter Controls ── */}
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2 rounded-xl sm:rounded-2xl bg-white dark:bg-[#121622] p-2.5 sm:p-3.5">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
@@ -337,11 +300,11 @@ export default function ManageStaff() {
             placeholder="Search by name, role, phone, or PG..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 text-xs text-gray-800 dark:text-gray-200 focus:outline-none focus:border-[#93B733]"
+            className="w-full pl-8 pr-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 text-xs font-bold text-gray-800 dark:text-gray-200 focus:outline-none focus:border-[#93B733]"
           />
         </div>
 
-        <div className="grid grid-cols-2 sm:flex items-center gap-2">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
           <select
             value={selectedPgFilter}
             onChange={(e) => setSelectedPgFilter(e.target.value)}
@@ -365,6 +328,24 @@ export default function ManageStaff() {
               <option key={r.value} value={r.value}>{r.icon} {r.label}</option>
             ))}
           </select>
+
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-bold transition shrink-0 cursor-pointer"
+            title="Refresh staff"
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin text-[#93B733]" : "text-[#93B733]"} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+
+          <button
+            onClick={handleOpenAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl bg-[#93B733] hover:bg-[#82a32d] text-black font-black text-xs shadow-xs transition active:scale-95 cursor-pointer shrink-0"
+          >
+            <Plus size={15} strokeWidth={2.5} />
+            <span>Add Staff</span>
+          </button>
         </div>
       </div>
 
@@ -375,7 +356,7 @@ export default function ManageStaff() {
           <p className="text-sm font-bold text-gray-500">Loading PG staff members...</p>
         </div>
       ) : filteredStaff.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-gray-300 dark:border-white/10 p-12 text-center bg-gray-50/50 dark:bg-white/[0.02]">
+        <div className="rounded-3xl p-12 text-center bg-gray-50/50 dark:bg-white/[0.02]">
           <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center mx-auto mb-3 text-gray-400">
             <Users size={28} />
           </div>
@@ -404,7 +385,7 @@ export default function ManageStaff() {
             return (
               <div
                 key={staff.id || staff._id}
-                className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121622] p-3.5 sm:p-4 shadow-xs flex flex-col justify-between hover:shadow-sm transition"
+                className="rounded-2xl bg-white dark:bg-[#121622] p-3.5 sm:p-4 flex flex-col justify-between transition"
               >
                 <div>
                   <div className="flex items-center justify-between gap-1.5 mb-2.5">

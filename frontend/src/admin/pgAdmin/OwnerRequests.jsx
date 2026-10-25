@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Wrench, CheckCircle2, Clock, RefreshCw, X, Search, MessageSquare, Phone, Building2, ChevronRight } from 'lucide-react';
 import api from '../../services/api';
+import FilterTabs from './components/FilterTabs';
 
 const LS_KEY = 'dormn_resident_requests', NOTICES_KEY = 'dormn_resident_notices';
 const formatDT = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A';
@@ -119,16 +120,19 @@ export default function OwnerRequests() {
   }), [requests, activeFilter, searchTerm]);
 
   return (
-    <div className="space-y-4 max-w-[1600px] mx-auto">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-2.5 sm:p-3 shadow-xs">
-        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
-          {[{ id: 'all', label: 'All Requests', count: counts.all }, { id: 'open', label: 'Open / New', count: counts.open }, { id: 'in_progress', label: 'In Progress', count: counts.in_progress }, { id: 'resolved', label: 'Resolved', count: counts.resolved }].map(tab => (
-            <button key={tab.id} onClick={() => setActiveFilter(tab.id)} className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black transition-all shrink-0 cursor-pointer ${activeFilter === tab.id ? 'bg-[#0D3A1D] text-white shadow-xs' : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'}`}>
-              <span>{tab.label}</span>
-              <span className={`rounded-lg px-1.5 py-0.5 text-[10px] font-black ${activeFilter === tab.id ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-200'}`}>{tab.count}</span>
-            </button>
-          ))}
-        </div>
+    <div className="space-y-4 w-full">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 rounded-2xl bg-white dark:bg-[#0c1220] p-2.5 sm:p-3">
+        {/* Responsive Filter Tabs (Mobile Dropdown + Desktop Segmented Pills) */}
+        <FilterTabs
+          tabs={[
+            { id: 'all', label: 'All Requests', count: counts.all },
+            { id: 'open', label: 'Open / New', count: counts.open },
+            { id: 'in_progress', label: 'In Progress', count: counts.in_progress },
+            { id: 'resolved', label: 'Resolved', count: counts.resolved }
+          ]}
+          activeTab={activeFilter}
+          onChange={setActiveFilter}
+        />
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="relative w-full lg:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
@@ -142,44 +146,44 @@ export default function OwnerRequests() {
       </div>
 
       {loading ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center shadow-sm">
+        <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 dark:border-gray-800 border-t-[#93B733] mx-auto mb-3" />
           <p className="text-sm font-bold text-gray-500">Loading maintenance requests...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center shadow-sm">
+        <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center">
           <Wrench size={40} className="text-gray-300 dark:text-gray-600 mx-auto mb-3" />
           <h3 className="text-lg font-black text-gray-900 dark:text-white">No requests found</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No requests match your current filters.</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2.5 sm:space-y-4">
           {filtered.map(req => (
-            <div key={req.id} onClick={() => { setSelectedReq(req); setNote(req.resolution_note || ''); }} className={`group flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-3xl border p-5 cursor-pointer transition-all ${req.status === 'open' ? 'border-amber-400/50 bg-amber-50/30 dark:bg-amber-500/[0.03] shadow-sm' : req.status === 'in_progress' ? 'border-blue-400/40 bg-blue-50/20 dark:bg-blue-500/[0.03]' : 'border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220]'}`}>
-              <div className="flex items-start gap-4 flex-1 min-w-0">
-                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-md ${req.status === 'open' ? 'bg-gradient-to-tr from-amber-500 to-orange-500' : req.status === 'in_progress' ? 'bg-gradient-to-tr from-blue-500 to-cyan-500' : 'bg-gradient-to-tr from-emerald-500 to-teal-500'} text-white`}>
-                  <Wrench size={20} />
+            <div key={req.id} onClick={() => { setSelectedReq(req); setNote(req.resolution_note || ''); }} className={`group flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 cursor-pointer transition-all ${req.status === 'open' ? 'bg-amber-50/30 dark:bg-amber-500/[0.04]' : req.status === 'in_progress' ? 'bg-blue-50/20 dark:bg-blue-500/[0.04]' : 'bg-white dark:bg-[#0c1220]'}`}>
+              <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
+                <div className={`flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl shadow-md ${req.status === 'open' ? 'bg-gradient-to-tr from-amber-500 to-orange-500' : req.status === 'in_progress' ? 'bg-gradient-to-tr from-blue-500 to-cyan-500' : 'bg-gradient-to-tr from-emerald-500 to-teal-500'} text-white`}>
+                  <Wrench size={17} className="sm:w-5 sm:h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-sm font-black text-gray-900 dark:text-white truncate">{req.student_name || 'Resident'}</span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733]">{req.category || 'Maintenance'}</span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${req.status === 'open' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : req.status === 'in_progress' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'}`}>
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mb-0.5 sm:mb-1">
+                    <span className="text-xs sm:text-sm font-black text-gray-900 dark:text-white truncate">{req.student_name || 'Resident'}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase bg-[#93B733]/15 text-[#0D3A1D] dark:text-[#93B733]">{req.category || 'Maintenance'}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase border ${req.status === 'open' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : req.status === 'in_progress' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'}`}>
                       {req.status === 'open' ? 'New' : req.status === 'in_progress' ? 'In Progress' : req.status === 'closed' ? 'Closed' : 'Resolved'}
                     </span>
                     {req.priority === 'Urgent' && <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-rose-100 dark:bg-rose-500/20 text-rose-600">Urgent</span>}
                   </div>
-                  <h4 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white leading-tight">{req.title}</h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">{req.description || 'No description.'}</p>
-                  <div className="flex items-center gap-3 text-[11px] font-bold text-gray-400 mt-2">
-                    <span className="flex items-center gap-1"><Building2 size={12} className="text-[#93B733]" />{req.pg_title || 'PG Property'}</span>
-                    <span className="flex items-center gap-1"><Clock size={12} />{formatDT(req.created_at || req.filed_at)}</span>
+                  <h4 className="text-xs sm:text-base font-bold text-gray-900 dark:text-white leading-tight">{req.title}</h4>
+                  <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">{req.description || 'No description.'}</p>
+                  <div className="flex items-center gap-2.5 sm:gap-3 text-[10px] sm:text-[11px] font-bold text-gray-400 mt-1.5 sm:mt-2">
+                    <span className="flex items-center gap-1"><Building2 size={11} className="text-[#93B733] sm:w-3 sm:h-3" />{req.pg_title || 'PG Property'}</span>
+                    <span className="flex items-center gap-1"><Clock size={11} className="sm:w-3 sm:h-3" />{formatDT(req.created_at || req.filed_at)}</span>
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-2 self-end md:self-center shrink-0">
-                {req.status === 'open' && <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse" />}
-                <ChevronRight size={18} className="text-gray-400 group-hover:text-[#93B733] transition-colors" />
+                {req.status === 'open' && <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-amber-500 animate-pulse" />}
+                <ChevronRight size={16} className="text-gray-400 group-hover:text-[#93B733] transition-colors sm:w-[18px] sm:h-[18px]" />
               </div>
             </div>
           ))}

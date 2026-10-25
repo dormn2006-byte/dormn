@@ -23,10 +23,6 @@ const EventInvite = () => {
   const [acceptedSuccess, setAcceptedSuccess] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  useEffect(() => {
-    fetchInvite();
-  }, [inviteCode]);
-
   const fetchInvite = async () => {
     setLoading(true);
     setError(null);
@@ -44,6 +40,10 @@ const EventInvite = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchInvite();
+  }, [inviteCode]);
 
   const handleAcceptInvite = async () => {
     if (!user) {

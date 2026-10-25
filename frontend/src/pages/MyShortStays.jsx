@@ -128,7 +128,7 @@ export default function MyShortStays() {
           <div className="flex items-center gap-3">
             <ThemeSwitch />
             <Link to="/student/dashboard" className="text-xs font-bold text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white">
-              My Dashboard
+              My Profile
             </Link>
           </div>
         </div>

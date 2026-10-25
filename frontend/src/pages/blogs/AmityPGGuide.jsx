@@ -32,7 +32,7 @@ const AmityPGGuide = () => {
       {
         "@type": "Article",
         "headline": "Top Verified PGs Near Amity University Noida Sector 125",
-        "description": "Comprehensive student guide for finding verified Boys, Girls, and COED PGs within walking distance of Amity University Noida with food and zero brokerage.",
+        "description": "Comprehensive student guide for finding verified Boys, Girls, and COED PGs within walking distance of Amity University Noida with food and direct owner booking.",
         "image": "https://dormn.com/logo.jpg", // Fallback to logo for strict schema requirements
         "author": { "@type": "Organization", "name": "Dormn Expert Team" },
         "publisher": { "@type": "Organization", "name": "Dormn", "logo": { "@type": "ImageObject", "url": "https://dormn.com/logo.jpg" } },
@@ -67,7 +67,7 @@ const AmityPGGuide = () => {
     <PublicLayout>
       <SEOHead
         title="Best PGs Near Amity University Noida (Sector 125) | Dormn"
-        description="Find verified Boys PGs, Girls PGs, and COED accommodations near Amity University Noida. Walking distance stays with food, AC, Wi-Fi, and zero brokerage."
+        description="Find verified Boys PGs, Girls PGs, and COED accommodations near Amity University Noida. Walking distance stays with food, AC, Wi-Fi, and direct owner booking."
         canonicalUrl="https://dormn.com/blogs/pg-near-amity-university-noida"
         ogImage="https://dormn.com/logo.jpg"
         schema={pageSchema}
@@ -101,7 +101,7 @@ const AmityPGGuide = () => {
               Verified Student PGs Near <span className="text-[#93B733]">Amity University</span> Noida
             </h1>
             <p className="text-slate-300 text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto mb-8">
-              The ultimate 2026 student guide to navigating Sector 125 & 126. We breakdown mess meals, safety curfews, walking distances, and how to book directly with zero brokerage.
+              The ultimate 2026 student guide to navigating Sector 125 & 126. We breakdown mess meals, safety curfews, walking distances, and how to book directly with verified owners.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm font-semibold text-slate-300">
               <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#E56A54]" /> 5 Min Read</span>
@@ -134,8 +134,8 @@ const AmityPGGuide = () => {
                   <span className="text-xl font-black text-[#0D3A1D]">5-10 <span className="text-sm font-bold text-gray-400">Mins</span></span>
                 </div>
                 <div className="bg-[#FAF9F5] p-4 rounded-2xl border border-gray-100">
-                  <span className="text-xs text-gray-500 font-bold uppercase tracking-wider block mb-1">Brokerage</span>
-                  <span className="text-xl font-black text-[#93B733]">Zero</span>
+                  <span className="text-xs text-gray-500 font-bold uppercase tracking-wider block mb-1">Booking</span>
+                  <span className="text-xl font-black text-[#93B733]">Direct</span>
                 </div>
                 <div className="bg-[#FAF9F5] p-4 rounded-2xl border border-gray-100">
                   <span className="text-xs text-gray-500 font-bold uppercase tracking-wider block mb-1">Meals</span>
@@ -239,7 +239,7 @@ const AmityPGGuide = () => {
           <aside className="lg:col-span-1">
             <div className="sticky top-28 bg-white rounded-3xl p-6 md:p-8 border-2 border-slate-200 shadow-xl space-y-6">
               <div className="bg-gradient-to-br from-[#0D3A1D] to-[#114b26] p-6 rounded-2xl text-center text-white shadow-inner">
-                <span className="text-xs font-bold uppercase tracking-widest text-[#93B733] block mb-2">Zero Brokerage</span>
+                <span className="text-xs font-bold uppercase tracking-widest text-[#93B733] block mb-2">Verified Stays</span>
                 <span className="text-2xl font-black block leading-tight">Book Your Amity PG Today</span>
               </div>
 

@@ -66,3 +66,36 @@ export const processImage = async (file) => {
     throw error;
   }
 };
+
+/**
+ * Compresses a base64 Data URI into an optimized WebP base64 Data URI using Sharp.
+ *
+ * @param {string} dataUrl - e.g. "data:image/jpeg;base64,..."
+ * @param {number} [maxDimension=1200] - Max width/height
+ * @param {number} [quality=82] - WebP quality
+ * @returns {Promise<string>} - "data:image/webp;base64,..."
+ */
+export const compressBase64ToWebP = async (dataUrl, maxDimension = 1200, quality = 82) => {
+  if (!dataUrl || typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
+    return dataUrl;
+  }
+
+  try {
+    const commaIndex = dataUrl.indexOf(",");
+    if (commaIndex === -1) return dataUrl;
+
+    const base64Data = dataUrl.slice(commaIndex + 1);
+    const buffer = Buffer.from(base64Data, "base64");
+    if (!buffer || buffer.length === 0) return dataUrl;
+
+    const compressedBuffer = await sharp(buffer)
+      .resize({ width: maxDimension, height: maxDimension, fit: "inside", withoutEnlargement: true })
+      .webp({ quality, effort: 6 })
+      .toBuffer();
+
+    return `data:image/webp;base64,${compressedBuffer.toString("base64")}`;
+  } catch (err) {
+    console.error("Backend WebP compression fallback:", err?.message || err);
+    return dataUrl;
+  }
+};

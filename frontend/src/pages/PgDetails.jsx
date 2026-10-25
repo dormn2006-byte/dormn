@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useContext, useCallback, useRef } from "r
 import { useParams, useNavigate } from "react-router-dom";
 import API, { IMAGE_BASE_URL } from "../services/api";
 import { AuthContext } from "../context/AuthContext";
+import Navbar from "../components/Navbar";
 import { formatDuration } from "../config/mediaLimits";
 import AmenitiesModal from "../components/AmenitiesModal";
 import EmailVerificationModal from "../components/auth/EmailVerificationModal";
@@ -12,10 +13,10 @@ import { calcStayDays, calcDailyPrice } from "../utils/shortStayUtils";
 import { getPgFoodPreference } from "../utils/amenities";
 import {
   Phone, MessageSquare, CheckCircle2, Clock, ChevronRight, ChevronLeft, ChevronDown,
-  X, Sparkles, Building2, AlertCircle, ShieldCheck,
+  X, Sparkles, Building2, AlertCircle, ShieldCheck, Bot, Send, RotateCcw,
   Share2, Copy, Check, ArrowLeft, BedDouble, BedSingle, Snowflake, Wind, Flame,
   Wifi, Zap, UtensilsCrossed, Shirt, Bath, Car, Droplets, Dumbbell, Tv, PlayCircle,
-  CalendarClock, KeyRound, CalendarCheck, CalendarRange, Tag, Apple
+  CalendarClock, KeyRound, CalendarCheck, CalendarRange, Tag, Apple, Play, Video
 } from "lucide-react";
 import {
   CheckInCalendarModal,
@@ -28,6 +29,8 @@ import {
   BookingSuccessModal,
   AuthPromptModal,
 } from "./pgDetails/PgDetailsModals";
+import PgGallery, { DEFAULT_DETAILS_FALLBACKS } from "./pgDetails/PgGallery";
+import DormnAiManagerCard from "./pgDetails/DormnAiManagerCard";
 
 const AMENITY_MAP = [
   { match: /power|backup|generator|electricity/i, icon: Zap, bg: "bg-amber-500/10 dark:bg-amber-400/15", color: "text-amber-600 dark:text-amber-400", border: "border-amber-200/60 dark:border-amber-500/25" },
@@ -67,52 +70,6 @@ const formatImageUrl = (url) => {
   if (/^(https?:|data:)/i.test(c)) return c;
   const p = c.startsWith("/") ? c : `/${c}`;
   return `${IMAGE_BASE_URL}${p.startsWith("/uploads/") ? p : `/uploads${p}`}`;
-};
-
-const DEFAULT_DETAILS_FALLBACKS = [
-  "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=1200&q=80",
-];
-
-const MediaThumbnail = ({ item, index }) => {
-  if (item.type === "video") {
-    return (
-      <div className="relative h-12 w-full bg-black sm:h-20 md:h-24">
-        <video
-          src={item.url}
-          preload="metadata"
-          muted
-          playsInline
-          className="pointer-events-none h-full w-full object-cover"
-        />
-        <span className="absolute inset-0 flex items-center justify-center bg-black/35">
-          <PlayCircle className="h-4 w-4 text-white drop-shadow sm:h-5 sm:w-5" />
-        </span>
-        {Number(item.duration) > 0 && (
-          <span className="absolute bottom-0.5 right-0.5 rounded bg-black/75 px-1 py-px text-[8px] font-bold text-white sm:text-[9px]">
-            {formatDuration(Number(item.duration))}
-          </span>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={item.url}
-      alt={`preview ${index + 1}`}
-      loading="lazy"
-      decoding="async"
-      className="h-12 w-full object-cover sm:h-20 md:h-24"
-      onError={(e) => {
-        // A thumbnail whose file is missing shouldn't be replaced by a fake
-        // placeholder image — just hide it so it can't render a default stock
-        // photo over a PG that already has real media.
-        e.currentTarget.style.display = "none";
-      }}
-    />
-  );
 };
 
 
@@ -209,6 +166,8 @@ const resolveRoomConfigurations = (pgData) => {
     });
 };
 
+
+
 const PgDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -240,18 +199,20 @@ const PgDetails = () => {
   const [shortStayLoading, setShortStayLoading] = useState(false);
   const [shortStaySuccessModal, setShortStaySuccessModal] = useState(false);
   const [shortStaySuccessData, setShortStaySuccessData] = useState(null);
-  // Track if user has an active stay at a DIFFERENT PG (blocks new bookings)
-  const [activeStayAtOtherPG, setActiveStayAtOtherPG] = useState(null);
+  // Active Tab: "details" (Default) | "manager" (Dormn AI)
+  const [activeTab, setActiveTab] = useState("details");
+  const [managerMessages, setManagerMessages] = useState([]);
+  const [managerInput, setManagerInput] = useState("");
+  const [managerIsTyping, setManagerIsTyping] = useState(false);
+  const managerChatBoxRef = useRef(null);
 
   // Check if current user already has a pending or active booking for this PG
-  // AND check if they have an active stay at ANY other PG
   // AND check if they have an active scheduled visit or short stay for this PG
   useEffect(() => {
     const checkExistingBookingAndVisits = async () => {
       const token = localStorage.getItem("token");
       if (!token || !user) {
         setExistingBooking(null);
-        setActiveStayAtOtherPG(null);
         setExistingVisit(null);
         setExistingShortStay(null);
         return;
@@ -271,14 +232,6 @@ const PgDetails = () => {
                    (b.status === "pending" || b.status === "approved" || b.payment_status === "paid")
           );
           setExistingBooking(found || null);
-
-          // Check for active stay at a DIFFERENT PG
-          const otherActiveStay = list.find(
-            (b) => Number(b.pg_id) !== Number(id) &&
-                   (b.status === 'approved' || b.payment_status === 'paid') &&
-                   b.status !== 'cancelled'
-          );
-          setActiveStayAtOtherPG(otherActiveStay || null);
         }
 
         const visitList = visitRes.data?.visits || [];
@@ -554,11 +507,6 @@ const currentActiveIndex = mediaCount > 0
       return;
     }
 
-    if (activeStayAtOtherPG) {
-      alert(`You already have an active PG stay at "${activeStayAtOtherPG.title || activeStayAtOtherPG.pg_name || 'another PG'}". You cannot book another PG until you request a cancellation from your current PG owner and they accept it.`);
-      return;
-    }
-
     const currentSpotsLeft = pg?.spots_left !== undefined ? pg.spots_left : Number(pg?.available_rooms || 0);
     if (currentSpotsLeft <= 0) {
       alert("Sorry, all spots for this PG have already been booked.");
@@ -772,11 +720,106 @@ const currentActiveIndex = mediaCount > 0
     }
   };
 
+  // Initialize Dormn AI welcome message when pg loads
+  useEffect(() => {
+    if (pg) {
+      const pgTitle = pg.title || pg.name || "this PG";
+      setManagerMessages([
+        {
+          id: 1,
+          sender: "bot",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          text: `Hello! 👋 I'm **Dormn AI**, the 24/7 Virtual Manager for **${pgTitle}**.\n\nI can answer questions regarding room pricing, food menus, gate curfew, security deposit, or help you schedule a visit or reserve your room instantly.\n\nWhat would you like to know?`,
+        },
+      ]);
+    }
+  }, [pg?.id, pg?.title, pg?.name]);
+
+  useEffect(() => {
+    if (managerChatBoxRef.current) {
+      managerChatBoxRef.current.scrollTop = managerChatBoxRef.current.scrollHeight;
+    }
+  }, [managerMessages, managerIsTyping]);
+
+  const handleManagerSend = (userText) => {
+    const query = (typeof userText === "string" ? userText : managerInput).trim();
+    if (!query) return;
+
+    const userMsg = {
+      id: Date.now(),
+      sender: "user",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      text: query,
+    };
+
+    setManagerMessages((prev) => [...prev, userMsg]);
+    setManagerInput("");
+    setManagerIsTyping(true);
+
+    setTimeout(() => {
+      const lower = query.toLowerCase();
+      let botReply = "";
+      let actionType = null; // "visit" | "book" | "shortStay" | "whatsapp"
+
+      const pgTitle = pg?.title || pg?.name || "this PG";
+      const foodPref = getPgFoodPreference(pg);
+      const isPureVeg = foodPref === "veg";
+      const isNonVeg = foodPref === "non-veg";
+
+      const sharingList = availableRooms && availableRooms.length > 0
+        ? availableRooms.map((r) => `• **${r.title}**: ${r.options.map((o) => `${o.isAc ? "AC" : "Non-AC"} ₹${o.price.toLocaleString()}`).join(" / ")}`).join("\n")
+        : `• Starting from ₹${Number(pg?.price || 0).toLocaleString()}/month`;
+
+      if (lower.includes("food") || lower.includes("mess") || lower.includes("meal") || lower.includes("dinner") || lower.includes("lunch") || lower.includes("breakfast") || lower.includes("eat") || lower.includes("cook")) {
+        botReply = `🍽️ **Food & Dining at ${pgTitle}:**\n\n• **Dietary Option:** ${isPureVeg ? "Pure Vegetarian 🥦" : isNonVeg ? "Both Non-Veg & Vegetarian Options 🍗" : "Wholesome Home-style Meals"}\n• **Meal Coverage:** 3 daily meals (Breakfast, Lunch & Dinner) prepared hygienically on-site.\n• **Water Supply:** 24/7 RO filtered drinking water.\n\nWould you like to schedule an in-person visit to check out the dining area?`;
+        actionType = "visit";
+      } else if (lower.includes("price") || lower.includes("rent") || lower.includes("cost") || lower.includes("deposit") || lower.includes("fee") || lower.includes("room") || lower.includes("sharing") || lower.includes("single") || lower.includes("double") || lower.includes("triple") || lower.includes("ac")) {
+        botReply = `🛏️ **Room Sharing & Pricing at ${pgTitle}:**\n\n${sharingList}\n\n• **Security Deposit:** Standard 1-month refundable security deposit.\n• **Included Utilities:** High-speed Wi-Fi, water, housekeeping, and maintenance.\n\nYou can select your preferred room sharing and reserve your spot directly!`;
+        actionType = "book";
+      } else if (lower.includes("curfew") || lower.includes("gate") || lower.includes("time") || lower.includes("timing") || lower.includes("rule") || lower.includes("late") || lower.includes("night") || lower.includes("entry")) {
+        const gateTime = pg?.gate_closing_time || "10:30 PM";
+        botReply = `⏰ **Gate Timings & Rules for ${pgTitle}:**\n\n• **Gate Closing Time:** ${gateTime}\n• **Late Entry Policy:** Permitted with prior warden / manager intimation.\n• **Visitor Rules:** Guests permitted in the reception/visitor lounge during designated daytime hours.\n• **Quiet Hours:** 11:00 PM – 6:00 AM to maintain peace for studying & sleep.`;
+      } else if (lower.includes("visit") || lower.includes("see") || lower.includes("tour") || lower.includes("check out") || lower.includes("schedule") || lower.includes("view")) {
+        botReply = `📅 **Schedule a Visit to ${pgTitle}:**\n\nVisiting is 100% free with no commitment required! Pick your preferred date and time slot, and the manager will give you an exclusive tour of the property.`;
+        actionType = "visit";
+      } else if (lower.includes("book") || lower.includes("reserve") || lower.includes("check in") || lower.includes("token") || lower.includes("join") || lower.includes("move in") || lower.includes("stay")) {
+        botReply = `🔑 **Check In & Reserve Your Spot:**\n\nYou can secure your bed online right now. Once you submit your check-in date and room choice, your spot is reserved under Dormn's verified booking protection!`;
+        actionType = "book";
+      } else if (lower.includes("short stay") || lower.includes("temporary") || lower.includes("few days") || lower.includes("daily") || lower.includes("days")) {
+        botReply = `🏨 **Short Stay at ${pgTitle}:**\n\nNeed a stay for just 4–5 days or on a daily basis? We support flexible short stays! Choose your arrival and departure dates to check availability.`;
+        actionType = "shortStay";
+      } else if (lower.includes("amenit") || lower.includes("wifi") || lower.includes("gym") || lower.includes("laundry") || lower.includes("parking") || lower.includes("geyser") || lower.includes("power") || lower.includes("cctv")) {
+        const amList = cleanAmenities.length > 0 ? cleanAmenities.slice(0, 8).join(", ") : "Wi-Fi, Power Backup, CCTV, RO Water, Housekeeping, Geyser";
+        botReply = `✨ **Verified Amenities at ${pgTitle}:**\n\n• ${amList}\n\nAll verified on-site by the Dormn operations team!`;
+      } else if (lower.includes("location") || lower.includes("where") || lower.includes("address") || lower.includes("near") || lower.includes("landmark") || lower.includes("metro")) {
+        botReply = `📍 **Location & Vicinity:**\n\n• **Property Address:** ${pg?.address || `${pg?.area || ""}, ${pg?.city || ""}`}\n• **Area:** ${pg?.area || ""}\n• **City:** ${pg?.city || ""}\n\nConveniently located near public transit, bus stops, and everyday essentials.`;
+      } else if (lower.includes("contact") || lower.includes("phone") || lower.includes("call") || lower.includes("whatsapp") || lower.includes("number")) {
+        botReply = `📱 **Connecting with Management:**\n\nYou can chat with the manager directly on WhatsApp or schedule a free visit to meet them in person!`;
+        actionType = "whatsapp";
+      } else {
+        botReply = `I'm here to help with any details about **${pgTitle}**! 🏢\n\nFeel free to ask about:\n• Room types & pricing\n• Food menus & timing\n• Gate curfew & visitor rules\n• Scheduling a free visit`;
+      }
+
+      setManagerMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          sender: "bot",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          text: botReply,
+          actionType,
+        },
+      ]);
+      setManagerIsTyping(false);
+    }, 400);
+  };
+
   const [mainImageLoaded, setMainImageLoaded] = useState(false);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAF9F5] dark:bg-[#000000] font-sans selection:bg-[#93B733] selection:text-white pb-20">
+        <Navbar />
         <section className="relative z-10 mx-auto max-w-[1440px] 2xl:max-w-[1600px] px-4 py-8 sm:px-6 md:px-8 lg:px-10 md:py-12">
           <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:gap-12">
             <div className="flex flex-col gap-8">
@@ -798,15 +841,18 @@ const currentActiveIndex = mediaCount > 0
   if (error || !pg) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAF9F5] dark:bg-[#000000] text-[#3A2935] dark:text-white px-4">
-        <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
-        <p className="font-bold text-lg text-red-500 mb-4">{error || "PG Not Found"}</p>
-        <button
-          onClick={() => navigate("/pgs")}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#0D3A1D] px-5 py-2.5 text-sm font-bold text-white shadow-md hover:bg-[#092814] cursor-pointer"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Back to Explore PGs</span>
-        </button>
+        <Navbar />
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mb-3" />
+          <p className="font-bold text-lg text-red-500 mb-4">{error || "PG Not Found"}</p>
+          <button
+            onClick={() => navigate("/pgs")}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#0D3A1D] px-5 py-2.5 text-sm font-bold text-white shadow-md hover:bg-[#092814] cursor-pointer"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to Explore PGs</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -815,6 +861,8 @@ const currentActiveIndex = mediaCount > 0
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#FAF9F5] dark:bg-[#000000] text-[#3A2935] dark:text-white font-sans pb-14 sm:pb-20">
+      <Navbar />
+
       {/* Floating Copied Toast Notification */}
       {copiedToast && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -866,38 +914,40 @@ const currentActiveIndex = mediaCount > 0
           </div>
 
           {/* PG Title, Type, Rating & Food Preference */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <h1 className="text-lg sm:text-3xl font-black tracking-tight text-[#3A2935] dark:text-white md:text-4xl">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-1.5 sm:mb-2">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold sm:font-black tracking-tight text-[#1F2937] dark:text-white leading-tight">
               {pg.title}
             </h1>
-            <span className="inline-flex items-center gap-1 sm:gap-1.5 rounded-lg sm:rounded-xl border border-[#93B733]/40 bg-[#93B733]/15 text-[#2c4406] dark:text-[#bbf246] px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-xs">
-              <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#93B733] shrink-0" />
-              <span>{String(pg.pg_type || "PG").toUpperCase()}</span>
-            </span>
+            <div className="inline-flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="inline-flex items-center gap-1 sm:gap-1.5 rounded-md sm:rounded-lg border border-[#93B733]/40 bg-[#93B733]/15 text-[#2c4406] dark:text-[#bbf246] px-2 py-0.5 sm:px-2.5 sm:py-0.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-xs">
+                <Building2 className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#93B733] shrink-0" />
+                <span>{String(pg.pg_type || "PG").toUpperCase()}</span>
+              </span>
 
-            {/* Food Type Badge (Veg / Non-Veg) */}
-            {(() => {
-              const food = getPgFoodPreference(pg);
-              if (food.type === "Veg") {
+              {/* Food Type Badge (Veg / Non-Veg) */}
+              {(() => {
+                const food = getPgFoodPreference(pg);
+                if (food.type === "Veg") {
+                  return (
+                    <span className="inline-flex items-center gap-1 sm:gap-1.5 rounded-md sm:rounded-lg border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 sm:px-2.5 sm:py-0.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                      <UtensilsCrossed className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span>Veg</span>
+                    </span>
+                  );
+                }
                 return (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg sm:rounded-xl border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-xs">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                    <UtensilsCrossed className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>Veg</span>
+                  <span className="inline-flex items-center gap-1 sm:gap-1.5 rounded-md sm:rounded-lg border border-amber-500/40 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 px-2 py-0.5 sm:px-2.5 sm:py-0.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-700 shrink-0"></span>
+                    <UtensilsCrossed className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>Non-Veg</span>
                   </span>
                 );
-              }
-              return (
-                <span className="inline-flex items-center gap-1.5 rounded-lg sm:rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-xs">
-                  <span className="w-2 h-2 rounded-full bg-amber-700 shrink-0"></span>
-                  <UtensilsCrossed className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                  <span>Non-Veg</span>
-                </span>
-              );
-            })()}
+              })()}
 
-            <div className="inline-flex items-center gap-1 rounded-lg sm:rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.04] px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-bold text-[#3A2935] dark:text-white">
-              <span className="text-[#93B733]">★</span> {pg.rating || "New"}
+              <div className="inline-flex items-center gap-1 rounded-md sm:rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.04] px-2 py-0.5 sm:px-2.5 sm:py-0.5 text-[10px] sm:text-[11px] font-bold text-gray-800 dark:text-white">
+                <span className="text-[#93B733]">★</span> {pg.rating || "New"}
+              </div>
             </div>
           </div>
 
@@ -910,145 +960,25 @@ const currentActiveIndex = mediaCount > 0
           </p>
         </div>
 
-        <div className="grid gap-2.5 sm:gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:gap-12">
+        <div className="w-full min-w-0 grid gap-2.5 sm:gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:gap-12">
           
           {/* LEFT SIDE: Details & Gallery */}
-          <div className="flex flex-col gap-2.5 sm:gap-8">
+          <div className="w-full min-w-0 flex flex-col gap-2.5 sm:gap-6">
             
             {/* Gallery (Bento Box Style) */}
-            <div className="rounded-xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-1 sm:p-2 md:rounded-[2.5rem] md:p-3 shadow-sm">
-              <div className="relative overflow-hidden rounded-lg sm:rounded-[1.5rem] md:rounded-[2rem] bg-gray-200 dark:bg-gray-800">
-                
-                {/* Dormn Verified PG Badge - Top Left */}
-                <div className="absolute top-2.5 left-2.5 sm:top-4 sm:left-4 z-20 flex items-center gap-1 sm:gap-1.5 rounded-full bg-[#0D3A1D]/90 dark:bg-black/85 backdrop-blur-md px-2.5 py-1 sm:px-3.5 sm:py-1.5 border border-[#93B733]/50 shadow-md">
-                  <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#93B733] shrink-0" />
-                  <span className="text-[9.5px] sm:text-xs font-black tracking-wide text-white uppercase">
-                    Dormn Verified PG
-                  </span>
-                </div>
-
-                {/* Backside Shimmer Skeleton */}
-                {!mainImageLoaded && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 animate-pulse z-0" />
-                )}
-
-                {activeMedia?.type === "video" ? (
-                  <video
-                    key={activeMedia.url}
-                    src={activeMedia.url}
-                    poster={activeMedia.poster || undefined}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    onLoadedMetadata={() => setMainImageLoaded(true)}
-                    className={`h-[190px] sm:h-[360px] md:h-[480px] w-full bg-black object-contain transition-all duration-700 ${
-                      mainImageLoaded ? "opacity-100" : "opacity-0"
-                    }`}
-                  />
-                ) : (
-                  <img
-                    src={displayActiveImage}
-                    alt="PG"
-                    onLoad={() => setMainImageLoaded(true)}
-                    className={`h-[190px] sm:h-[360px] md:h-[480px] w-full object-cover transition-all duration-700 hover:scale-105 ${
-                      mainImageLoaded ? "opacity-100" : "opacity-0"
-                    }`}
-                    onError={(e) => {
-                      // Don't substitute the default stock placeholder for a
-                      // missing/broken file. Skip to the next gallery item so
-                      // a broken cover is never shown as a fake image.
-                      if (mediaCount > 1) {
-                        e.preventDefault();
-                        setActiveImageIndex((prev) => (prev + 1) % mediaCount);
-                      } else {
-                        e.currentTarget.style.display = "none";
-                        setMainImageLoaded(true);
-                      }
-                    }}
-                  />
-                )}
-                {mediaCount > 1 && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={showPreviousImage}
-                      aria-label="Previous Image"
-                      className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 z-20 flex h-7 w-7 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-gray-800 shadow-md transition-all hover:bg-white hover:scale-110 active:scale-95 cursor-pointer"
-                    >
-                      <ChevronLeft className="h-3.5 w-3.5 sm:h-5 sm:w-5 stroke-[2.5]" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={showNextImage}
-                      aria-label="Next Image"
-                      className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 z-20 flex h-7 w-7 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-gray-800 shadow-md transition-all hover:bg-white hover:scale-110 active:scale-95 cursor-pointer"
-                    >
-                      <ChevronRight className="h-3.5 w-3.5 sm:h-5 sm:w-5 stroke-[2.5]" />
-                    </button>
-
-                    <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 z-20 rounded-full bg-black/70 backdrop-blur-sm px-2 py-0.5 sm:px-3 sm:py-1 text-[9px] sm:text-xs font-semibold text-white">
-                      {currentActiveIndex + 1} / {mediaCount}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Single Section Thumbnail Strip: Static 4-col when <= 4, infinite loop marquee moving left when > 4 */}
-              {mediaCount <= 4 ? (
-                <div className="mt-1 sm:mt-2 md:mt-3 grid grid-cols-4 gap-1 sm:gap-2 md:gap-3">
-                  {mediaItems.map((item, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => setActiveImageIndex(index)}
-                      className={`overflow-hidden rounded-md sm:rounded-xl border-2 transition-all duration-300 cursor-pointer ${
-                        currentActiveIndex === index
-                          ? "border-[#93B733] shadow-md opacity-100 ring-2 ring-[#93B733]/40 scale-[1.02]"
-                          : "border-transparent opacity-70 hover:opacity-100"
-                      }`}
-                    >
-                      <MediaThumbnail item={item} index={index} />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div 
-                  className="thumbnail-marquee-container mt-1 sm:mt-2 md:mt-3 overflow-hidden rounded-md sm:rounded-xl"
-                  onMouseEnter={() => setIsGalleryLoopPaused(true)}
-                  onMouseLeave={() => setIsGalleryLoopPaused(false)}
-                  onTouchStart={() => setIsGalleryLoopPaused(true)}
-                  onTouchEnd={() => setIsGalleryLoopPaused(false)}
-                >
-                  <div 
-                    className="thumbnail-marquee-track gap-1 sm:gap-2 md:gap-3 py-0.5"
-                    style={{
-                      animationPlayState: isGalleryLoopPaused ? "paused" : "running",
-                      animationDuration: `${Math.max(mediaCount * 2.2, 16)}s`
-                    }}
-                  >
-                    {[...mediaItems, ...mediaItems].map((item, index) => {
-                      const realIndex = index % mediaCount;
-                      const isSelected = currentActiveIndex === realIndex;
-                      return (
-                        <button
-                          key={`${realIndex}-${index >= mediaCount ? 'dup' : 'orig'}`}
-                          type="button"
-                          onClick={() => setActiveImageIndex(realIndex)}
-                          className={`thumbnail-marquee-item overflow-hidden rounded-md sm:rounded-xl border-2 transition-all duration-200 cursor-pointer ${
-                            isSelected
-                              ? "border-[#93B733] shadow-md opacity-100 ring-2 ring-[#93B733]/40 scale-[1.02]"
-                              : "border-transparent opacity-75 hover:opacity-100"
-                          }`}
-                        >
-                          <MediaThumbnail item={item} index={realIndex} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            <PgGallery
+              mediaItems={mediaItems}
+              currentActiveIndex={currentActiveIndex}
+              setActiveImageIndex={setActiveImageIndex}
+              mainImageLoaded={mainImageLoaded}
+              setMainImageLoaded={setMainImageLoaded}
+              displayActiveImage={displayActiveImage}
+              activeMedia={activeMedia}
+              showPreviousImage={showPreviousImage}
+              showNextImage={showNextImage}
+              isGalleryLoopPaused={isGalleryLoopPaused}
+              setIsGalleryLoopPaused={setIsGalleryLoopPaused}
+            />
 
             {/* About / Description Card (Desktop) */}
             <div className="hidden lg:block rounded-xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-4 sm:p-6 shadow-sm md:rounded-[2.5rem] md:p-8">
@@ -1067,11 +997,52 @@ const currentActiveIndex = mediaCount > 0
 
           </div>
 
-          {/* RIGHT SIDE: Booking, Amenities & Actions */}
-          <div className="space-y-2.5 sm:space-y-6">
-            
-            {/* Container for right sidebar */}
-            <div className="space-y-2.5 sm:space-y-6">
+          {/* RIGHT SIDE: Booking, Amenities & Actions (Details) OR PG Manager AI */}
+          <div className="w-full min-w-0 space-y-2.5 sm:space-y-6">
+            {/* View Selector Toggle: PG Details vs PG Manager - Placed directly above the right column card (2nd image in laptop view) */}
+            <div className="w-full flex items-center justify-start">
+              <div className="inline-flex items-center gap-1 sm:gap-1.5 bg-gray-100 dark:bg-white/[0.06] p-1.5 rounded-2xl border border-gray-200/80 dark:border-white/10 shadow-xs max-w-md w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("details")}
+                  className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 px-4 sm:px-6 rounded-xl text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer active:scale-95 active:shadow-inner ${
+                    activeTab === "details"
+                      ? "bg-white dark:bg-[#18181b] text-gray-950 dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+                      : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/[0.02]"
+                  }`}
+                >
+                  <Building2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors ${
+                    activeTab === "details" ? "text-[#4E700F] dark:text-[#bbf246]" : "text-gray-400"
+                  }`} />
+                  <span>PG Details</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("manager")}
+                  className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 px-4 sm:px-6 rounded-xl text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer active:scale-95 active:shadow-inner ${
+                    activeTab === "manager"
+                      ? "bg-white dark:bg-[#18181b] text-gray-950 dark:text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+                      : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white hover:bg-white/40 dark:hover:bg-white/[0.02]"
+                  }`}
+                >
+                  <Bot className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors ${
+                    activeTab === "manager" ? "text-[#4E700F] dark:text-[#bbf246]" : "text-gray-400"
+                  }`} />
+                  <span>PG Manager</span>
+                  <span className={`text-[8.5px] sm:text-[9.5px] font-black uppercase px-1.5 py-0.5 rounded-full shrink-0 ${
+                    activeTab === "manager"
+                      ? "bg-[#93B733]/20 text-[#4E700F] dark:text-[#bbf246] border border-[#93B733]/40"
+                      : "bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400"
+                  }`}>
+                    AI
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {activeTab === "details" ? (
+              <div className="w-full min-w-0 space-y-2.5 sm:space-y-6">
               
               {/* Pricing & Booking Card */}
               <div id="booking-card" className="rounded-xl sm:rounded-[2rem] border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0d0d0d] p-3 sm:p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] md:rounded-[2.5rem] md:p-8">
@@ -1191,30 +1162,9 @@ const currentActiveIndex = mediaCount > 0
                     </div>
                   )}
 
-                  {/* Warning: Active stay at another PG blocks new bookings */}
-                  {activeStayAtOtherPG && !existingBooking && (
-                    <div className="rounded-lg sm:rounded-2xl border-2 border-amber-400 dark:border-amber-500/40 bg-amber-50/70 dark:bg-amber-500/10 p-2 sm:p-4 text-xs font-bold text-amber-900 dark:text-amber-200 shadow-xs">
-                      <div className="flex items-center gap-1.5 sm:gap-2 font-black text-amber-800 dark:text-amber-300 text-xs sm:text-sm">
-                        <AlertCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-amber-600 dark:text-amber-400 shrink-0" />
-                        <span>You Already Have an Active PG Stay</span>
-                      </div>
-                      <p className="mt-0.5 sm:mt-1 text-[9.5px] sm:text-[11px] font-semibold text-amber-700 dark:text-amber-300 leading-snug">
-                        You are currently staying at <strong>"{activeStayAtOtherPG.title || activeStayAtOtherPG.pg_name || 'another PG'}"</strong>. 
-                        To book a new PG, please request a cancellation from your current PG owner first.
-                      </p>
-                      <button
-                        onClick={() => navigate('/my-pg?action=account')}
-                        className="mt-1.5 sm:mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 px-2.5 py-1 text-[10px] sm:text-[11px] font-bold text-white transition cursor-pointer"
-                      >
-                        Request Cancellation →
-                      </button>
-                    </div>
-                  )}
-
                   {(() => {
                     const spotsLeft = pg?.spots_left !== undefined ? pg.spots_left : Number(pg?.available_rooms || 0);
                     const isFullyBooked = spotsLeft <= 0 && !existingBooking;
-                    const hasActiveStayElsewhere = !!activeStayAtOtherPG && !existingBooking;
 
                     return (
                       <div className="space-y-1.5 sm:space-y-2">
@@ -1222,9 +1172,9 @@ const currentActiveIndex = mediaCount > 0
                           {/* Button 1: Check In / Active Stay Portal */}
                           <button
                             onClick={handleCheckInClick}
-                            disabled={bookingLoading || isFullyBooked || hasActiveStayElsewhere}
+                            disabled={bookingLoading || isFullyBooked}
                             className={`w-full flex items-center justify-center gap-1 sm:gap-2 rounded-lg sm:rounded-2xl px-2 py-2 sm:px-4 sm:py-3.5 text-[10.5px] sm:text-sm font-black shadow-xs sm:shadow-md transition-all active:scale-[0.98] ${
-                              isFullyBooked || hasActiveStayElsewhere
+                              isFullyBooked
                                 ? "bg-gray-400 dark:bg-gray-800 text-gray-200 cursor-not-allowed shadow-none"
                                 : bookingLoading
                                 ? "opacity-60 cursor-wait bg-[#93B733] text-black"
@@ -1237,8 +1187,6 @@ const currentActiveIndex = mediaCount > 0
                             <span className={`font-black truncate ${bookingStatusMeta ? "text-white" : "text-black"}`}>
                               {bookingLoading ? (
                                 'Submitting...'
-                              ) : hasActiveStayElsewhere ? (
-                                'Cancel Stay'
                               ) : isFullyBooked ? (
                                 'Fully Booked'
                               ) : bookingStatusMeta ? (
@@ -1255,9 +1203,9 @@ const currentActiveIndex = mediaCount > 0
                           {/* Button 2: Request a Visit */}
                           <button
                             onClick={handleRequestVisitClick}
-                            disabled={isFullyBooked || hasActiveStayElsewhere}
+                            disabled={isFullyBooked}
                             className={`w-full flex items-center justify-center gap-1 sm:gap-2 rounded-lg sm:rounded-2xl px-2 py-2 sm:px-4 sm:py-3.5 text-[10.5px] sm:text-sm font-black shadow-xs transition-all active:scale-[0.98] ${
-                              isFullyBooked || hasActiveStayElsewhere
+                              isFullyBooked
                                 ? "border border-gray-300 dark:border-gray-800 text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-900 cursor-not-allowed"
                                 : existingVisit?.status === "confirmed"
                                 ? "border-2 border-blue-500 bg-blue-500 hover:bg-blue-600 text-white cursor-pointer shadow-md"
@@ -1571,10 +1519,25 @@ const currentActiveIndex = mediaCount > 0
                   </div>
                 )}
               </div>
-
             </div>
+            ) : (
+              /* DEDICATED PG MANAGER VIEW: All other PG details hidden */
+              <DormnAiManagerCard
+                pg={pg}
+                managerMessages={managerMessages}
+                setManagerMessages={setManagerMessages}
+                managerInput={managerInput}
+                setManagerInput={setManagerInput}
+                managerIsTyping={managerIsTyping}
+                managerChatBoxRef={managerChatBoxRef}
+                handleManagerSend={handleManagerSend}
+                handleRequestVisitClick={handleRequestVisitClick}
+                handleShortStayClick={handleShortStayClick}
+                handleWhatsAppRedirect={handleWhatsAppRedirect}
+                setActiveTab={setActiveTab}
+              />
+            )}
           </div>
-
         </div>
       </section>
 

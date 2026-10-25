@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import api from "../../services/api";
+import FilterTabs from "./components/FilterTabs";
 
 const dayInput = (date) => new Date(date).toISOString().slice(0, 10);
 const inDays = (days) => dayInput(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -219,7 +220,7 @@ const PromoCodes = () => {
   );
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -249,18 +250,22 @@ const PromoCodes = () => {
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        {tabButton("active", "Active", activeCodes.length)}
-        {tabButton("invalid", "Invalid", invalidCodes.length)}
-      </div>
+      <FilterTabs
+        tabs={[
+          { id: "active", label: "Active", count: activeCodes.length },
+          { id: "invalid", label: "Invalid", count: invalidCodes.length },
+        ]}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+      />
 
       {loading ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center shadow-sm">
+        <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-200 dark:border-gray-800 border-t-[#93B733] mx-auto mb-4" />
           <p className="text-sm font-bold text-gray-500 dark:text-gray-400">Loading promo codes…</p>
         </div>
       ) : visibleCodes.length === 0 ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center shadow-sm">
+        <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center">
           <Ticket size={36} className="text-gray-400 mx-auto mb-4" />
           <h3 className="text-base sm:text-xl font-black text-gray-900 dark:text-white">
             {activeTab === "active" ? "No active promo codes" : "Nothing here yet"}
@@ -286,7 +291,7 @@ const PromoCodes = () => {
           {visibleCodes.map((promo) => (
             <div
               key={promo.id}
-              className="flex flex-col gap-3 rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-4 sm:p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 rounded-3xl bg-white dark:bg-[#0c1220] p-4 sm:p-5 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">

@@ -135,15 +135,11 @@ const PGAdminLayout = () => {
   }, [dockCounts, seenTick, activeAppId]);
 
   return (
-    <div className="h-screen overflow-hidden bg-[#FAFAFA] dark:bg-black text-gray-900 dark:text-white transition-colors duration-300 relative">
-      {/* Background Effects */}
-      <div className="pointer-events-none fixed left-[-120px] top-[-120px] h-80 w-80 rounded-full bg-pink-500/10 blur-3xl"></div>
-      <div className="pointer-events-none fixed bottom-[-120px] right-[-120px] h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl"></div>
-
+    <div className="owner-portal-root h-screen overflow-hidden bg-[#FAFAFA] dark:bg-black text-gray-900 dark:text-white transition-colors duration-300 relative">
       <div className="flex h-screen">
         {/* Desktop Sidebar with Smooth Collapsing (UNCHANGED for laptop view) */}
         <div
-          className={`hidden xl:block shrink-0 transition-[width] duration-200 ease-in-out will-change-[width] ${
+          className={`hidden xl:block shrink-0 transition-[width] duration-200 ease-in-out ${
             isCollapsed ? "w-[80px]" : "w-[260px]"
           }`}
         >
@@ -158,7 +154,7 @@ const PGAdminLayout = () => {
           onClick={() => setSidebarOpen(false)}
         >
           <div
-            className={`h-full w-[280px] max-w-[85vw] transform-gpu transition-transform duration-250 ease-out will-change-transform ${
+            className={`h-full w-[280px] max-w-[85vw] transform-gpu transition-transform duration-250 ease-out ${
               sidebarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
             onClick={(e) => e.stopPropagation()}
@@ -177,68 +173,22 @@ const PGAdminLayout = () => {
             toggleCollapse={toggleCollapse}
           />
 
-          {/* Page Content Centered (with mobile bottom padding for navbar) */}
+          {/* Page Content Centered */}
           <main
             className={`flex-1 w-full bg-[#FAFAFA] dark:bg-black ${
               isChat
-                ? "overflow-hidden p-0 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] xl:pb-0 flex flex-col min-h-0"
+                ? "overflow-hidden p-0 flex flex-col min-h-0"
                 : isFullBleed
-                ? "overflow-y-auto p-0 pb-20 sm:pb-24 xl:pb-0"
-                : "overflow-y-auto p-3 sm:p-5 md:p-6 lg:p-8 pb-32 sm:pb-36 xl:pb-8"
+                ? "overflow-y-auto p-0 pb-6"
+                : "overflow-y-auto p-3 sm:p-4 md:p-5 lg:p-6 pb-8"
             }`}
           >
-            <div className={`w-full ${isChat ? "h-full min-h-0 flex-1 flex flex-col" : isPricing ? "w-full min-h-full" : "mx-auto max-w-[1600px]"}`}>
+            <div className={`w-full ${isChat ? "h-full min-h-0 flex-1 flex flex-col" : "w-full min-h-full flex-1"}`}>
               <Outlet />
             </div>
           </main>
         </div>
       </div>
-
-      {/* Mobile Bottom Navigation Bar: Visible ONLY on mobile/phone (hidden on laptop xl:hidden) */}
-      <nav className="owner-bottom-nav fixed bottom-0 left-0 right-0 z-[60] bg-white dark:bg-black text-gray-900 dark:text-white border-t border-gray-200 dark:border-zinc-800 shadow-[0_-4px_24px_rgba(0,0,0,0.15)] dark:shadow-[0_-4px_30px_rgba(0,0,0,0.95)] xl:hidden pb-[calc(env(safe-area-inset-bottom)+6px)] transition-colors duration-200">
-        <div className="flex items-center justify-around max-w-lg mx-auto px-2">
-          {ownerNavItems.map((item) => {
-            const isActive = activeAppId === item.id;
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  if (item.id === "/owner/my-pgs") markOwnerCategorySeen("myPgs", dockCounts.myPgs);
-                  if (item.id === "/owner/bookings") {
-                    markOwnerCategorySeen("pendingBookings", dockCounts.pendingBookings);
-                    markOwnerCategorySeen("bookings", dockCounts.bookings);
-                  }
-                  if (item.id === "/owner/payments") markOwnerCategorySeen("payments", dockCounts.payments);
-                  navigate(item.id);
-                }}
-                className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-1.5 transition-all cursor-pointer select-none ${
-                  isActive
-                    ? "text-[#0D3A1D] dark:text-[#93B733]"
-                    : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
-                }`}
-              >
-                <div className="relative flex items-center justify-center">
-                  <Icon className={`w-5 h-5 sm:w-6 sm:h-6 transition-transform ${isActive ? "scale-110 stroke-[2.6]" : "stroke-[2.2]"}`} />
-                  {item.badge && (
-                    <span className="absolute -top-2 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center shadow-md">
-                      {item.badge}
-                    </span>
-                  )}
-                </div>
-                <span className={`text-[13px] sm:text-sm md:text-base tracking-tight truncate ${isActive ? "font-black text-[#0D3A1D] dark:text-[#93B733]" : "font-extrabold text-gray-700 dark:text-gray-300"}`}>
-                  {item.name}
-                </span>
-
-                {/* Active Green Underline Indicator */}
-                {isActive && (
-                  <span className="absolute bottom-0 left-2 right-2 h-[3.5px] bg-[#0D3A1D] dark:bg-[#93B733] rounded-t-full shadow-[0_-2px_10px_rgba(147,183,51,0.8)]" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
     </div>
   );
 };
