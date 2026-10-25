@@ -9,7 +9,7 @@ const FALLBACK_IMAGES = [
   "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=800&q=80",
 ];
 
-const HERO_PAGE_SIZE = 4;
+const HERO_PAGE_SIZE = 6;
 const ROTATE_MS = 5000;
 
 const imageFor = (pg, index = 0) => {
@@ -18,43 +18,67 @@ const imageFor = (pg, index = 0) => {
   return raw.startsWith("http") ? raw : `${IMAGE_BASE_URL}/uploads/${raw}`;
 };
 
-const SponsoredCard = memo(({ pg, index, className = "" }) => (
-  <Link
-    to={`/pg/${pg.id}`}
-    className={`group relative block aspect-square overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-900 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${className}`}
-  >
-    <img
-      src={imageFor(pg, index)}
-      alt={pg.title || "Sponsored PG"}
-      loading="lazy"
-      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-      onError={(e) => {
-        e.currentTarget.src = FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
-      }}
-    />
-    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
+const SponsoredCard = memo(({ pg, index, className = "", naturalSize = false }) => {
+  const [ratio, setRatio] = useState(null);
+  const src = imageFor(pg, index);
 
-    <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-lg border border-[#93B733]/50 bg-black/75 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#93B733] backdrop-blur-sm sm:text-[10px]">
-      <BadgeCheck size={11} />
-      Sponsored
-    </span>
+  const wrapperStyle = naturalSize ? { aspectRatio: ratio || "4 / 3" } : null;
+  const wrapperClassName = naturalSize
+    ? "relative w-full"
+    : "relative w-full aspect-square";
+  const imgClassName = naturalSize
+    ? "absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+    : "h-full w-full object-cover transition-transform duration-500 group-hover:scale-105";
+  const onLoad = naturalSize
+    ? (e) => {
+        const w = e.currentTarget.naturalWidth;
+        const h = e.currentTarget.naturalHeight;
+        if (w && h) setRatio(`${w} / ${h}`);
+      }
+    : undefined;
 
-    <div className="absolute inset-x-0 bottom-0 p-3 text-white">
-      <h4 className="truncate text-sm font-black leading-tight sm:text-base group-hover:text-[#bbf246] transition-colors">
-        {pg.title || "PG"}
-      </h4>
-      <p className="mt-0.5 truncate text-[11px] font-semibold text-gray-200 sm:text-xs">
-        {[pg.area, pg.city].filter(Boolean).join(", ")}
-        {pg.price ? (
-          <>
-            {" • "}
-            <span className="font-bold text-[#93B733]">₹{Number(pg.price).toLocaleString()}/mo</span>
-          </>
-        ) : null}
-      </p>
-    </div>
-  </Link>
-));
+  return (
+    <Link
+      to={`/pg/${pg.id}`}
+      className={`group relative block overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-900 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${className}`}
+    >
+      {/* When naturalSize, height follows the sponsored PG's actual image dimensions */}
+      <div className={wrapperClassName} style={wrapperStyle}>
+        <img
+          src={src}
+          alt={pg.title || "Sponsored PG"}
+          loading="lazy"
+          className={imgClassName}
+          onLoad={onLoad}
+          onError={(e) => {
+            e.currentTarget.src = FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
+          }}
+        />
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
+
+      <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-lg border border-[#93B733]/50 bg-black/75 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#93B733] backdrop-blur-sm sm:text-[10px]">
+        <BadgeCheck size={11} />
+        Sponsored
+      </span>
+
+      <div className="absolute inset-x-0 bottom-0 p-3 text-white">
+        <h4 className="truncate text-sm font-black leading-tight sm:text-base group-hover:text-[#bbf246] transition-colors">
+          {pg.title || "PG"}
+        </h4>
+        <p className="mt-0.5 truncate text-[11px] font-semibold text-gray-200 sm:text-xs">
+          {[pg.area, pg.city].filter(Boolean).join(", ")}
+          {pg.price ? (
+            <>
+              {" • "}
+              <span className="font-bold text-[#93B733]">₹{Number(pg.price).toLocaleString()}/mo</span>
+            </>
+          ) : null}
+        </p>
+      </div>
+    </Link>
+  );
+});
 SponsoredCard.displayName = "SponsoredCard";
 
 const SectionHeading = ({ count }) => (
@@ -121,9 +145,9 @@ const SponsoredShowcase = ({ sponsoredPGs = [], variant = "hero" }) => {
   return (
     <div className="flex w-full flex-col gap-3">
       <SectionHeading count={pgs.length} />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 items-start gap-4">
         {currentChunk.map((pg, index) => (
-          <SponsoredCard key={pg.id} pg={pg} index={safePage * HERO_PAGE_SIZE + index} />
+          <SponsoredCard key={pg.id} pg={pg} index={safePage * HERO_PAGE_SIZE + index} naturalSize />
         ))}
       </div>
       {pages.length > 1 && (

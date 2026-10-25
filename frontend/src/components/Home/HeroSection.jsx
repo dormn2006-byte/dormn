@@ -27,7 +27,7 @@ const HeroSection = ({ pgs = [], sponsoredPGs = [] }) => {
 
 
       <section className="relative overflow-hidden bg-[#FAF9F5] px-4 pb-12 pt-6 sm:px-5 sm:pb-16 sm:pt-8 md:px-8 md:pb-20 md:pt-12 lg:px-12">
-        <Container className="relative grid items-center gap-12 sm:gap-14 md:gap-16 lg:grid-cols-2">
+        <Container className="relative grid items-center gap-12 sm:gap-14 md:gap-16 lg:grid-cols-[1fr_1.3fr]">
           
           {/* Left Content */}
           <div className="z-10 mt-4 md:mt-0">
@@ -91,7 +91,7 @@ const HeroSection = ({ pgs = [], sponsoredPGs = [] }) => {
           </div>
 
           {hasSponsors ? (
-            <div className="mt-4 md:mt-0 lg:ml-auto lg:w-full lg:max-w-[520px]">
+            <div className="mt-4 md:mt-0 lg:w-full">
               <SponsoredShowcase sponsoredPGs={sponsoredPGs} variant="hero" />
             </div>
           ) : (
