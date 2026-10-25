@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 const infoCardClass =
-  "rounded-[1.5rem] sm:rounded-[2rem] border border-gray-200 bg-white p-4 sm:p-5 lg:p-6 shadow-sm";
+  "rounded-[1.5rem] sm:rounded-[2rem] bg-white dark:bg-[#0c1220] p-4 sm:p-5 lg:p-6";
 
 const BookingDetails = () => {
   const { id } = useParams();
@@ -58,7 +58,7 @@ const BookingDetails = () => {
           <AdminTopbar />
 
           {/* Hero Section */}
-          <div className="rounded-[1.5rem] sm:rounded-[2rem] border border-gray-200 bg-white p-4 sm:p-6 lg:p-7 shadow-sm">
+          <div className="rounded-[1.5rem] sm:rounded-[2rem] bg-white dark:bg-[#0c1220] p-4 sm:p-6 lg:p-7">
             <div className="flex flex-col gap-5 lg:gap-8 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex flex-col gap-6 md:flex-row md:items-center">
                 <img
@@ -338,7 +338,7 @@ const BookingDetails = () => {
                   ].map((doc, index) => (
                     <div
                       key={index}
-                      className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+                      className="flex flex-col gap-3 rounded-2xl bg-gray-50 dark:bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
                     >
                       <div className="flex items-center gap-3">
                         <FileText className="text-cyan-600" size={20} />

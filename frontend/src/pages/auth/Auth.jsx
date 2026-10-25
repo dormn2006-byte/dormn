@@ -85,13 +85,11 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const { login } = useContext(AuthContext);
 
-  const roleParam = searchParams.get("role");
   const modeParam = searchParams.get("mode");
   const redirectParam = searchParams.get("redirect");
   const prefillParam = searchParams.get("prefill");
 
   const [authMode, setAuthMode] = useState(modeParam === "signup" ? "signup" : "login");
-  const [userRole, setUserRole] = useState(roleParam === "owner" ? "owner" : "student");
   const [loginMethod, setLoginMethod] = useState("password");
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
@@ -160,17 +158,9 @@ export default function Auth() {
     const authToken = data?.token || pendingAuth?.token;
 
     if (verifiedUser && authToken) {
-      if (userRole === "owner" && verifiedUser.role === "student") {
-        setError("This account is registered as a Student. Please select the Student portal to log in.");
-        return;
-      }
-      if (userRole === "student" && verifiedUser.role === "owner") {
-        setError("This account is registered as a Property Owner. Please select the Property Owner portal to log in.");
-        return;
-      }
-
       login(verifiedUser, authToken);
-      navigateByRole(verifiedUser, redirectParam);
+      // New account creation takes user to onboarding questionnaire to choose Tenant vs Owner & fill profile
+      navigate("/onboarding");
     }
   };
 
@@ -193,35 +183,19 @@ export default function Auth() {
 
       const res = await api.post("/auth/google", {
         token: credentialResponse.credential,
-        role: userRole,
         gender: formData.gender || null,
         mode: authMode
       });
 
       if (res.data?.success) {
         const user = res.data.user;
-        const isEventAdmin = user.role === "event_admin" || user.role === "event_manager";
-
-        if (userRole === "owner" && user.role === "student") {
-          setError("This account is registered as a Student. Please select the Student portal to log in.");
-          setLoading(false);
-          return;
-        }
-
-        if (userRole === "student" && user.role === "owner") {
-          setError("This account is registered as a Property Owner. Please select the Property Owner portal to log in.");
-          setLoading(false);
-          return;
-        }
-
-        if (userRole === "owner" && user.role !== "owner" && user.role !== "superadmin" && !isEventAdmin) {
-          setError("Access denied. You do not have owner privileges.");
-          setLoading(false);
-          return;
-        }
-
         login(user, res.data.token);
-        navigateByRole(user, redirectParam);
+
+        if (res.data?.isNewUser || user.onboarding_completed === false) {
+          navigate("/onboarding");
+        } else {
+          navigateByRole(user, redirectParam);
+        }
       }
     } catch (err) {
       console.error("Google sign-in error:", err);
@@ -242,11 +216,11 @@ export default function Auth() {
           }));
         }
         setAuthMode("login");
-        setError("An account with this email already exists. Please log in using your email and password instead of Google.");
+        setError("User doesn't exist or invalid credentials or try another way");
       } else if (isAlreadyExists) {
         setError("This email is already in use. Please log in.");
       } else {
-        setError(err.response?.data?.message || "Google sign-in failed. Please try again.");
+        setError("User doesn't exist or invalid credentials or try another way");
       }
     } finally {
       setLoading(false);
@@ -254,7 +228,7 @@ export default function Auth() {
   };
 
   const handleGoogleError = () => {
-    setError("Google sign-in was cancelled or failed to authenticate.");
+    setError("User doesn't exist or invalid credentials or try another way");
   };
 
   const handleRequestOtp = async () => {
@@ -268,26 +242,7 @@ export default function Auth() {
         setSuccessMessage("6-digit login OTP sent to your email!");
       }
     } catch (err) {
-      const isNotFound = err.response?.status === 404 || err.response?.data?.notFound || err.response?.data?.message?.includes("User not found");
-      if (isNotFound) {
-        setError(
-          <div className="flex flex-col gap-1.5">
-            <span>User not found, try another way.</span>
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMode("signup");
-                setError("");
-              }}
-              className="text-left font-black text-[#93B733] hover:text-[#0D3A1D] underline cursor-pointer"
-            >
-              Don't have an account? Sign up here &rarr;
-            </button>
-          </div>
-        );
-      } else {
-        setError(err.response?.data?.message || "Failed to send OTP.");
-      }
+      setError("User doesn't exist or invalid credentials or try another way");
     } finally {
       setLoading(false);
     }
@@ -357,28 +312,12 @@ export default function Auth() {
 
         if (res.data?.success) {
           const user = res.data.user;
-          const isEventAdmin = user.role === "event_admin" || user.role === "event_manager";
-
-          if (userRole === "owner" && user.role === "student") {
-            setError("This account is registered as a Student. Please select the Student portal to log in.");
-            setLoading(false);
-            return;
-          }
-
-          if (userRole === "student" && user.role === "owner") {
-            setError("This account is registered as a Property Owner. Please select the Property Owner portal to log in.");
-            setLoading(false);
-            return;
-          }
-
-          if (userRole === "owner" && user.role !== "owner" && user.role !== "superadmin" && !isEventAdmin) {
-            setError("Access denied. You do not have owner privileges.");
-            setLoading(false);
-            return;
-          }
-
           login(user, res.data.token);
-          navigateByRole(user, redirectParam);
+          if (user.role !== "superadmin" && user.role !== "admin" && user.onboarding_completed === false) {
+            navigate("/onboarding");
+          } else {
+            navigateByRole(user, redirectParam);
+          }
         }
       } else {
         if (!agreeTerms || !agreePrivacy) {
@@ -406,7 +345,7 @@ export default function Auth() {
           full_name: formData.full_name,
           email: formData.email,
           password: formData.password,
-          role: userRole,
+          role: "student",
           gender: formData.gender,
           phone: formData.phone.trim().replace(/\D/g, "")
         };
@@ -421,29 +360,16 @@ export default function Auth() {
         }
       }
     } catch (err) {
-      const isNotFound = err.response?.status === 404 || err.response?.data?.notFound || err.response?.data?.message?.includes("User not found");
+      if (authMode === "login") {
+        setError("User doesn't exist or invalid credentials or try another way");
+        setLoading(false);
+        return;
+      }
       const isAlreadyExists = err.response?.status === 409 || err.response?.data?.alreadyExists;
-
-      if (isNotFound && authMode === "login") {
-        setError(
-          <div className="flex flex-col gap-1.5">
-            <span>User not found, try another way.</span>
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMode("signup");
-                setError("");
-              }}
-              className="text-left font-black text-[#93B733] hover:text-[#0D3A1D] underline cursor-pointer"
-            >
-              Don't have an account? Sign up here &rarr;
-            </button>
-          </div>
-        );
-      } else if (isAlreadyExists) {
+      if (isAlreadyExists) {
         setError("This email is already in use. Please log in.");
       } else {
-        setError(err.response?.data?.message || `${authMode === "login" ? "Login" : "Signup"} failed.`);
+        setError(err.response?.data?.message || "Signup failed.");
       }
     } finally {
       setLoading(false);
@@ -502,17 +428,6 @@ export default function Auth() {
           </div>
 
           <div className="p-5 sm:p-6 md:p-7 flex-1 flex flex-col">
-            {/* Role Switcher */}
-            {authMode !== "forgot" && (
-              <div className="flex rounded-xl bg-gray-100/80 p-1.5 mb-4 border border-gray-200/50">
-                <button type="button" onClick={() => setUserRole("student")} className={`flex-1 rounded-lg py-2 text-sm font-bold transition flex justify-center items-center cursor-pointer ${userRole === "student" ? "bg-white text-[#0D3A1D] shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}>
-                  Student
-                </button>
-                <button type="button" onClick={() => setUserRole("owner")} className={`flex-1 rounded-lg py-2 text-sm font-bold transition flex justify-center items-center cursor-pointer ${userRole === "owner" ? "bg-white text-[#0D3A1D] shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}>
-                  Property Owner
-                </button>
-              </div>
-            )}
 
             {/* Notifications */}
             {successMessage && (

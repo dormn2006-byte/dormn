@@ -20,6 +20,7 @@ import {
   X
 } from "lucide-react";
 import api from "../../services/api";
+import FilterTabs from "./components/FilterTabs";
 
 export default function Cancellations() {
   const [cancellations, setCancellations] = useState([]);
@@ -106,38 +107,10 @@ export default function Cancellations() {
   }, [cancellations, searchTerm, selectedStatus]);
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto pb-12">
-      {/* TOP BANNER & STATS CARDS */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center font-black shadow-sm">
-              <UserMinus size={20} />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                Resident Cancellation Requests
-              </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Review and approve move-out / checkout requests from enrolled residents
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <button
-          onClick={fetchCancellations}
-          disabled={loading}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] hover:bg-gray-50 dark:hover:bg-white/5 text-xs font-bold text-gray-700 dark:text-gray-300 transition shadow-sm cursor-pointer self-start md:self-center"
-        >
-          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-          <span>Refresh List</span>
-        </button>
-      </div>
-
+    <div className="space-y-6 w-full pb-12">
       {/* 4 Summary Stat Pills (Compact & Optimized) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] p-2.5 sm:p-3.5 shadow-xs">
+        <div className="rounded-2xl bg-white dark:bg-[#0c1220] p-2.5 sm:p-3.5">
           <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wide text-gray-400 block mb-0.5 truncate">
             Total Requests
           </span>
@@ -146,7 +119,7 @@ export default function Cancellations() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-2.5 sm:p-3.5 shadow-xs">
+        <div className="rounded-2xl bg-amber-500/[0.04] p-2.5 sm:p-3.5">
           <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wide text-amber-600 dark:text-amber-400 block mb-0.5 flex items-center gap-1.5 truncate">
             <Clock size={12} className="animate-spin shrink-0" style={{ animationDuration: "4s" }} /> Needs Decision
           </span>
@@ -155,7 +128,7 @@ export default function Cancellations() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.04] p-2.5 sm:p-3.5 shadow-xs">
+        <div className="rounded-2xl bg-emerald-500/[0.04] p-2.5 sm:p-3.5">
           <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wide text-emerald-600 dark:text-emerald-400 block mb-0.5 flex items-center gap-1.5 truncate">
             <CheckCircle2 size={12} className="shrink-0" /> Accepted & Released
           </span>
@@ -164,7 +137,7 @@ export default function Cancellations() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.03] p-2.5 sm:p-3.5 shadow-xs">
+        <div className="rounded-2xl bg-rose-500/[0.04] p-2.5 sm:p-3.5">
           <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wide text-rose-600 dark:text-rose-400 block mb-0.5 flex items-center gap-1.5 truncate">
             <XCircle size={12} className="shrink-0" /> Declined
           </span>
@@ -175,57 +148,51 @@ export default function Cancellations() {
       </div>
 
       {/* FILTER TABS & SEARCH BAR (Compact) */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-2.5 sm:p-3 shadow-xs">
-        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
-          {[
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 rounded-2xl bg-white dark:bg-[#0c1220] p-2.5 sm:p-3">
+        {/* Responsive Filter Tabs (Mobile Dropdown + Desktop Segmented Pills) */}
+        <FilterTabs
+          tabs={[
             { id: "all", label: "All Requests", count: counts.total },
             { id: "pending", label: "Needs Decision", count: counts.pending, isAlert: counts.pending > 0 },
             { id: "approved", label: "Accepted & Released", count: counts.approved },
             { id: "rejected", label: "Declined", count: counts.rejected },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setSelectedStatus(tab.id)}
-              className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-black transition-all shrink-0 cursor-pointer ${
-                selectedStatus === tab.id
-                  ? "bg-rose-600 text-white shadow-sm"
-                  : "bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10"
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span className={`rounded-lg px-1.5 py-0.5 text-[10px] font-black ${
-                selectedStatus === tab.id
-                  ? "bg-white/20 text-white"
-                  : tab.isAlert
-                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold"
-                    : "bg-gray-200 dark:bg-white/10 text-gray-800 dark:text-gray-200"
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
-        </div>
+          ]}
+          activeTab={selectedStatus}
+          onChange={setSelectedStatus}
+        />
 
-        <div className="relative w-full lg:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-          <input
-            type="text"
-            placeholder="Search by student, PG or reason..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-2xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 py-2.5 sm:py-3 pl-10 sm:pl-12 pr-4 text-xs sm:text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-rose-500 focus:bg-white dark:focus:bg-[#141b2d]"
-          />
+        <div className="flex items-center gap-2 w-full lg:w-auto">
+          <div className="relative flex-1 lg:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+            <input
+              type="text"
+              placeholder="Search by student, PG or reason..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-2xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/5 py-2.5 sm:py-3 pl-10 sm:pl-12 pr-4 text-xs sm:text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-rose-500 focus:bg-white dark:focus:bg-[#141b2d]"
+            />
+          </div>
+
+          <button
+            onClick={fetchCancellations}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3 py-2.5 sm:py-3 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition shrink-0 cursor-pointer"
+            title="Refresh cancellations"
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin text-rose-500" : "text-rose-500"} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
         </div>
       </div>
 
       {/* CANCELLATION REQUESTS LIST */}
       {loading ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-12 text-center shadow-sm">
+        <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-12 text-center">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 dark:border-gray-800 border-t-rose-500 mx-auto mb-4"></div>
           <p className="text-sm font-bold text-gray-500 dark:text-gray-400">Loading cancellation requests...</p>
         </div>
       ) : filteredCancellations.length === 0 ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-12 text-center shadow-sm space-y-3">
+        <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-12 text-center space-y-3">
           <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-white/5 text-gray-400 flex items-center justify-center mx-auto">
             <UserMinus size={28} />
           </div>
@@ -248,24 +215,22 @@ export default function Cancellations() {
             return (
               <div
                 key={item.booking_id || item.id}
-                className={`rounded-3xl border p-5 sm:p-6 transition-all duration-200 space-y-4 shadow-sm ${
+                className={`rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 transition-all duration-200 space-y-3 sm:space-y-4 ${
                   isPending
-                    ? "border-amber-500/40 bg-amber-500/[0.02] dark:bg-amber-500/[0.04]"
-                    : isApproved
-                      ? "border-emerald-500/30 bg-white dark:bg-[#0c1220]"
-                      : "border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220]"
+                    ? "bg-amber-500/[0.04]"
+                    : "bg-white dark:bg-[#0c1220]"
                 }`}
               >
                 {/* Top Row: Student & PG Overview */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-white/5">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-100 dark:border-white/5">
                   {/* Student Info */}
-                  <div className="flex items-start gap-3.5 min-w-0">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-500 to-amber-500 text-white font-black text-lg flex items-center justify-center shrink-0 shadow-md">
+                  <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-rose-500 to-amber-500 text-white font-black text-sm sm:text-lg flex items-center justify-center shrink-0 shadow-md">
                       {(item.student_name || "S").charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <h3 className="text-base font-black text-gray-900 dark:text-white truncate">
+                      <div className="flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
+                        <h3 className="text-sm sm:text-base font-black text-gray-900 dark:text-white truncate">
                           {item.student_name || "Student Resident"}
                         </h3>
                         <span className="text-xs font-bold text-gray-400">

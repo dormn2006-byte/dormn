@@ -8,6 +8,7 @@ import {
   ChevronRight, ChevronDown, BookOpenCheck, CreditCard, XCircle, UserCheck
 } from "lucide-react";
 import api, { IMAGE_BASE_URL } from "../../services/api";
+import FilterTabs from "./components/FilterTabs";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
@@ -386,19 +387,19 @@ export default function PgAnalyticsDetails() {
       </div>
 
       {/* Hero Property Analytics Header Card */}
-      <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-3 sm:p-3.5 shadow-xs relative overflow-hidden">
+      <div className="rounded-xl bg-white dark:bg-[#111] p-3 sm:p-3.5 relative overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3">
           <div className="flex items-start sm:items-center gap-3">
             <img
               src={pg.profile_image ? `${IMAGE_BASE_URL}/uploads/${pg.profile_image}` : "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=400&q=80"}
               alt={pg.title}
-              className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover border border-emerald-500/20 shadow-xs shrink-0"
+              className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover shrink-0"
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-sm sm:text-base font-black text-gray-900 dark:text-white tracking-tight truncate">{pg.title}</h1>
-                <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${
-                  pg.status === 'approved' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' : 'bg-amber-500/20 text-amber-500 border-amber-500/30'
+                <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                  pg.status === 'approved' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-amber-500/20 text-amber-500'
                 }`}>
                   {pg.status === 'approved' ? 'APPROVED LIVE' : pg.status}
                 </span>
@@ -433,7 +434,7 @@ export default function PgAnalyticsDetails() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-2.5">
         
         {/* Metric 1: Actual Revenue */}
-        <div className="bg-white dark:bg-[#111] p-2.5 sm:p-3 rounded-xl border border-gray-100 dark:border-white/5 shadow-xs flex flex-col justify-between h-18 sm:h-20 relative overflow-hidden group">
+        <div className="bg-white dark:bg-[#111] p-2.5 sm:p-3 rounded-xl flex flex-col justify-between h-18 sm:h-20 relative overflow-hidden group">
           <div className="flex items-center justify-between">
             <h3 className="text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 uppercase tracking-wider">
               <IndianRupee size={12} className="text-gray-400" />
@@ -459,7 +460,7 @@ export default function PgAnalyticsDetails() {
         </div>
 
         {/* Metric 2: Active Tenants */}
-        <div className="bg-white dark:bg-[#111] p-2.5 sm:p-3 rounded-xl border border-gray-100 dark:border-white/5 shadow-xs flex flex-col justify-between h-18 sm:h-20 relative overflow-hidden group">
+        <div className="bg-white dark:bg-[#111] p-2.5 sm:p-3 rounded-xl flex flex-col justify-between h-18 sm:h-20 relative overflow-hidden group">
           <div className="flex items-center justify-between">
             <h3 className="text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 uppercase tracking-wider">
               <Users size={12} className="text-gray-400" />
@@ -480,7 +481,7 @@ export default function PgAnalyticsDetails() {
         </div>
 
         {/* Metric 3: Spots Left */}
-        <div className="bg-white dark:bg-[#111] p-2.5 sm:p-3 rounded-xl border border-gray-100 dark:border-white/5 shadow-xs flex flex-col justify-between h-18 sm:h-20 relative overflow-hidden group">
+        <div className="bg-white dark:bg-[#111] p-2.5 sm:p-3 rounded-xl flex flex-col justify-between h-18 sm:h-20 relative overflow-hidden group">
           <div className="flex items-center justify-between">
             <h3 className="text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 uppercase tracking-wider">
               <Bed size={12} className="text-gray-400" />
@@ -501,7 +502,7 @@ export default function PgAnalyticsDetails() {
         </div>
 
         {/* Metric 4: Open Issues */}
-        <div className="bg-white dark:bg-[#111] p-2.5 sm:p-3 rounded-xl border border-gray-100 dark:border-white/5 shadow-xs flex flex-col justify-between h-18 sm:h-20 relative overflow-hidden group">
+        <div className="bg-white dark:bg-[#111] p-2.5 sm:p-3 rounded-xl flex flex-col justify-between h-18 sm:h-20 relative overflow-hidden group">
           <div className="flex items-center justify-between">
             <h3 className="text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 uppercase tracking-wider">
               <Wrench size={12} className="text-gray-400" />
@@ -527,7 +528,7 @@ export default function PgAnalyticsDetails() {
       <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-2.5">
         
         {/* Progress Overview (Recharts Area Chart) */}
-        <div className="bg-white dark:bg-[#111] p-3 sm:p-3.5 rounded-xl border border-gray-100 dark:border-white/5 shadow-xs">
+        <div className="bg-white dark:bg-[#111] p-3 sm:p-3.5 rounded-xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
             <div>
               <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white">Progress Overview</h3>
@@ -594,7 +595,7 @@ export default function PgAnalyticsDetails() {
         </div>
 
         {/* Status Split (Recharts Donut Chart) */}
-        <div className="bg-white dark:bg-[#111] p-3 sm:p-3.5 rounded-xl border border-gray-100 dark:border-white/5 shadow-xs flex flex-col justify-between">
+        <div className="bg-white dark:bg-[#111] p-3 sm:p-3.5 rounded-xl flex flex-col justify-between">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1.5">
             <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white flex items-center gap-1.5 shrink-0">
               <PieChartIcon size={14} className="text-gray-400" />
@@ -665,42 +666,22 @@ export default function PgAnalyticsDetails() {
       </div>
 
       {/* ══════ FULL PROPERTY MANAGEMENT SECTIONS ══════ */}
-      <div className="rounded-xl border border-gray-100 dark:border-white/5 bg-white dark:bg-[#111] shadow-xs overflow-hidden">
+      <div className="rounded-xl bg-white dark:bg-[#111] overflow-hidden">
         
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-1 px-2.5 pt-2 border-b border-gray-100 dark:border-white/5 overflow-x-auto bg-gray-50/50 dark:bg-white/[0.01]">
-          {[
-            { id: "bookings", label: "All Bookings", icon: BookOpenCheck, count: visibleBookings.length },
-            { id: "requests", label: "All Requests", icon: Wrench, count: requests.length },
-            { id: "tenants", label: "All Tenants", icon: Users, count: uniqueTenants.length },
-            { id: "kyc", label: "All KYC Forms", icon: FileText, count: kycForms.length },
-            { id: "payments", label: "All Payments", icon: CreditCard, count: paidPayments.length },
-            { id: "overview", label: "Overview", icon: Building2, count: null },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 pb-2 px-2.5 text-[11px] font-bold transition border-b-2 cursor-pointer whitespace-nowrap ${
-                  isActive
-                    ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5"
-                    : "border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
-                }`}
-              >
-                <Icon size={13} />
-                <span>{tab.label}</span>
-                {tab.count !== null && (
-                  <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                    isActive ? "bg-blue-500/20 text-blue-600 dark:text-blue-400" : "bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400"
-                  }`}>
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* Navigation Tabs (Dropdown on mobile, Segmented tabs on desktop) */}
+        <div className="p-2 sm:p-3 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.01]">
+          <FilterTabs
+            tabs={[
+              { id: "bookings", label: "All Bookings", icon: BookOpenCheck, count: visibleBookings.length },
+              { id: "requests", label: "All Requests", icon: Wrench, count: requests.length },
+              { id: "tenants", label: "All Tenants", icon: Users, count: uniqueTenants.length },
+              { id: "kyc", label: "All KYC Forms", icon: FileText, count: kycForms.length },
+              { id: "payments", label: "All Payments", icon: CreditCard, count: paidPayments.length },
+              { id: "overview", label: "Overview", icon: Building2, count: null },
+            ]}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+          />
         </div>
 
         {/* Tab Content Body */}

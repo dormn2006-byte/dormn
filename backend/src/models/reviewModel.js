@@ -5,7 +5,7 @@ import { serialize } from "../utils/serialize.js";
 // Fetch approved reviews for the frontend
 export const getApprovedReviews = async () => {
   const reviews = await Review.aggregate([
-    { $match: { status: "approved" } },
+    { $match: { status: { $ne: "hidden" } } },
     { $sort: { created_at: -1 } },
     {
       $lookup: {
@@ -41,6 +41,7 @@ export const createReview = async (userId, rating, description) => {
     user_id: userId,
     rating,
     description,
+    status: "approved",
   });
 
   return { insertId: review._id, affectedRows: 1 };

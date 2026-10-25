@@ -17,6 +17,12 @@ const PublicGate = ({ children }) => {
   return <ComingSoon />;
 };
 
+const ResidentGate = ({ children }) => {
+  const { user, token } = useContext(AuthContext);
+  if (!token || !user) return <Navigate to="/auth" replace />;
+  return children;
+};
+
 // Lazy-loaded routes to keep initial bundle size ultra-light
 const Home = lazyWithRetry(() => import("../pages/Home"), "Home");
 const ComingSoon = lazyWithRetry(() => import("../pages/ComingSoon"), "ComingSoon");
@@ -38,6 +44,7 @@ const DashboardRedirect = () => {
 
 // Lazy-loaded routes to keep initial bundle size light
 const Auth = lazyWithRetry(() => import("../pages/auth/Auth"), "Auth");
+const Onboarding = lazyWithRetry(() => import("../pages/auth/Onboarding"), "Onboarding");
 const About = lazyWithRetry(() => import("../pages/About"), "About");
 const FAQ = lazyWithRetry(() => import("../pages/faq"), "FAQ");
 const Contact = lazyWithRetry(() => import("../pages/Contact"), "Contact");
@@ -80,6 +87,21 @@ const PgAnalyticsDetails = lazyWithRetry(() => import("../admin/pgAdmin/PgAnalyt
 const Cancellations = lazyWithRetry(() => import("../admin/pgAdmin/Cancellations"), "Cancellations");
 const OwnerPGChat = lazyWithRetry(() => import("../admin/pgAdmin/PGChat"), "OwnerPGChat");
 const OwnerProfile = lazyWithRetry(() => import("../admin/pgAdmin/OwnerProfile"), "OwnerProfile");
+const OwnerBookedPGs = lazyWithRetry(() => import("../admin/pgAdmin/OwnerBookedPGs"), "OwnerBookedPGs");
+const OwnerSavedPGs = lazyWithRetry(() => import("../admin/pgAdmin/OwnerSavedPGs"), "OwnerSavedPGs");
+
+// Smart wrappers to redirect owners to their dedicated portal views
+const SmartSavedPGs = () => {
+  const { user } = useContext(AuthContext);
+  if (user?.role === "owner") return <Navigate to="/owner/saved-pgs" replace />;
+  return <SavedPGs />;
+};
+
+const SmartMyBookings = () => {
+  const { user } = useContext(AuthContext);
+  if (user?.role === "owner") return <Navigate to="/owner/booked-pgs" replace />;
+  return <MyBookings />;
+};
 
 // New features from Downloads backup
 const Gym = lazyWithRetry(() => import("../pages/Gym"), "Gym");
@@ -132,6 +154,7 @@ const AppRoutes = () => {
           {/* ── Coming Soon gate: public site hidden until launch ── */}
           <Route path="/" element={<PublicGate><Home /></PublicGate>} />
           <Route path="/pgs" element={<PublicGate><ExplorePGs /></PublicGate>} />
+          <Route path="/explore" element={<Navigate to="/pgs" replace />} />
           <Route path="/about" element={<PublicGate><About /></PublicGate>} />
           <Route path="/faqs" element={<PublicGate><FAQ /></PublicGate>} />
           <Route path="/contact" element={<PublicGate><Contact /></PublicGate>} />
@@ -164,6 +187,7 @@ const AppRoutes = () => {
           {/* Universal Dashboard & Auth Shortcuts */}
           <Route path="/dashboard" element={<DashboardRedirect />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/login" element={<Navigate to="/auth" replace />} />
           <Route path="/signup" element={<Navigate to="/auth?mode=signup" replace />} />
           <Route path="/register" element={<Navigate to="/auth?mode=signup" replace />} />
@@ -211,8 +235,8 @@ const AppRoutes = () => {
           <Route
             path="/saved-pgs"
             element={
-              <ProtectedRoute role="student">
-                <SavedPGs />
+              <ProtectedRoute allowedRoles={["student", "owner"]}>
+                <SmartSavedPGs />
               </ProtectedRoute>
             }
           />
@@ -261,8 +285,8 @@ const AppRoutes = () => {
           <Route
             path="/my-bookings"
             element={
-              <ProtectedRoute role="student">
-                <MyBookings />
+              <ProtectedRoute allowedRoles={["student", "owner"]}>
+                <SmartMyBookings />
               </ProtectedRoute>
             }
           />
@@ -320,6 +344,8 @@ const AppRoutes = () => {
             <Route path="promo-codes" element={<PromoCodes />} />
             <Route path="kyc-forms" element={<TenantRegistrations />} />
             <Route path="profile" element={<OwnerProfile />} />
+            <Route path="booked-pgs" element={<OwnerBookedPGs />} />
+            <Route path="saved-pgs" element={<OwnerSavedPGs />} />
             <Route path="settings" element={<OwnerProfile defaultTab="security" />} />
             <Route path="visits" element={<PgVisits />} />
             <Route path="short-stays" element={<PgShortStays />} />

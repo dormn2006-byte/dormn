@@ -44,8 +44,8 @@ const ReviewsSection = () => {
     const handleResize = () => {
       const isMobile = window.innerWidth < 768;
       setDimensions({
-        width: Math.min(window.innerWidth - 40, isMobile ? 320 : 420),
-        height: isMobile ? 140 : 180,
+        width: Math.min(window.innerWidth - 32, isMobile ? 320 : 440),
+        height: isMobile ? 180 : 205,
       });
     };
 
@@ -135,68 +135,101 @@ const ReviewsSection = () => {
     setSubmitted(false);
   }, []);
 
+  const count = reviews.length;
+  const hasReviews = count > 0;
+
+  // Adaptive vertical footprint: lowest when empty, expands gracefully as reviews are added
+  const sectionPadding = !hasReviews
+    ? "py-8 sm:py-12"
+    : count === 1
+    ? "py-10 sm:py-14"
+    : count === 2
+    ? "py-12 sm:py-16"
+    : "py-16 sm:py-20 lg:py-24";
+
+  const headerMargin = !hasReviews
+    ? "mb-4 sm:mb-5"
+    : count === 1
+    ? "mb-6 sm:mb-8"
+    : "mb-8 sm:mb-10";
+
   return (
-    <section className="bg-[#FAF9F5] px-4 py-24 sm:px-6 lg:px-8 border-y border-gray-100 [content-visibility:auto] [contain-intrinsic-size:1px_600px]">
+    <section className={`bg-[#FAF9F5] px-4 sm:px-6 lg:px-8 border-y border-gray-100 transition-all duration-300 ${sectionPadding}`}>
       <Container className="max-w-[1440px] 2xl:max-w-[1600px]">
         {/* Section Header */}
-        <div className="mb-10 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#93B733]/20 bg-[#93B733]/10 px-4 py-1.5 shadow-sm mb-4">
-            <Star className="h-4 w-4 text-[#93B733] fill-[#93B733]" />
-            <span className="text-xs font-bold uppercase tracking-wider text-[#0D3A1D]">
+        <div className={`${headerMargin} text-center transition-all duration-300`}>
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#93B733]/20 bg-[#93B733]/10 px-3.5 py-1 sm:px-4 sm:py-1.5 shadow-xs mb-3">
+            <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#93B733] fill-[#93B733]" />
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[#0D3A1D]">
               Verified Reviews
             </span>
           </div>
-          <h2 className="text-3xl md:text-4xl font-black text-[#0D3A1D] tracking-tight mb-3">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-[#0D3A1D] tracking-tight mb-2">
             What Our Students <span className="text-[#4E700F]">Say</span>
           </h2>
-          <p className="text-sm md:text-base text-gray-600 font-medium">
+          <p className="text-xs sm:text-sm md:text-base text-gray-600 font-medium max-w-xl mx-auto">
             Real experiences from students who found their perfect PG through Dormn.
           </p>
         </div>
 
-        {/* 3D Interactive Review Cards Stack */}
-        <div className="mx-auto mt-8 w-full max-w-4xl flex justify-center pb-8 min-h-[220px]">
-          {/* 🛡️ THE FIX: Handle Loading, Empty, and Render States properly */}
-          {isLoading ? (
-             <div className="flex flex-col items-center justify-center h-full text-gray-400">
-               <p className="text-sm font-semibold animate-pulse text-[#93B733]">Loading verified reviews...</p>
-             </div>
-          ) : reviews.length > 0 ? (
+        {/* Dynamic Reviews Content Area */}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-6 text-gray-400">
+            <div className="h-4 w-40 rounded-full bg-gray-200/80 animate-pulse mb-2" />
+            <p className="text-xs font-semibold text-[#93B733]">Loading verified reviews...</p>
+          </div>
+        ) : hasReviews ? (
+          <div className="mx-auto w-full max-w-4xl flex flex-col items-center transition-all duration-300">
             <CardStack
-              key={reviews.length} // Extra safety layer to reset animations if length changes
+              key={reviews.length}
               items={reviews}
               initialIndex={0}
               maxVisible={Math.min(5, reviews.length)}
-              autoAdvance
+              autoAdvance={reviews.length > 1}
               intervalMs={3000}
               pauseOnHover
-              showDots
+              showDots={reviews.length > 1}
               cardWidth={dimensions.width}
               cardHeight={dimensions.height}
             />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
-              <p className="text-lg font-semibold text-gray-500">No reviews yet.</p>
-              <p className="text-sm mt-1">Be the first to share your experience!</p>
-            </div>
-          )}
-        </div>
 
-        {/* Add Review Button */}
-        <div className="flex justify-center pt-2">
-          <button
-            onClick={handleAddReviewClick} 
-            className="inline-flex items-center gap-2.5 rounded-2xl bg-[#0D3A1D] px-6 py-3.5 text-sm font-black text-white shadow-lg transition-all hover:bg-[#07130B] hover:scale-[1.03] active:scale-[0.98]"
-          >
-            <PlusCircle className="h-5 w-5 text-[#93B733]" />
-            Add Your Review
-          </button>
-        </div>
+            {/* Add Review Button when reviews exist */}
+            <div className="flex justify-center pt-4 sm:pt-6">
+              <button
+                onClick={handleAddReviewClick} 
+                className="inline-flex items-center gap-2.5 rounded-2xl bg-[#0D3A1D] px-6 py-3 text-xs sm:text-sm font-black text-white shadow-lg transition-all hover:bg-[#07130B] hover:scale-[1.03] active:scale-[0.98]"
+              >
+                <PlusCircle className="h-4 w-4 sm:h-5 sm:w-5 text-[#93B733]" />
+                Add Your Review
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Optimized Compact Low-Profile Empty State */
+          <div className="mx-auto max-w-md rounded-2xl border border-gray-200/70 bg-white/80 p-5 sm:p-6 text-center shadow-xs transition-all duration-300">
+            <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#93B733]">
+              <Star className="h-5 w-5 fill-[#93B733]" />
+            </div>
+            <h3 className="text-sm sm:text-base font-black text-[#0D3A1D]">No reviews yet</h3>
+            <p className="mt-1 text-xs text-gray-500 font-medium">
+              Be the first resident to share your experience and help others find their stay!
+            </p>
+            <div className="mt-3.5 flex justify-center">
+              <button
+                onClick={handleAddReviewClick}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#0D3A1D] px-4 py-2 sm:px-5 sm:py-2.5 text-xs font-black text-white shadow-md transition-all hover:bg-[#07130B] hover:scale-105 active:scale-95"
+              >
+                <PlusCircle className="h-3.5 w-3.5 text-[#93B733]" />
+                Write the First Review
+              </button>
+            </div>
+          </div>
+        )}
       </Container>
 
       {/* Add Review Modal Popup */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
           <div className="relative w-full max-w-md rounded-3xl border border-gray-100 bg-white p-6 sm:p-8 shadow-2xl animate-[slideUp_0.2s_ease-out]">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">

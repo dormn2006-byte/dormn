@@ -28,9 +28,11 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
   const dockRectRef = useRef(null);
   const lastClickTimeRef = useRef(0);
 
-  const activeApp = apps.find(app => openApps.includes(app.id));
+  const safeApps = useMemo(() => Array.isArray(apps) ? apps.filter(Boolean) : [], [apps]);
+
+  const activeApp = safeApps.find(app => app?.id && openApps.includes(app.id));
   const activeAppId = activeApp ? activeApp.id : null;
-  const expandedAppId = (isParty || isPhoneView) ? null : (hoveredApp ? hoveredApp.id : activeAppId);
+  const expandedAppId = isParty ? null : (hoveredApp ? hoveredApp.id : activeAppId);
 
   const getResponsiveConfig = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -41,9 +43,10 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
     
     if (isMobile) {
       const idx = w < 380 ? 0 : w < 480 ? 1 : w < 640 ? 2 : 3;
-      const szMap = variant === 'resident' ? [34, 38, 42, 46] : variant === 'owner' ? [38, 44, 48, 52] : [36, 40, 44, 48];
-      const spMap = variant === 'resident' ? [5, 6, 7, 8] : [6, 8, 9, 10];
-      return { baseIconSize: szMap[idx], maxScale: 1.0, effectWidth: 0, baseSpacing: spMap[idx], isBottom: true, labelWidth: 0 };
+      const szMap = variant === 'resident' ? [42, 46, 50, 54] : [48, 52, 56, 60];
+      const spMap = variant === 'resident' ? [8, 9, 10, 12] : [9, 11, 13, 15];
+      const lwMap = [72, 80, 88, 96];
+      return { baseIconSize: szMap[idx], maxScale: 1.0, effectWidth: 0, baseSpacing: spMap[idx], isBottom: true, labelWidth: isParty ? 0 : lwMap[idx] };
     }
 
     const isRes = variant === 'resident';
@@ -87,8 +90,11 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
   }, [apps, baseIconSize, baseSpacing, effectWidth, maxScale, isMobileDevice]);
 
   const getLabelWidthForApp = useCallback((app) => {
-    if (isPhoneView) return 0;
     if (!app || !app.name) return currentLabelWidth;
+    if (isPhoneView) {
+      const charCount = app.name.length;
+      return Math.max(68, Math.min(105, Math.round(charCount * 7.5 + 24)));
+    }
     if (isParty) {
       const charCount = app.name.length;
       const needed = Math.max(90, Math.min(240, Math.round(charCount * 7.5 + 24)));
@@ -99,24 +105,26 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
 
   const calculatePositions = useCallback((scales, expandedId) => {
     let x = 0;
-    return scales.map((scale, i) => {
-      const app = apps[i];
-      const labelW = (!isPhoneView && app.id === expandedId) ? getLabelWidthForApp(app) : 0;
-      const sw = baseIconSize * scale;
+    return (scales || []).slice(0, safeApps.length).map((scale, i) => {
+      const app = safeApps[i];
+      if (!app) return x;
+      const labelW = app.id === expandedId ? getLabelWidthForApp(app) : 0;
+      const sw = baseIconSize * (scale || 1);
       const cx = x + sw / 2;
       x += sw + labelW + baseSpacing;
       return cx;
     });
-  }, [apps, baseIconSize, baseSpacing, getLabelWidthForApp, isPhoneView]);
+  }, [safeApps, baseIconSize, baseSpacing, getLabelWidthForApp]);
 
   const animateToTargetRef = useRef();
 
   useEffect(() => {
-    const s = scalesRef.current.length === apps.length ? scalesRef.current : apps.map(() => 1);
-    const p = calculatePositions(s, expandedAppId);
+    scalesRef.current = safeApps.map((_, i) => scalesRef.current[i] ?? 1);
+    const p = calculatePositions(scalesRef.current, expandedAppId);
     positionsRef.current = p;
+    setCurrentScales([...scalesRef.current]);
     setCurrentPositions(p);
-  }, [apps, calculatePositions, config, expandedAppId]);
+  }, [safeApps, calculatePositions, config, expandedAppId]);
 
   const animateToTarget = useCallback(() => {
     if (isMobileDevice) return;
@@ -126,15 +134,17 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
     const lf = mouseX !== null ? 0.38 : 0.28;
     let changed = false;
 
-    const ns = scalesRef.current.map((c, i) => {
-      const d = ts[i] - c;
+    const ns = ts.map((targetScale, i) => {
+      const currentScale = scalesRef.current[i] ?? 1;
+      const d = targetScale - currentScale;
       if (Math.abs(d) > 0.002) changed = true;
-      return c + d * lf;
+      return currentScale + d * lf;
     });
-    const np = positionsRef.current.map((c, i) => {
-      const d = tp[i] - c;
+    const np = tp.map((targetPos, i) => {
+      const currentPos = positionsRef.current[i] ?? targetPos;
+      const d = targetPos - currentPos;
       if (Math.abs(d) > 0.1) changed = true;
-      return c + d * lf;
+      return currentPos + d * lf;
     });
 
     scalesRef.current = ns;
@@ -224,20 +234,25 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
 
   const handleTouchEnd = useCallback((e) => {
     if (e.cancelable) e.preventDefault();
-    if (touchedAppIndexRef.current !== null) clickApp(apps[touchedAppIndexRef.current].id, touchedAppIndexRef.current);
+    const touchedIdx = touchedAppIndexRef.current;
+    if (touchedIdx !== null && safeApps[touchedIdx]?.id) {
+      clickApp(safeApps[touchedIdx].id, touchedIdx);
+    }
     setMouseX(null);
     setHoveredApp(null);
     touchedAppIndexRef.current = null;
-  }, [apps, clickApp]);
+  }, [safeApps, clickApp]);
 
-  const contentWidth = currentPositions.length > 0
-    ? Math.max(...currentPositions.map((pos, i) => {
-        const labelW = (!isPhoneView && apps[i].id === expandedAppId) ? getLabelWidthForApp(apps[i]) : 0;
-        return pos + (baseIconSize * currentScales[i]) / 2 + labelW;
+  const contentWidth = currentPositions.length > 0 && safeApps.length > 0
+    ? Math.max(...currentPositions.slice(0, safeApps.length).map((pos, i) => {
+        const app = safeApps[i];
+        if (!app) return 0;
+        const labelW = app.id === expandedAppId ? getLabelWidthForApp(app) : 0;
+        return pos + (baseIconSize * (currentScales[i] || 1)) / 2 + labelW;
       }))
-    : (apps.length * (baseIconSize + baseSpacing)) - baseSpacing;
+    : Math.max(0, (safeApps.length * (baseIconSize + baseSpacing)) - baseSpacing);
 
-  const borderRadius = Math.max(18, baseIconSize * 0.48);
+  const borderRadius = Math.max(20, baseIconSize * 0.5);
   const dockStyle = useMemo(() => ({
     ...(isParty ? {} : isOwner ? {
       background: 'rgba(11, 16, 32, 0.88)',
@@ -249,7 +264,11 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
       boxShadow: '0 20px 48px -8px rgba(0, 0, 0, 0.12), 0 4px 16px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
     }),
     borderRadius: `${borderRadius}px`,
-    padding: (isOwner || isResident) ? `${Math.max(7, padding)}px ${Math.max(12, padding + 4)}px` : `${padding}px`,
+    padding: isPhoneView
+      ? `${Math.max(9, Math.round(baseIconSize * 0.2))}px ${Math.max(16, Math.round(baseIconSize * 0.32))}px`
+      : (isOwner || isResident)
+        ? `${Math.max(7, padding)}px ${Math.max(12, padding + 4)}px`
+        : `${padding}px`,
     margin: '0 auto',
     width: 'fit-content',
     WebkitTransform: 'translateZ(0)',
@@ -259,7 +278,7 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
     contain: 'paint layout',
     WebkitBackdropFilter: 'blur(28px) saturate(190%)',
     backdropFilter: 'blur(28px) saturate(190%)'
-  }), [borderRadius, baseIconSize, padding, isParty, isOwner, isResident]);
+  }), [borderRadius, baseIconSize, padding, isParty, isOwner, isResident, isPhoneView]);
 
   const dotSize = Math.max(4, baseIconSize * 0.08);
 
@@ -279,11 +298,16 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
         className="relative"
         style={{ height: `${baseIconSize}px`, width: `${contentWidth}px` }}
       >
-        {apps.map((app, index) => {
-          const scale = currentScales[index];
-          const position = currentPositions[index] || 0;
+        {safeApps.map((app, index) => {
+          if (!app || !app.id) return null;
+          const scale = currentScales[index] || 1;
+          const position = (currentPositions[index] !== undefined && !isNaN(currentPositions[index]))
+            ? currentPositions[index]
+            : (positionsRef.current[index] !== undefined && !isNaN(positionsRef.current[index]))
+            ? positionsRef.current[index]
+            : (calculatePositions(safeApps.map(() => 1), expandedAppId)[index] || 0);
           const sz = baseIconSize * scale;
-          const isExp = !isPhoneView && app.id === expandedAppId;
+          const isExp = app.id === expandedAppId;
           const lw = isExp ? getLabelWidthForApp(app) : 0;
           const isActive = openApps.includes(app.id);
 
@@ -299,7 +323,7 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
                 left: `${position - sz / 2}px`,
                 bottom: isBottom ? '0px' : 'auto',
                 top: isBottom ? 'auto' : '0px',
-                width: `${sz + (isPhoneView ? 0 : lw)}px`,
+                width: `${sz + lw}px`,
                 height: `${sz}px`,
                 transformOrigin: isBottom ? 'bottom center' : 'top center',
                 zIndex: Math.round(scale * 10),
@@ -409,17 +433,16 @@ const MacOSDock = ({ apps, onAppClick, openApps = [], className = '', variant = 
 
               {/* Side Expanding Label Pill */}
               <div
-                className={`dock-label-pill hidden md:flex ml-1 sm:ml-2 text-[10px] sm:text-xs md:text-sm font-black rounded-lg sm:rounded-xl shadow-xs sm:shadow-md border items-center justify-center px-1.5 sm:px-3 ${
+                className={`dock-label-pill flex ml-1.5 sm:ml-2 text-[11px] sm:text-xs md:text-sm font-black rounded-lg sm:rounded-xl shadow-xs sm:shadow-md border items-center justify-center px-2 sm:px-3 ${
                   isParty
                     ? "bg-purple-950/95 dark:bg-[#120D26]/95 text-pink-300 dark:text-pink-300 border-purple-400/40 shadow-pink-500/20 backdrop-blur-md"
                     : isOwner
                     ? "bg-white/95 dark:bg-[#161c2c]/95 text-[#0D3A1D] dark:text-white border-white/50 dark:border-white/20 shadow-lg shadow-black/30 backdrop-blur-xl"
-                    : "bg-white/95 text-[#0D3A1D] border-gray-200/90 shadow-md backdrop-blur-md"
+                    : "bg-white/95 dark:bg-[#141414]/95 text-[#0D3A1D] dark:text-[#93B733] border-gray-200/90 dark:border-white/10 shadow-md backdrop-blur-md"
                 }`}
                 style={{
-                  display: isPhoneView ? 'none' : undefined,
-                  height: `${Math.max(24, sz * 0.76)}px`,
-                  width: isExp ? Math.max(0, lw - 8) : 0,
+                  height: `${Math.max(26, sz * 0.76)}px`,
+                  width: isExp ? Math.max(0, lw - 6) : 0,
                   opacity: isExp ? 1 : 0,
                   transition: 'width 140ms cubic-bezier(0.4, 0, 0.2, 1), opacity 140ms cubic-bezier(0.4, 0, 0.2, 1)',
                   overflow: 'hidden',

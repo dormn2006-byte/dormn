@@ -114,10 +114,10 @@ const OwnerPayments = () => {
   const showSettlementView = !legacyPayments;
 
   return (
-    <div className="space-y-3 sm:space-y-4 max-w-[1600px] mx-auto animate-fadeIn">
+    <div className="space-y-3 sm:space-y-4 w-full animate-fadeIn">
 
       {/* Header & Totals */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] p-3 sm:p-4 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-white dark:bg-[#0c1220] p-3 sm:p-4">
         <div>
           <span className="rounded-lg bg-[#93B733]/15 text-[#93B733] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
             Payouts & Revenue
@@ -142,19 +142,19 @@ const OwnerPayments = () => {
 
       {/* Money tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] p-3 shadow-2xs">
+        <div className="rounded-2xl bg-white dark:bg-[#0c1220] p-3">
           <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Rent Received</p>
           <p className="text-base sm:text-xl font-black text-gray-900 dark:text-white mt-0.5">{rupees(grossRevenue)}</p>
         </div>
-        <div className="rounded-2xl border border-amber-200 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-500/5 p-3 shadow-2xs">
+        <div className="rounded-2xl bg-amber-500/10 p-3">
           <p className="text-[10px] uppercase tracking-wider text-amber-500 font-bold">Ready to Transfer</p>
           <p className="text-base sm:text-xl font-black text-amber-600 dark:text-amber-400 mt-0.5">{rupees(pendingNet)}</p>
         </div>
-        <div className="rounded-2xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5 p-3 shadow-2xs">
+        <div className="rounded-2xl bg-emerald-500/10 p-3">
           <p className="text-[10px] uppercase tracking-wider text-emerald-500 font-bold">Transferred to Bank</p>
           <p className="text-base sm:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{rupees(paidNet)}</p>
         </div>
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] p-3 shadow-2xs">
+        <div className="rounded-2xl bg-white dark:bg-[#0c1220] p-3">
           <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Company Fee</p>
           <p className="text-base sm:text-xl font-black text-gray-500 mt-0.5">{rupees(feeCollected)}</p>
         </div>
@@ -174,7 +174,7 @@ const OwnerPayments = () => {
       )}
 
       {/* Transactions */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] shadow-2xs">
+      <div className="overflow-hidden rounded-2xl bg-white dark:bg-[#0c1220]">
         <div className="p-3 sm:p-3.5 border-b border-gray-100 dark:border-white/10 flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">

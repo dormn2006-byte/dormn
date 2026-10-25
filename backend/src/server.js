@@ -96,9 +96,15 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // ── Rate limiters ──
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: Number(process.env.GLOBAL_RATE_LIMIT_MAX) || 2500,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    if (req.method === "OPTIONS") return true;
+    if (req.path?.startsWith("/uploads") || req.originalUrl?.includes("/uploads")) return true;
+    if (process.env.NODE_ENV !== "production" && (req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1" || req.hostname === "localhost")) return true;
+    return false;
+  },
   message: { success: false, message: "Too many requests from this IP, please try again later." },
 });
 
@@ -129,18 +135,7 @@ const drDormnLimiter = rateLimit({
   message: { success: false, message: "Too many AI requests. Please wait a few minutes and try again." },
 });
 
-app.use("/api/", globalLimiter);
-app.use("/api/auth/login", authLimiter);
-app.use("/api/auth/register", authLimiter);
-app.use("/api/auth/send-verification-otp", otpSendLimiter);
-app.use("/api/auth/request-otp", otpSendLimiter);
-app.use("/api/auth/forgot-password", otpSendLimiter);
-app.use("/api/auth/verify-email-otp", otpVerifyLimiter);
-app.use("/api/auth/reset-password", otpVerifyLimiter);
-app.use("/api/dr-dormn/chat", drDormnLimiter);
-
-// PG AI manager also calls a paid LLM per turn (and is open to guests), so it
-// gets its own shared budget per IP.
+// PG AI manager limiter
 const pgAiLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 30,
@@ -148,13 +143,8 @@ const pgAiLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: "Too many AI requests. Please wait a few minutes and try again." },
 });
-app.use("/api/pg-ai/chat", pgAiLimiter);
 
-// ── Routes ──
-app.use("/api/enrollments", enrollmentRoutes);
-app.use("/api/auth", authRoutes);
-app.use("/api/pg", pgRoutes);
-app.use("/api/reviews", reviewRoutes);
+// ── Static media uploads (must precede API rate limiter so images never exhaust rate quotas) ──
 app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Misses on /api/uploads fall through to here. Two problems to solve:
@@ -190,6 +180,22 @@ app.use("/api/uploads", async (req, res) => {
   if (type) res.set("Content-Type", type);
   return res.status(404).end();
 });
+
+app.use("/api/", globalLimiter);
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/send-verification-otp", otpSendLimiter);
+app.use("/api/auth/request-otp", otpSendLimiter);
+app.use("/api/auth/forgot-password", otpSendLimiter);
+app.use("/api/auth/verify-email-otp", otpVerifyLimiter);
+app.use("/api/auth/reset-password", otpVerifyLimiter);
+app.use("/api/dr-dormn/chat", drDormnLimiter);
+
+// ── Routes ──
+app.use("/api/enrollments", enrollmentRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/pg", pgRoutes);
+app.use("/api/reviews", reviewRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/superadmin", superAdminRoutes);
 app.use("/api/payments", paymentRoutes);

@@ -4,6 +4,7 @@ import Enrollment from "../schemas/enrollmentSchema.js";
 import Booking from "../schemas/bookingSchema.js";
 import { serialize } from "../utils/serialize.js";
 import { encrypt, decryptEnrollmentObject } from "../utils/encryptionService.js";
+import { compressBase64ToWebP } from "../utils/imageProcessor.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,20 +24,26 @@ const parseJSON = (v, fallback) => {
   try { return JSON.parse(v); } catch { return fallback; }
 };
 
-const cleanPassport = (p) => (typeof p === "string" && !/googleusercontent|lh3\.google/i.test(p) ? p : null);
+const cleanPassport = (p) => (typeof p === "string" && p.trim() ? p : null);
 
 // @route   GET /api/student/profile
 // @desc    Get the current student's full profile (with registration data sync)
 export const getStudentProfile = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await User.findById(userId)
+    const userId = Number(req.user.id) || req.user.id;
+    const user = await User.findOne({
+      $or: [{ _id: Number(userId) }, { _id: String(userId) }]
+    })
       .select("full_name email phone gender profile_image")
       .lean();
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-    const profile = await StudentProfile.findOne({ user_id: userId }).lean();
-    const enrollment = await Enrollment.findOne({ student_id: userId })
+    const profile = await StudentProfile.findOne({
+      $or: [{ user_id: Number(userId) }, { user_id: String(userId) }]
+    }).lean();
+    const enrollment = await Enrollment.findOne({
+      $or: [{ student_id: Number(userId) }, { student_id: String(userId) }]
+    })
       .sort({ created_at: -1 })
       .lean();
 
@@ -79,7 +86,8 @@ export const getStudentProfile = async (req, res) => {
       company: p.workplace_name || e.workplace_name || "",
       designation: p.designation || e.designation || "",
       
-      passportPhoto: cleanPassport(p.passport_photo) || cleanPassport(e.passport_photo) || null,
+      photo: p.passport_photo || user.profile_image || e.passport_photo || null,
+      passportPhoto: p.passport_photo || user.profile_image || e.passport_photo || null,
       aadharFront: p.aadhar_front || e.aadhar_front || null,
       aadharBack: p.aadhar_back || e.aadhar_back || null,
       collegeIdImage: p.college_id_image || e.college_id_image || null,
@@ -105,7 +113,7 @@ export const getStudentProfile = async (req, res) => {
 // @desc    Create or update full student profile & sync with registration form
 export const saveStudentProfile = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = Number(req.user.id) || req.user.id;
     const b = req.body || {};
 
     const cleanPhone = (p) => {
@@ -134,10 +142,23 @@ export const saveStudentProfile = async (req, res) => {
     const medicalDetails = encrypt(b.medicalDetails || "");
     const collegeIdNumber = encrypt(b.collegeIdNumber || "");
 
-    const passportPhoto = cleanPassport(b.passportPhoto || b.photo);
-    const aadharFront = b.aadharFront || null;
-    const aadharBack = b.aadharBack || null;
-    const collegeIdImage = b.collegeIdImage || null;
+    let passportPhoto = cleanPassport(b.passportPhoto || b.photo);
+    let aadharFront = b.aadharFront || null;
+    let aadharBack = b.aadharBack || null;
+    let collegeIdImage = b.collegeIdImage || null;
+
+    if (passportPhoto && typeof passportPhoto === "string" && passportPhoto.startsWith("data:image/")) {
+      passportPhoto = await compressBase64ToWebP(passportPhoto);
+    }
+    if (aadharFront && typeof aadharFront === "string" && aadharFront.startsWith("data:image/")) {
+      aadharFront = await compressBase64ToWebP(aadharFront);
+    }
+    if (aadharBack && typeof aadharBack === "string" && aadharBack.startsWith("data:image/")) {
+      aadharBack = await compressBase64ToWebP(aadharBack);
+    }
+    if (collegeIdImage && typeof collegeIdImage === "string" && collegeIdImage.startsWith("data:image/")) {
+      collegeIdImage = await compressBase64ToWebP(collegeIdImage);
+    }
 
     // interests / hobbies / socials are stored as NATIVE values (no string serialisation).
     const sharedFields = {
@@ -178,8 +199,6 @@ export const saveStudentProfile = async (req, res) => {
       is_public: isPublic,
     };
 
-    // Only written when actually supplied, so a save from another form never
-    // blanks out an already-stored value.
     if (b.guardianEmail !== undefined) {
       sharedFields.guardian_email = b.guardianEmail || "";
     }
@@ -187,23 +206,26 @@ export const saveStudentProfile = async (req, res) => {
       sharedFields.aadhar_number = encrypt(cleanDigits(b.aadharNumber));
     }
 
-    const existing = await StudentProfile.findOne({ user_id: userId })
+    const existing = await StudentProfile.findOne({
+      $or: [{ user_id: Number(userId) }, { user_id: String(userId) }]
+    })
       .select("_id")
       .lean();
 
     if (existing) {
-      // ON DUPLICATE KEY UPDATE: images use COALESCE(VALUES(x), x) so only overwrite
-      // when a new value is supplied.
       const updateData = { ...sharedFields };
       if (passportPhoto != null) updateData.passport_photo = passportPhoto;
       if (aadharFront != null) updateData.aadhar_front = aadharFront;
       if (aadharBack != null) updateData.aadhar_back = aadharBack;
       if (collegeIdImage != null) updateData.college_id_image = collegeIdImage;
 
-      await StudentProfile.updateOne({ user_id: userId }, updateData);
+      await StudentProfile.updateOne(
+        { $or: [{ user_id: Number(userId) }, { user_id: String(userId) }] },
+        updateData
+      );
     } else {
       await StudentProfile.create({
-        user_id: userId,
+        user_id: Number(userId) || userId,
         ...sharedFields,
         passport_photo: passportPhoto,
         aadhar_front: aadharFront,
@@ -212,15 +234,36 @@ export const saveStudentProfile = async (req, res) => {
       });
     }
 
-    if (fullName && phone) {
-      await User.updateOne({ _id: userId }, { full_name: fullName, phone });
-    } else if (fullName) {
-      await User.updateOne({ _id: userId }, { full_name: fullName });
-    } else if (phone) {
-      await User.updateOne({ _id: userId }, { phone });
+    // Keep User model in sync (name, phone, profile_image, and onboarding status)
+    const userUpdate = { onboarding_completed: true };
+    if (fullName) userUpdate.full_name = fullName;
+    if (phone) userUpdate.phone = phone;
+    if (passportPhoto) userUpdate.profile_image = passportPhoto;
+    await User.updateOne(
+      { $or: [{ _id: Number(userId) }, { _id: String(userId) }] },
+      userUpdate
+    );
+
+    // Also sync latest passport photo to Enrollment if student has an existing enrollment
+    if (passportPhoto) {
+      try {
+        await Enrollment.updateMany(
+          { $or: [{ student_id: Number(userId) }, { student_id: String(userId) }] },
+          { passport_photo: passportPhoto }
+        );
+      } catch (enrollErr) {
+        console.warn("Notice: could not sync Enrollment photo:", enrollErr?.message);
+      }
     }
 
-    res.status(200).json({ success: true, message: "Profile saved & synced successfully!", isPublic: Boolean(isPublic) });
+    res.status(200).json({
+      success: true,
+      message: "Profile saved & synced successfully!",
+      isPublic: Boolean(isPublic),
+      photo: passportPhoto,
+      passportPhoto,
+      profile_image: passportPhoto,
+    });
   } catch (error) {
     console.error("Save Profile Error:", error);
     res.status(500).json({ success: false, message: error.message || "Failed to save student profile." });

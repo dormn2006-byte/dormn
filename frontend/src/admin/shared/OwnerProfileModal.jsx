@@ -68,11 +68,11 @@ const OwnerProfileModal = ({ isOpen, onClose, initialTab = "profile" }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl p-4 animate-in fade-in duration-150">
-      <div className="relative w-full max-w-2xl rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0a0f1d] text-gray-900 dark:text-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden transition-all">
+    <div className="owner-portal-root fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl p-4 animate-in fade-in duration-150">
+      <div className="relative w-full max-w-2xl rounded-3xl bg-white dark:bg-[#0a0f1d] text-gray-900 dark:text-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden transition-all">
         
         {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 px-7 py-5 bg-gray-50/80 dark:bg-white/[0.03]">
+        <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 px-7 py-5 bg-gray-50/80 dark:bg-white/[0.03]">
           <div className="flex items-center gap-3.5">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-pink-500 via-rose-500 to-cyan-500 text-lg font-black text-white shadow-md shadow-pink-500/20">
               {(formData.fullName?.charAt(0) || "O").toUpperCase()}
@@ -242,7 +242,7 @@ const OwnerProfileModal = ({ isOpen, onClose, initialTab = "profile" }) => {
                       ? 'bg-gray-500 text-white'
                       : 'bg-emerald-500 text-white'
                   }`}>
-                    {(subData?.status || user?.subscription_status) === 'trial' ? 'Free Trial' : ((subData?.status || user?.subscription_status) ? (subData?.status || user?.subscription_status).toUpperCase() : 'ACTIVE')}
+                    {(subData?.status || user?.subscription_status || 'active') === 'trial' ? 'Free Trial' : (subData?.status || user?.subscription_status || 'active').toUpperCase()}
                   </span>
                 </div>
                 <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-5">
@@ -277,7 +277,7 @@ const OwnerProfileModal = ({ isOpen, onClose, initialTab = "profile" }) => {
               <div className="flex items-center justify-between gap-4 p-5 rounded-2xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-[#141b2d]">
                 <div>
                   <h4 className="text-xs font-black text-gray-900 dark:text-white">Want to upgrade or change plans?</h4>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Explore our Yearly discounts & Free tiers</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Membership pricing and packages will be allotted soon</p>
                 </div>
                 <button
                   onClick={() => {

@@ -151,6 +151,7 @@ export const createPG = async (pgData) => {
     available_rooms,
     amenities,
     rules,
+    profile_image,
     google_map_link,
     sharing_options,
     food_type,

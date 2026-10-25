@@ -1,12 +1,13 @@
 import { useNavigate, Link } from "react-router-dom";
 import { useState, useCallback, useContext, useEffect, useRef, memo, useMemo } from "react";
 import { AuthContext } from "../context/AuthContext";
+import api from "../services/api";
 import MacOSDock from "../components/ui/mac-os-dock";
 import { ThemeSwitch } from "../components/ui/theme-switch-button";
 import { buildStudentDockApps } from "../constants/studentDockConfig";
 import {
-  User, Settings, Search, Building2,
-  Shield, Bell, Eye, Trash2, Check, UserCircle, ChevronRight, LogOut,
+  Settings, Search, Building2,
+  Shield, Bell, Eye, EyeOff, Globe, Lock, Trash2, Check, UserCircle, ChevronRight, LogOut,
   ShieldAlert, ShieldCheck, ArrowRight, CheckCircle2, Clock
 } from "lucide-react";
 import EmailVerificationModal from "../components/auth/EmailVerificationModal";
@@ -32,25 +33,6 @@ const Toggle = memo(({ checked, onChange, label, desc }) => (
 ));
 Toggle.displayName = "Toggle";
 
-const RadioGroup = memo(({ label, options, value, onChange }) => (
-  <div>
-    <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2.5">{label}</p>
-    <div className="flex flex-wrap gap-2.5">
-      {options.map(opt => (
-        <button key={opt} type="button" onClick={() => onChange(opt)}
-          className={`rounded-xl px-5 py-2.5 text-sm font-bold transition-all ${
-            value === opt
-              ? "bg-[#93B733] text-white shadow-sm"
-              : "border border-gray-200 text-gray-600 hover:border-[#93B733]/40 hover:text-[#0D3A1D] bg-gray-50/60"
-          }`}>
-          {value === opt && <Check size={14} className="inline mr-1.5 -mt-0.5" />}{opt}
-        </button>
-      ))}
-    </div>
-  </div>
-));
-RadioGroup.displayName = "RadioGroup";
-
 const StudentSettings = () => {
   const navigate = useNavigate();
   const { user, logout } = useContext(AuthContext);
@@ -65,12 +47,32 @@ const StudentSettings = () => {
     }
   });
 
+  // Fetch real profile from backend on mount so settings stay strictly synced
   useEffect(() => {
-    if (userProfKey) {
+    let isMounted = true;
+    const loadProfile = async () => {
       try {
-        setProfile(JSON.parse(localStorage.getItem(userProfKey) || "{}"));
-      } catch {}
-    }
+        const res = await api.get("/student/profile");
+        if (res.data?.profile && isMounted) {
+          const p = res.data.profile;
+          setProfile(prev => {
+            const merged = {
+              ...prev,
+              ...p,
+              isPublic: p.is_public !== undefined ? Boolean(p.is_public) : (p.isPublic !== undefined ? Boolean(p.isPublic) : (prev.isPublic ?? true))
+            };
+            if (userProfKey) {
+              try { localStorage.setItem(userProfKey, JSON.stringify(merged)); } catch {}
+            }
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch student profile in settings:", err);
+      }
+    };
+    loadProfile();
+    return () => { isMounted = false; };
   }, [userProfKey]);
 
   const [showSavedToast, setShowSavedToast] = useState(false);
@@ -99,37 +101,48 @@ const StudentSettings = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const triggerSave = useCallback((newProfile) => {
+  const saveSettings = useCallback(async (updated) => {
+    setProfile(updated);
     if (userProfKey) {
-      try { localStorage.setItem(userProfKey, JSON.stringify(newProfile)); } catch {}
+      try {
+        localStorage.setItem(userProfKey, JSON.stringify(updated));
+        if (userKey) localStorage.setItem(`dormn_registration_form_${userKey}`, JSON.stringify(updated));
+      } catch {}
     }
     localStorage.removeItem("dormn_student_profile");
+    localStorage.removeItem("dormn_registration_form");
+    window.dispatchEvent(new Event("dormn_profile_updated"));
+    try {
+      await api.post("/student/profile", updated);
+    } catch (e) {
+      console.error("Failed to sync profile settings with server:", e);
+    }
     setShowSavedToast(true);
     setTimeout(() => setShowSavedToast(false), 3000);
-  }, [userProfKey]);
+  }, [userProfKey, userKey]);
 
+  const isPublic = profile.isPublic ?? true;
   const notifs = profile.notifications || {};
-  const display = profile.display || {};
-  const toggleNotif = useCallback((key) => setProfile(p => {
-    const n = { ...p, notifications: { ...(p.notifications || {}), [key]: !(p.notifications || {})[key] } };
-    triggerSave(n);
-    return n;
-  }), [triggerSave]);
 
-  const setDisplay = useCallback((key, val) => setProfile(p => {
-    const n = { ...p, display: { ...(p.display || {}), [key]: val } };
-    triggerSave(n);
-    return n;
-  }), [triggerSave]);
+  const togglePrivacy = useCallback(() => {
+    saveSettings({ ...profile, isPublic: !isPublic });
+  }, [profile, isPublic, saveSettings]);
+
+  const toggleNotif = useCallback((key) => {
+    saveSettings({
+      ...profile,
+      notifications: { ...notifs, [key]: !notifs[key] }
+    });
+  }, [profile, notifs, saveSettings]);
   
   const handleClear = useCallback(() => {
     if (window.confirm("Clear all profile data? This action cannot be undone.")) {
       if (userProfKey) localStorage.removeItem(userProfKey);
       localStorage.removeItem("dormn_student_profile");
       setProfile({});
-      triggerSave({});
+      saveSettings({});
     }
-  }, [userProfKey, triggerSave]);
+  }, [userProfKey, saveSettings]);
 
   const handleLogout = useCallback(() => {
     logout();
@@ -302,16 +315,44 @@ const StudentSettings = () => {
           </div>
         </SectionCard>
 
-        {/* ══════ DISPLAY PREFERENCES ══════ */}
+        {/* ══════ PROFILE PRIVACY ══════ */}
         <SectionCard className="p-6 sm:p-8">
           <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-[#0D3A1D] mb-5 flex items-center gap-2">
-            <Eye size={18} className="text-violet-500" /> Display Preferences
+            <Shield size={18} className="text-[#93B733]" /> Profile Privacy
           </h3>
-          <div className="space-y-6">
-            <RadioGroup label="Food Preference" options={["Veg", "Non-Veg", "Both"]}
-              value={display.food || "Both"} onChange={(v) => setDisplay("food", v)} />
-            <RadioGroup label="Gender" options={["Male", "Female", "Prefer not to say"]}
-              value={display.gender || "Prefer not to say"} onChange={(v) => setDisplay("gender", v)} />
+          <div className={`rounded-2xl border p-4 sm:p-5 transition-all ${
+            isPublic
+              ? "border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/20"
+              : "border-purple-200 dark:border-purple-800/40 bg-purple-50/50 dark:bg-purple-950/20"
+          }`}>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className={`p-2.5 rounded-xl shrink-0 ${
+                  isPublic ? "bg-emerald-500/15 text-emerald-600" : "bg-purple-500/15 text-purple-600"
+                }`}>
+                  {isPublic ? <Globe size={20} /> : <Lock size={20} />}
+                </div>
+                <div>
+                  <h4 className="text-sm sm:text-base font-black text-gray-900 dark:text-white">
+                    Profile Visibility: <span className={isPublic ? "text-emerald-600 dark:text-emerald-400" : "text-purple-600 dark:text-purple-400"}>{isPublic ? "Public" : "Private"}</span>
+                  </h4>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
+                    {isPublic
+                      ? "When Public: Verified PG owners can view your Name, Phone, and College / Workplace info when you explore or schedule visits. Documents stay protected."
+                      : "When Private: No PG owner or user can view your personal details or contact information."}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={togglePrivacy}
+                className={`shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm text-white transition-all cursor-pointer ${
+                  isPublic ? "bg-emerald-600 hover:bg-emerald-500" : "bg-purple-600 hover:bg-purple-500"
+                }`}
+              >
+                {isPublic ? <EyeOff size={15} /> : <Eye size={15} />} Switch to {isPublic ? "Private" : "Public"}
+              </button>
+            </div>
           </div>
         </SectionCard>
 

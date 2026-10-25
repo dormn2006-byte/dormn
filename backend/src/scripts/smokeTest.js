@@ -27,6 +27,7 @@ const OWNER = {
   full_name: "Smoke Owner",
   email: `smoke.owner.${stamp}@example.com`,
   password: "SmokePass123",
+  phone: "9876543210",
   role: "owner",
   gender: "male",
 };
@@ -34,6 +35,7 @@ const STUDENT = {
   full_name: "Smoke Student",
   email: `smoke.student.${stamp}@example.com`,
   password: "SmokePass123",
+  phone: "9876543211",
   role: "student",
   gender: "female",
 };
@@ -264,9 +266,9 @@ const run = async () => {
   const approveBooking = await request("PUT", `/bookings/${bookingId}/status`, { token: ownerTokenLive, body: { status: "approved" } });
   check("owner approves booking", approveBooking.status === 200, JSON.stringify(approveBooking.body)?.slice(0, 140));
 
-  // The active-stay guard only applies once a stay is approved/paid.
+  // The duplicate booking guard applies once a stay for the same PG is approved/paid.
   const duplicateGuard = await request("POST", "/bookings/create", { token: studentToken, body: { pg_id: pgId } });
-  check("further booking blocked by active-stay guard once approved", duplicateGuard.status === 400 && duplicateGuard.body?.code === "ACTIVE_STAY_EXISTS", JSON.stringify(duplicateGuard.body)?.slice(0, 160));
+  check("further booking blocked by duplicate-booking guard once approved", duplicateGuard.status === 400 && (duplicateGuard.body?.code === "BOOKING_ALREADY_APPROVED" || duplicateGuard.body?.code === "ACTIVE_STAY_EXISTS"), JSON.stringify(duplicateGuard.body)?.slice(0, 160));
 
   const myPgs = await request("GET", "/bookings/my-pgs", { token: studentToken });
   check("GET /bookings/my-pgs succeeds", myPgs.status === 200);

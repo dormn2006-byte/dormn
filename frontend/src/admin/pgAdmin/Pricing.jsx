@@ -35,7 +35,7 @@ const plans = [
     description: "For new owners — try Dormn with a 30-day free trial on your first property.",
     features: ["1 PG listing", "Standard search placement", "Basic booking requests", "Free listing updates", "Web & mobile access"],
     isPopular: false,
-    glowStyle: "border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220]/80 shadow-lg shadow-gray-200/50 dark:shadow-none",
+    glowStyle: "bg-white dark:bg-[#0c1220]/80",
     buttonStyle: "bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100 font-extrabold shadow-md hover:scale-[1.02]",
   },
   {
@@ -44,7 +44,7 @@ const plans = [
     description: "For growing PG businesses that need higher visibility and up to 5 properties.",
     features: ["Up to 5 PG listings", "Featured search ranking", "Advanced editing toolkit", "Team collaboration (up to 5)", "Priority customer support"],
     isPopular: false,
-    glowStyle: "border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220]/90 shadow-lg shadow-gray-200/50 dark:shadow-none",
+    glowStyle: "bg-white dark:bg-[#0c1220]/90",
     buttonStyle: "bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100 font-extrabold shadow-md hover:scale-[1.02]",
   },
   {
@@ -53,7 +53,7 @@ const plans = [
     description: "For top-tier PG businesses wanting maximum student bookings, AI insights, and unlimited listings.",
     features: ["Unlimited PG listings", "Top #1 priority placement", "AI-powered content & analytics", "Unlimited team members", "Brand customization"],
     isPopular: true,
-    glowStyle: "border-emerald-500/60 dark:border-emerald-400/70 bg-gradient-to-b from-emerald-500/10 via-teal-500/5 to-blue-600/10 dark:from-emerald-500/15 dark:via-teal-500/10 dark:to-blue-600/20 shadow-2xl shadow-emerald-500/15 dark:shadow-[0_0_50px_rgba(16,185,129,0.3)] relative",
+    glowStyle: "bg-gradient-to-b from-emerald-500/10 via-teal-500/5 to-blue-600/10 dark:from-emerald-500/15 dark:via-teal-500/10 dark:to-blue-600/20 relative",
     buttonStyle: "bg-gradient-to-r from-emerald-400 via-teal-300 to-blue-500 text-gray-950 font-black shadow-lg hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:scale-[1.02]",
     buttonInlineStyle: { backgroundColor: "#10b981", color: "#000000" },
   },
@@ -274,38 +274,38 @@ const Pricing = () => {
 
       {/* ══════ SUBSCRIPTION STATUS BAR ══════ */}
       {!subLoading && subData && (
-        <div className="relative z-10 mb-8 max-w-6xl mx-auto">
-          <div className="rounded-2xl border bg-white dark:bg-[#0c1220] border-gray-200 dark:border-white/10 p-5 sm:p-6 shadow-lg">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${currentTier === "pro" ? "bg-gradient-to-br from-emerald-500 to-teal-500" : currentTier === "standard" ? "bg-blue-500" : currentTier === "custom" ? "bg-purple-500" : "bg-gray-500"} text-white shadow-lg`}>
-                  <Crown size={24} />
+        <div className="relative z-10 mb-6 sm:mb-8 max-w-6xl mx-auto">
+          <div className="rounded-2xl border bg-white dark:bg-[#0c1220] border-gray-200 dark:border-white/10 p-3.5 sm:p-5 lg:p-6 shadow-md sm:shadow-lg">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl sm:rounded-2xl ${currentTier === "pro" ? "bg-gradient-to-br from-emerald-500 to-teal-500" : currentTier === "standard" ? "bg-blue-500" : currentTier === "custom" ? "bg-purple-500" : "bg-gray-500"} text-white shadow-md sm:shadow-lg shrink-0`}>
+                  <Crown size={20} className="sm:w-6 sm:h-6" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2.5 mb-1">
-                    <h3 className="text-lg font-black text-gray-900 dark:text-white">{currentTier.charAt(0).toUpperCase() + currentTier.slice(1)} Plan</h3>
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${statusColors[currentStatus] || statusColors.trial}`}>
+                  <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
+                    <h3 className="text-base sm:text-lg font-black text-gray-900 dark:text-white">{currentTier.charAt(0).toUpperCase() + currentTier.slice(1)} Plan</h3>
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider ${statusColors[currentStatus] || statusColors.trial}`}>
                       {currentStatus === "trial" ? "Free Trial" : currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
                     </span>
                   </div>
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  <p className="text-[11px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400">
                     {daysRemaining !== null && daysRemaining >= 0 ? `${daysRemaining} day${daysRemaining !== 1 ? "s" : ""} remaining${expiresAt ? ` • Expires ${expiresAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}` : currentStatus === "expired" ? "Your subscription has expired. Please renew to continue." : ""}
                     {subData?.cycle ? ` • ${subData.cycle.charAt(0).toUpperCase() + subData.cycle.slice(1)} billing` : ""}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col items-end">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">PG Listings</span>
+              <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-white/5">
+                <div className="flex flex-col sm:items-end">
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5 sm:mb-1">PG Listings</span>
                   <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
+                    <div className="w-20 sm:w-24 h-1.5 sm:h-2 rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-500 ${currentPgCount >= maxPgListings ? "bg-red-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, (currentPgCount / Math.max(1, maxPgListings)) * 100)}%` }} />
                     </div>
-                    <span className="text-xs font-black text-gray-700 dark:text-gray-300">{currentPgCount}/{maxPgListings >= 999 ? "∞" : maxPgListings}</span>
+                    <span className="text-[11px] sm:text-xs font-black text-gray-700 dark:text-gray-300">{currentPgCount}/{maxPgListings >= 999 ? "∞" : maxPgListings}</span>
                   </div>
                 </div>
                 {currentStatus === "active" && currentTier !== "free" && (
-                  <button onClick={() => setShowCancelModal(true)} className="text-[11px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 border border-red-200 dark:border-red-500/30 rounded-lg px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-500/10 transition cursor-pointer">Cancel Plan</button>
+                  <button onClick={() => setShowCancelModal(true)} className="text-[10px] sm:text-[11px] font-bold text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 border border-red-200 dark:border-red-500/30 rounded-lg px-2.5 sm:px-3 py-1 sm:py-1.5 hover:bg-red-50 dark:hover:bg-red-500/10 transition cursor-pointer">Cancel Plan</button>
                 )}
               </div>
             </div>
@@ -314,122 +314,90 @@ const Pricing = () => {
       )}
 
       {subLoading && (
-        <div className="relative z-10 mb-8 flex items-center justify-center py-8">
-          <Loader2 size={24} className="animate-spin text-emerald-500" />
-          <span className="ml-2 text-sm font-bold text-gray-500">Loading subscription...</span>
+        <div className="relative z-10 mb-6 sm:mb-8 flex items-center justify-center py-6 sm:py-8">
+          <Loader2 size={22} className="animate-spin text-emerald-500" />
+          <span className="ml-2 text-xs sm:text-sm font-bold text-gray-500">Loading subscription...</span>
         </div>
       )}
 
-      {/* ══════ 4-TAB BILLING CYCLE SWITCHER ══════ */}
-      <div className="relative z-10 mb-10 text-center max-w-4xl mx-auto">
-        <div className="inline-flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 rounded-2xl sm:rounded-full border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-[#0c1220]/95 p-1.5 backdrop-blur-xl shadow-lg">
-          {CYCLES.map((cycle) => {
-            const isSelected = selectedCycle === cycle.id;
-            return (
-              <button
-                key={cycle.id}
-                onClick={() => setSelectedCycle(cycle.id)}
-                className={`flex items-center gap-1.5 rounded-full px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-black transition-all duration-200 cursor-pointer ${
-                  isSelected
-                    ? "bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-600 text-white shadow-md scale-[1.02]"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
-                }`}
-              >
-                <span>{cycle.label}</span>
-                {cycle.badge && (
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider ${
-                      isSelected
-                        ? "bg-black/20 text-white border border-white/20"
-                        : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30"
-                    }`}
-                  >
-                    {cycle.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+      {/* ══════ PRICING STATUS HEADER ══════ */}
+      <div className="relative z-10 mb-6 sm:mb-10 text-center max-w-4xl mx-auto">
+        <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 px-3 sm:px-4 py-1 sm:py-1.5 text-[11px] sm:text-sm font-black text-amber-700 dark:text-amber-400 mb-2 sm:mb-3 shadow-xs">
+          <Clock size={13} className="shrink-0 sm:w-4 sm:h-4" />
+          <span>Will be allotted soon</span>
         </div>
+        <h1 className="text-xl sm:text-3xl lg:text-4xl font-black tracking-tight text-gray-900 dark:text-white mb-1.5 sm:mb-2">
+          Owner Membership Plans
+        </h1>
+        <p className="text-[11px] sm:text-sm font-semibold text-gray-500 dark:text-gray-400 max-w-xl mx-auto px-2">
+          Tier pricing and package allocations are currently being updated. Plan allotments will be available soon.
+        </p>
       </div>
 
       {/* ══════ 3 PRICING CARDS ══════ */}
-      <div className="relative z-10 grid grid-cols-1 gap-6 md:grid-cols-3 lg:gap-8 w-full max-w-6xl mx-auto items-stretch">
+      <div className="relative z-10 grid grid-cols-1 gap-3.5 sm:gap-6 md:grid-cols-3 lg:gap-8 w-full max-w-6xl mx-auto items-stretch">
         {plans.map((plan) => {
           const isCurrentPlan = currentTier === plan.id && currentStatus !== "expired";
-          const priceInfo = getPlanPrice(plan.id);
 
           return (
             <div
               key={plan.name}
-              className={`group flex flex-col justify-between rounded-3xl border p-6 sm:p-8 backdrop-blur-xl transition-all duration-300 ${plan.glowStyle} ${
-                isCurrentPlan ? "ring-2 ring-emerald-500/90 dark:ring-emerald-400/90 scale-[1.02]" : "hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/20"
+              className={`group flex flex-col justify-between rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 backdrop-blur-xl transition-all duration-300 ${plan.glowStyle} ${
+                isCurrentPlan ? "ring-2 ring-emerald-500/90 dark:ring-emerald-400/90 sm:scale-[1.02]" : "hover:-translate-y-1"
               }`}
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <h3 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white">{plan.name}</h3>
+                  <h3 className="text-lg sm:text-2xl font-black tracking-tight text-gray-900 dark:text-white">{plan.name}</h3>
                   {plan.isPopular && (
-                    <span className="rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-600 px-3.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-md">
+                    <span className="rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-600 px-2.5 sm:px-3.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow-md">
                       Popular
                     </span>
                   )}
                   {isCurrentPlan && (
-                    <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 sm:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                       Active
                     </span>
                   )}
                 </div>
 
-                {/* ══════ PRICING DISPLAY: CANCELLED ORIGINAL + DISCOUNT PRICE ══════ */}
-                <div className="mt-4 flex flex-col gap-1">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    {priceInfo.originalMonthly && priceInfo.originalMonthly > priceInfo.monthlyEffective && (
-                      <span className="text-xl sm:text-2xl font-bold text-gray-400 dark:text-gray-500 line-through">
-                        ₹{priceInfo.originalMonthly.toLocaleString()}
-                      </span>
-                    )}
-                    <span className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-gray-900 dark:text-white">
-                      {priceInfo.label}
+                {/* ══════ PRICING DISPLAY: HIDDEN / ALLOTTED SOON ══════ */}
+                <div className="mt-2.5 sm:mt-4 flex flex-col gap-0.5 sm:gap-1 py-0.5 sm:py-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base sm:text-xl lg:text-2xl font-black tracking-tight text-gray-900 dark:text-white">
+                      Will be allotted soon
                     </span>
-                    {priceInfo.discountBadge && (
-                      <span className="rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-black">
-                        {priceInfo.discountBadge}
-                      </span>
-                    )}
                   </div>
-
-                  <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                    {priceInfo.totalLabel}
+                  <p className="text-[10px] sm:text-[11px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <Clock size={11} className="shrink-0" />
+                    <span>Pricing will be announced soon</span>
                   </p>
                 </div>
 
-                <p className="mt-3 text-xs leading-relaxed text-gray-600 dark:text-gray-400 min-h-[36px]">
+                <p className="mt-2 sm:mt-3 text-[11px] sm:text-xs leading-relaxed text-gray-600 dark:text-gray-400 sm:min-h-[36px]">
                   {plan.description}
                 </p>
 
-                <div className="my-5 h-px w-full bg-gradient-to-r from-transparent via-gray-200 dark:via-white/15 to-transparent" />
+                <div className="my-3 sm:my-5 h-px w-full bg-gradient-to-r from-transparent via-gray-200 dark:via-white/15 to-transparent" />
 
-                <ul className="space-y-3.5 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                <ul className="space-y-2 sm:space-y-3.5 text-[11px] sm:text-xs font-semibold text-gray-700 dark:text-gray-300">
                   {plan.features.map((feature, idx) => (
-                    <li key={idx} className="flex items-center gap-3">
-                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                        <Check size={12} strokeWidth={3} />
+                    <li key={idx} className="flex items-center gap-2 sm:gap-3">
+                      <div className="flex h-4 w-4 sm:h-5 sm:w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <Check size={10} className="sm:w-3 sm:h-3" strokeWidth={3} />
                       </div>
-                      <span>{feature}</span>
+                      <span className="leading-snug">{feature}</span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="mt-8">
+              <div className="mt-4 sm:mt-8">
                 <button
-                  onClick={() => handleSelectPlan(plan)}
-                  disabled={isCurrentPlan}
-                  style={!isCurrentPlan && plan.buttonInlineStyle ? plan.buttonInlineStyle : {}}
-                  className={`w-full rounded-2xl py-3.5 sm:py-4 text-xs font-black tracking-wide transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${plan.buttonStyle}`}
+                  disabled
+                  className="w-full rounded-xl sm:rounded-2xl py-2.5 sm:py-3.5 text-xs font-black tracking-wide transition-all duration-200 opacity-70 cursor-not-allowed bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-white/10"
                 >
-                  {isCurrentPlan ? "Current Plan" : currentTier !== "free" && plan.id === "free" ? "Downgrade" : "Choose Plan"}
+                  Will be allotted soon
                 </button>
               </div>
             </div>

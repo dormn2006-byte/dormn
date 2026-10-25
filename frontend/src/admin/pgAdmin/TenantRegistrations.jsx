@@ -9,10 +9,6 @@ const TenantRegistrations = () => {
   const [rejectTarget, setRejectTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchRegistrations();
-  }, []);
-
   const fetchRegistrations = async () => {
     try {
       const res = await API.get("/enrollments/owner-list");
@@ -23,6 +19,10 @@ const TenantRegistrations = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchRegistrations();
+  }, []);
 
   const handleStatusUpdate = async (enrollment_id, newStatus, rejection_note) => {
     if (!window.confirm(`Are you sure you want to mark this application as ${newStatus.toUpperCase()}?`)) return;
@@ -151,48 +151,47 @@ const TenantRegistrations = () => {
   if (loading) return <div className="p-10 text-center font-bold text-gray-500">Loading Records...</div>;
 
   return (
-    <div className="p-6 md:p-10 space-y-8 font-sans max-w-[1400px] mx-auto">
+    <div className="space-y-6 w-full pb-12">
       <div>
-        <h1 className="text-3xl font-black text-gray-900">Tenant Registrations</h1>
-        <p className="text-sm text-gray-500 mt-1">Review, approve, and download KYC details securely.</p>
+        <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white">Tenant Registrations</h1>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Review, approve, and download KYC details securely.</p>
       </div>
 
-      <div className="grid gap-6">
+      <div className="grid gap-3 sm:gap-6">
         {enrollments.length === 0 ? (
-          <div className="p-16 text-center border-2 border-dashed border-gray-200 rounded-3xl bg-white">
-            <FileText size={48} className="mx-auto text-gray-300 mb-4" />
-            <h3 className="text-xl font-bold text-gray-900">No Registrations Yet</h3>
+          <div className="p-8 sm:p-16 text-center rounded-2xl sm:rounded-3xl bg-white dark:bg-[#111]">
+            <FileText size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+            <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white">No Registrations Yet</h3>
           </div>
         ) : (
           enrollments.map((student) => (
-            <div key={student.id} className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition">
+            <div key={student.id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 sm:p-6 bg-white dark:bg-[#111] rounded-2xl transition">
               
               {/* Info Section */}
-              <div className="flex items-start gap-4 w-full md:w-auto">
-                <div className={`p-3 rounded-full ${
-                  student.status === 'verified' ? 'bg-green-100 text-green-600' : 
-                  student.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
+              <div className="flex items-start gap-3 sm:gap-4 w-full md:w-auto">
+                <div className={`p-2.5 sm:p-3 rounded-xl sm:rounded-full shrink-0 ${
+                  student.status === 'verified' ? 'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-400' : 
+                  student.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400' : 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400'
                 }`}>
-                  {student.status === 'verified' ? <CheckCircle2 size={24} /> : 
-                   student.status === 'rejected' ? <XCircle size={24} /> : <AlertCircle size={24} />}
+                  {student.status === 'verified' ? <CheckCircle2 size={20} /> : 
+                   student.status === 'rejected' ? <XCircle size={20} /> : <AlertCircle size={20} />}
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">{student.student_name || "New Tenant"}</h3>
-                  <p className="text-sm text-gray-500">{student.pg_title || "Unknown Property"}</p>
-                  <p className="text-xs font-medium text-gray-400 mt-1">Submitted: {new Date(student.created_at).toLocaleDateString()}</p>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">{student.student_name || "New Tenant"}</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">{student.pg_title || "Unknown Property"}</p>
+                  <p className="text-[11px] font-medium text-gray-400 mt-0.5">Submitted: {new Date(student.created_at).toLocaleDateString()}</p>
                   {(student.guardian_email || student.aadhar_number) && (
-                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-gray-500">
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-gray-500 dark:text-gray-400">
                       {student.guardian_email && (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Users size={12} className="text-gray-400" />
-                          Guardian: <strong className="text-gray-700">{student.guardian_name || 'N/A'}</strong>
-                          <span className="text-gray-400">{student.guardian_email}</span>
+                        <span className="inline-flex items-center gap-1 truncate max-w-full">
+                          <Users size={11} className="text-gray-400 shrink-0" />
+                          Guardian: <strong className="text-gray-700 dark:text-gray-300 truncate">{student.guardian_name || 'N/A'}</strong>
                         </span>
                       )}
                       {student.aadhar_number && (
-                        <span className="inline-flex items-center gap-1.5">
-                          <ShieldCheck size={12} className="text-gray-400" />
-                          Aadhar: <strong className="text-gray-700 tracking-wide">{student.aadhar_number}</strong>
+                        <span className="inline-flex items-center gap-1">
+                          <ShieldCheck size={11} className="text-gray-400 shrink-0" />
+                          Aadhar: <strong className="text-gray-700 dark:text-gray-300 tracking-wide">{student.aadhar_number}</strong>
                         </span>
                       )}
                     </div>
@@ -201,25 +200,25 @@ const TenantRegistrations = () => {
               </div>
 
               {/* Actions Section */}
-              <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto pt-2 border-t border-gray-100 dark:border-white/5 md:pt-0 md:border-0 justify-between sm:justify-start">
                 
                 {student.status === 'pending' && (
-                  <>
-                    <button onClick={() => handleStatusUpdate(student.id, 'verified')} className="rounded-xl bg-green-50 text-green-700 px-4 py-2 text-sm font-bold border border-green-200 hover:bg-green-100 transition">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleStatusUpdate(student.id, 'verified')} className="rounded-xl bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-400 px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-bold border border-green-200 dark:border-green-500/30 hover:bg-green-100 transition cursor-pointer">
                       Accept
                     </button>
-                    <button onClick={() => setRejectTarget(student)} disabled={submitting} className="rounded-xl bg-red-50 text-red-700 px-4 py-2 text-sm font-bold border border-red-200 hover:bg-red-100 transition disabled:opacity-50">
+                    <button onClick={() => setRejectTarget(student)} disabled={submitting} className="rounded-xl bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-400 px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-bold border border-red-200 dark:border-red-500/30 hover:bg-red-100 transition disabled:opacity-50 cursor-pointer">
                       Reject
                     </button>
-                  </>
+                  </div>
                 )}
 
-                {student.status === 'verified' && <span className="px-4 py-2 text-xs font-bold text-green-700 bg-green-50 rounded-xl border border-green-200">Enrolled ✅</span>}
+                {student.status === 'verified' && <span className="px-3 py-1 sm:px-4 sm:py-2 text-xs font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/15 rounded-xl border border-green-200 dark:border-green-500/30">Enrolled ✅</span>}
                 {student.status === 'rejected' && (
-                  <div className="flex flex-col items-end gap-1.5">
-                    <span className="px-4 py-2 text-xs font-bold text-red-700 bg-red-50 rounded-xl border border-red-200">Rejected ❌</span>
+                  <div className="flex flex-col items-start sm:items-end gap-1">
+                    <span className="px-3 py-1 sm:px-4 sm:py-2 text-xs font-bold text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-500/15 rounded-xl border border-red-200 dark:border-red-500/30">Rejected ❌</span>
                     {student.rejection_note && (
-                      <p className="max-w-xs text-right text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                      <p className="max-w-xs text-left sm:text-right text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-gray-400">
                         Reason: {student.rejection_note}
                       </p>
                     )}
@@ -227,8 +226,8 @@ const TenantRegistrations = () => {
                 )}
 
                 {/* PDF Download */}
-                <button onClick={() => generatePDF(student)} className="flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-gray-800">
-                  <Download size={16} /> Print PDF
+                <button onClick={() => generatePDF(student)} className="flex items-center justify-center gap-1.5 rounded-xl bg-gray-900 dark:bg-white dark:text-gray-900 px-4 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm font-bold text-white transition hover:bg-gray-800 cursor-pointer ml-auto sm:ml-0">
+                  <Download size={14} /> Print PDF
                 </button>
               </div>
             </div>

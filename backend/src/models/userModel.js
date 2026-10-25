@@ -18,6 +18,7 @@ export const createUser = async ({
   subscription_started_at = new Date(),
   subscription_expires_at = null,
   max_pg_listings = 1,
+  onboarding_completed = false,
 }) => {
   const isOwner = role === "owner";
 
@@ -31,6 +32,7 @@ export const createUser = async ({
     gender: gender || null,
     is_email_verified: is_email_verified ? 1 : 0,
     auth_provider: auth_provider || "local",
+    onboarding_completed: Boolean(onboarding_completed),
     subscription_tier: isOwner ? subscription_tier : null,
     subscription_status: isOwner ? subscription_status : null,
     subscription_started_at: isOwner ? subscription_started_at : null,

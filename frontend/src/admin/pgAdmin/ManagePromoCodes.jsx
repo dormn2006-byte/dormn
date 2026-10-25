@@ -210,9 +210,9 @@ const ManagePromoCodes = () => {
   }, [coupons, searchTerm, selectedPgFilter]);
 
   return (
-    <div className="space-y-2.5 sm:space-y-6 max-w-[1600px] mx-auto animate-fadeIn pb-12">
+    <div className="space-y-2.5 sm:space-y-6 w-full animate-fadeIn pb-12">
       {/* ── HEADER CARD ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 rounded-2xl sm:rounded-3xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#0C1220] p-3 sm:p-6 shadow-xs sm:shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 rounded-2xl sm:rounded-3xl bg-white dark:bg-[#0C1220] p-3 sm:p-6">
         <div className="flex items-center justify-between sm:justify-start gap-2">
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
             <div className="h-7 w-7 sm:h-9 sm:w-9 rounded-xl sm:rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-black shrink-0">
@@ -274,7 +274,7 @@ const ManagePromoCodes = () => {
 
       {/* ── STATS CARDS ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3.5">
-        <div className="rounded-xl sm:rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#0C1220] p-2.5 sm:p-4 shadow-2xs">
+        <div className="rounded-xl sm:rounded-2xl bg-white dark:bg-[#0C1220] p-2.5 sm:p-4">
           <div className="flex items-center justify-between text-gray-400">
             <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider">Total Codes</span>
             <Tag size={13} className="text-purple-500 sm:w-3.5 sm:h-3.5" />
@@ -283,7 +283,7 @@ const ManagePromoCodes = () => {
           <p className="hidden sm:block text-[10px] font-semibold text-gray-400 mt-0.5">Created across your PGs</p>
         </div>
 
-        <div className="rounded-xl sm:rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-2.5 sm:p-4 shadow-2xs">
+        <div className="rounded-xl sm:rounded-2xl bg-emerald-500/5 p-2.5 sm:p-4">
           <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400">
             <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider">Active Codes</span>
             <Sparkles size={13} className="sm:w-3.5 sm:h-3.5" />
@@ -292,7 +292,7 @@ const ManagePromoCodes = () => {
           <p className="hidden sm:block text-[10px] font-semibold text-emerald-600/70 dark:text-emerald-400/70 mt-0.5">Currently redeemable</p>
         </div>
 
-        <div className="rounded-xl sm:rounded-2xl border border-blue-500/20 bg-blue-500/5 p-2.5 sm:p-4 shadow-2xs">
+        <div className="rounded-xl sm:rounded-2xl bg-blue-500/5 p-2.5 sm:p-4">
           <div className="flex items-center justify-between text-blue-600 dark:text-blue-400">
             <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider">Redemptions</span>
             <Users size={13} className="sm:w-3.5 sm:h-3.5" />
@@ -301,7 +301,7 @@ const ManagePromoCodes = () => {
           <p className="hidden sm:block text-[10px] font-semibold text-blue-600/70 dark:text-blue-400/70 mt-0.5">Students joined with promo</p>
         </div>
 
-        <div className="rounded-xl sm:rounded-2xl border border-amber-500/20 bg-amber-500/5 p-2.5 sm:p-4 shadow-2xs">
+        <div className="rounded-xl sm:rounded-2xl bg-amber-500/5 p-2.5 sm:p-4">
           <div className="flex items-center justify-between text-amber-600 dark:text-amber-400">
             <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider">Discount Given</span>
             <Percent size={13} className="sm:w-3.5 sm:h-3.5" />
@@ -312,7 +312,7 @@ const ManagePromoCodes = () => {
           <p className="hidden sm:block text-[10px] font-semibold text-amber-600/70 dark:text-amber-400/70 mt-0.5">Total concessions provided</p>
         </div>
 
-        <div className="rounded-xl sm:rounded-2xl border border-purple-500/20 bg-purple-500/5 p-2.5 sm:p-4 shadow-2xs col-span-2 sm:col-span-1">
+        <div className="rounded-xl sm:rounded-2xl bg-purple-500/5 p-2.5 sm:p-4 col-span-2 sm:col-span-1">
           <div className="flex items-center justify-between text-purple-600 dark:text-purple-400">
             <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider">Promo Revenue</span>
             <TrendingUp size={13} className="sm:w-3.5 sm:h-3.5" />
@@ -325,7 +325,7 @@ const ManagePromoCodes = () => {
       </div>
 
       {/* ── SEARCH & FILTER CONTROLS ── */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3 rounded-xl sm:rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#0C1220] p-2 sm:p-3.5 shadow-2xs">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3 rounded-xl sm:rounded-2xl bg-white dark:bg-[#0C1220] p-2 sm:p-3.5">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
           <input
@@ -359,12 +359,12 @@ const ManagePromoCodes = () => {
 
       {/* ── PROMO CODES GRID ── */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center p-8 sm:p-16 rounded-2xl sm:rounded-3xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#0C1220] text-center">
+        <div className="flex flex-col items-center justify-center p-8 sm:p-16 rounded-2xl sm:rounded-3xl bg-white dark:bg-[#0C1220] text-center">
           <div className="h-6 w-6 sm:h-8 sm:w-8 animate-spin rounded-full border-2 sm:border-3 border-gray-200 dark:border-gray-800 border-t-purple-600 mb-2 sm:mb-3" />
           <p className="text-xs font-bold text-gray-500">Loading your promo codes...</p>
         </div>
       ) : filteredCoupons.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-6 sm:p-16 rounded-2xl sm:rounded-3xl border border-dashed border-gray-200 dark:border-white/10 bg-white dark:bg-[#0C1220] text-center">
+        <div className="flex flex-col items-center justify-center p-6 sm:p-16 rounded-2xl sm:rounded-3xl bg-white dark:bg-[#0C1220] text-center">
           <div className="h-10 w-10 sm:h-14 sm:w-14 rounded-2xl sm:rounded-3xl bg-purple-500/10 text-purple-600 flex items-center justify-center mb-2.5 sm:mb-3">
             <Tag size={20} className="sm:hidden" />
             <Tag size={28} className="hidden sm:block" />
@@ -602,10 +602,10 @@ const PromoCodeCard = memo(
 
     return (
       <div
-        className={`relative rounded-2xl sm:rounded-3xl border transition-all duration-200 flex flex-col justify-between p-3.5 sm:p-6 shadow-xs sm:shadow-sm hover:shadow-md ${
+        className={`relative rounded-2xl sm:rounded-3xl transition-all duration-200 flex flex-col justify-between p-3.5 sm:p-6 ${
           isActive && !isExpired && !usageFull
-            ? "border-purple-500/25 bg-white dark:bg-[#0C1220]"
-            : "border-gray-200 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02] opacity-80"
+            ? "bg-white dark:bg-[#0C1220]"
+            : "bg-gray-50/50 dark:bg-white/[0.02] opacity-80"
         }`}
       >
         <div className="space-y-2.5 sm:space-y-4">
