@@ -68,7 +68,7 @@ const Sector62Guide = () => {
     <PublicLayout>
       <SEOHead
         title="Best PGs in Sector 62 Noida | Near Stellar IT Park | Dormn"
-        description="Find verified Boys PGs, Girls PGs, and COED stays in Sector 62 Noida for IT professionals. Features power backup, Wi-Fi, food, and zero brokerage."
+        description="Find verified Boys PGs, Girls PGs, and COED stays in Sector 62 Noida for IT professionals. Features power backup, Wi-Fi, food, and verified amenities."
         canonicalUrl="https://dormn.com/blogs/pg-in-sector-62-noida"
         ogImage="https://dormn.com/logo.jpg"
         schema={pageSchema}
@@ -102,7 +102,7 @@ const Sector62Guide = () => {
               Verified Professional PGs in <span className="text-[#38BDF8]">Sector 62</span> Noida
             </h1>
             <p className="text-slate-300 text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto mb-8">
-              The ultimate 2026 living guide for IT professionals and corporate interns. Navigate stays near Stellar IT Park, Logix Cyber Park, and the Blue Line Metro with zero brokerage.
+              The ultimate 2026 living guide for IT professionals and corporate interns. Navigate stays near Stellar IT Park, Logix Cyber Park, and the Blue Line Metro with verified booking.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm font-semibold text-slate-300">
               <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#E56A54]" /> 6 Min Read</span>
@@ -135,8 +135,8 @@ const Sector62Guide = () => {
                   <span className="text-xl font-black text-[#0F172A]">Blue <span className="text-sm font-bold text-slate-400">Line</span></span>
                 </div>
                 <div className="bg-[#F8FAFC] p-4 rounded-2xl border border-slate-100">
-                  <span className="text-xs text-slate-500 font-bold uppercase tracking-wider block mb-1">Brokerage</span>
-                  <span className="text-xl font-black text-[#38BDF8]">Zero</span>
+                  <span className="text-xs text-slate-500 font-bold uppercase tracking-wider block mb-1">Booking</span>
+                  <span className="text-xl font-black text-[#38BDF8]">Direct</span>
                 </div>
                 <div className="bg-[#F8FAFC] p-4 rounded-2xl border border-slate-100">
                   <span className="text-xs text-slate-500 font-bold uppercase tracking-wider block mb-1">Power</span>
@@ -240,7 +240,7 @@ const Sector62Guide = () => {
           <aside className="lg:col-span-1">
             <div className="sticky top-28 bg-white rounded-3xl p-6 md:p-8 border-2 border-slate-200 shadow-xl space-y-6">
               <div className="bg-gradient-to-br from-[#0F172A] to-[#1E293B] p-6 rounded-2xl text-center text-white shadow-inner">
-                <span className="text-xs font-bold uppercase tracking-widest text-[#38BDF8] block mb-2">Zero Brokerage</span>
+                <span className="text-xs font-bold uppercase tracking-widest text-[#38BDF8] block mb-2">Verified Stays</span>
                 <span className="text-2xl font-black block leading-tight">Secure Your Stay Near Work</span>
               </div>
 

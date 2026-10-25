@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect, useCallback } from "react";
+import { useContext, useState, useEffect, useCallback, useRef } from "react";
 import { Navigate } from "react-router-dom";
 import {
   Mic, MicOff, Video, VideoOff, SkipForward, Phone,
@@ -78,8 +78,83 @@ const Dormgle = () => {
     [remoteStream, remoteVideoRef]
   );
 
+  const [guestStream, setGuestStream] = useState(null);
+  const guestVideoRef = useRef(null);
+
+  useEffect(() => {
+    let currentStream = null;
+
+    if (notLoggedIn) {
+      navigator.mediaDevices
+        .getUserMedia({ video: true, audio: false })
+        .then((stream) => {
+          currentStream = stream;
+          setGuestStream(stream);
+          if (guestVideoRef.current) {
+            guestVideoRef.current.srcObject = stream;
+          }
+        })
+        .catch((err) => console.warn("Guest camera access denied or error:", err));
+        
+      return () => {
+        if (currentStream) {
+          currentStream.getTracks().forEach((track) => track.stop());
+        }
+      };
+    }
+  }, [notLoggedIn]);
+
   if (notLoggedIn) {
-    return <Navigate to="/auth?redirect=/dormgle" replace />;
+    return (
+      <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
+        <Navbar />
+        <main className="flex-1 flex flex-col gap-4 p-4">
+          <div className="flex-1 grid w-full gap-4 md:grid-cols-2">
+            {/* Left panel: Auth prompt */}
+            <div className="relative h-full w-full rounded-2xl overflow-hidden bg-gray-900 md:h-auto md:aspect-video flex items-center justify-center p-6 text-center border-2 border-dashed border-gray-700">
+              <div className="max-w-sm">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#93B733]/20 text-[#93B733] mb-4">
+                  <User size={32} />
+                </div>
+                <h2 className="text-2xl font-black text-white mb-2">Login Required</h2>
+                <p className="text-gray-400 mb-6 text-sm">
+                  Login to use Dormgle and explore all the features. Connect with other Dormn residents via random video chat!
+                </p>
+                <a
+                  href="/auth?redirect=/dormgle"
+                  className="inline-flex rounded-xl bg-[#93B733] px-6 py-3 text-sm font-black text-black shadow-md transition-all hover:bg-[#82a32d] hover:scale-105 active:scale-95"
+                >
+                  Log In / Sign Up
+                </a>
+              </div>
+            </div>
+
+            {/* Right panel: Local camera preview */}
+            <div className="relative h-full w-full rounded-2xl overflow-hidden bg-gray-900 md:h-auto md:aspect-video">
+              {guestStream ? (
+                <video
+                  ref={guestVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="absolute inset-0 h-full w-full scale-x-[-1] object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <div className="text-center text-gray-500">
+                    <VideoOff size={48} className="mx-auto mb-4 opacity-50" />
+                    <p>Camera off</p>
+                  </div>
+                </div>
+              )}
+              <div className="absolute bottom-4 right-4 rounded-lg bg-black/60 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-md">
+                You (Preview)
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   // ── Idle / Landing / Error screen ─────────────────────────────

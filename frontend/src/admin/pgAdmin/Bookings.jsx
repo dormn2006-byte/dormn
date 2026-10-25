@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import api from "../../services/api";
 import { formatVisitDate } from "../../utils/visitDate";
+import FilterTabs from "./components/FilterTabs";
 
 const formatDateTime = (dateStr) => {
   if (!dateStr) return null;
@@ -160,29 +161,14 @@ const Bookings = () => {
   ];
 
   return (
-    <div className="space-y-3 sm:space-y-4 max-w-[1600px] mx-auto animate-fadeIn">
+    <div className="space-y-3 sm:space-y-4 w-full animate-fadeIn">
       {/* Filter Tabs & Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-2 sm:p-2.5 shadow-2xs">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setSelectedStatus(t.id)}
-              className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                selectedStatus === t.id
-                  ? "bg-blue-600 text-white shadow-2xs shadow-blue-500/25"
-                  : "bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10"
-              }`}
-            >
-              <span>{t.label}</span>
-              <span className={`rounded-lg px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold ${
-                selectedStatus === t.id ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-white/10 text-gray-800 dark:text-gray-200"
-              }`}>
-                {t.count}
-              </span>
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-2xl bg-white dark:bg-[#0c1220] p-2 sm:p-2.5">
+        <FilterTabs
+          tabs={tabs}
+          activeTab={selectedStatus}
+          onChange={setSelectedStatus}
+        />
 
         <div className="relative w-full sm:w-64 md:w-72 shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
@@ -198,12 +184,12 @@ const Bookings = () => {
 
       {/* Decision Cards: 2 IN A ROW */}
       {loading ? (
-        <div className="rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-6 sm:p-12 text-center shadow-2xs">
+        <div className="rounded-2xl bg-white dark:bg-[#0c1220] p-6 sm:p-12 text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-3 border-gray-200 dark:border-gray-800 border-t-blue-500 mx-auto mb-2.5" />
           <p className="text-xs font-bold text-gray-500 dark:text-gray-400">Loading student applications...</p>
         </div>
       ) : filteredBookings.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-6 sm:p-12 text-center shadow-2xs">
+        <div className="rounded-2xl bg-white dark:bg-[#0c1220] p-6 sm:p-12 text-center">
           <BookOpenCheck size={30} className="text-gray-400 mx-auto mb-2" />
           <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">No booking applications found</h3>
           <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">No applications match your current filters.</p>
@@ -213,10 +199,10 @@ const Bookings = () => {
           {filteredBookings.map((b) => (
             <div
               key={b.id}
-              className={`flex flex-col justify-between rounded-xl sm:rounded-2xl border p-2.5 sm:p-3.5 transition-all duration-200 ${
+              className={`flex flex-col justify-between rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 transition-all duration-200 ${
                 b.status === "pending"
-                  ? "border-amber-500/40 bg-amber-500/[0.03] shadow-xs"
-                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220]"
+                  ? "bg-amber-500/[0.04]"
+                  : "bg-white dark:bg-[#0c1220]"
               }`}
             >
               {/* Profile & Contact Details */}

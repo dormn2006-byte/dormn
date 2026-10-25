@@ -43,8 +43,6 @@ const Field = ({ label, className = "", ...props }) => (
 );
 
 export default function AddEventModal({ isOpen, onClose, defaultCategory = "concerts", onEventAdded }) {
-  if (!isOpen) return null;
-
   const initialCat = defaultCategory === "all" ? "concerts" : defaultCategory;
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -140,6 +138,8 @@ export default function AddEventModal({ isOpen, onClose, defaultCategory = "conc
       setLoading(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto">

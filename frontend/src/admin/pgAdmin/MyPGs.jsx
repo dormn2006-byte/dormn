@@ -23,6 +23,7 @@ import {
   ArrowRight,
   Sparkles
 } from "lucide-react";
+import FilterTabs from "./components/FilterTabs";
 import api, { IMAGE_BASE_URL } from "../../services/api";
 
 const MyPGs = () => {
@@ -114,7 +115,7 @@ const MyPGs = () => {
   }, [fetchMyPGs]);
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto">
+    <div className="space-y-6 w-full">
 
       {/* Missing Payout Alert Banner if any approved PGs exist */}
       {!payoutConfigured && pgPages.some((p) => p.status === "approved") && (
@@ -143,35 +144,20 @@ const MyPGs = () => {
       )}
 
       {/* Big Bold Search & Category Action Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-3 sm:p-5 shadow-sm">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-3xl bg-white dark:bg-[#0c1220] p-3 sm:p-5">
         
-        {/* Large Prominent Filter Tabs */}
-        <div className="flex items-center gap-2.5 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
-          {[
-            { id: "all", label: "All Properties", count: counts.all },
-            { id: "approved", label: "Approved Live", count: counts.approved },
-            { id: "pending", label: "Pending Review", count: counts.pending },
-            { id: "rejected", label: "Needs Revision", count: counts.rejected },
-            { id: "removed", label: "Removed", count: counts.removed },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2.5 rounded-2xl px-3 py-2 sm:px-5 sm:py-3.5 text-xs sm:text-sm font-black transition-all shrink-0 ${
-                activeTab === tab.id
-                  ? tab.id === "removed" ? "bg-rose-600 text-white shadow-lg shadow-rose-500/25" : "bg-blue-600 text-white shadow-lg shadow-blue-500/25"
-                  : "bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10"
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span className={`rounded-xl px-2 sm:px-2.5 py-0.5 text-xs font-black ${
-                activeTab === tab.id ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-white/10 text-gray-800 dark:text-gray-200"
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
-        </div>
+        {/* Responsive Filter Tabs (Mobile Dropdown + Desktop Segmented Pills) */}
+        <FilterTabs
+          tabs={[
+            { id: "all", label: "All Properties", count: counts.all, dot: null },
+            { id: "approved", label: "Approved Live", count: counts.approved, dot: "bg-emerald-500" },
+            { id: "pending", label: "Pending Review", count: counts.pending, dot: "bg-amber-500" },
+            { id: "rejected", label: "Needs Revision", count: counts.rejected, dot: "bg-rose-500" },
+            { id: "removed", label: "Removed", count: counts.removed, dot: "bg-gray-400" },
+          ]}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+        />
 
         {/* Large Search Field & Add PG Button */}
         <div className="flex items-center gap-3 w-full lg:w-auto">
@@ -199,12 +185,12 @@ const MyPGs = () => {
 
       {/* Property Grid Showcase - Big & Clear */}
       {loading ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center shadow-sm">
+        <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-200 dark:border-gray-800 border-t-blue-500 mx-auto mb-4"></div>
           <p className="text-sm font-bold text-gray-500 dark:text-gray-400">Loading property listings...</p>
         </div>
       ) : filteredPGs.length === 0 ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center shadow-sm">
+        <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center">
           <Building2 size={36} className="text-gray-400 mx-auto mb-4" />
           <h3 className="text-base sm:text-xl font-black text-gray-900 dark:text-white">No properties found</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Try switching status filters or adding a new PG listing.</p>
@@ -222,7 +208,7 @@ const MyPGs = () => {
           {filteredPGs.map((pg) => (
             <div
               key={pg.id}
-              className="group flex flex-col rounded-xl sm:rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] overflow-hidden shadow-xs hover:shadow-2xl transition-all duration-300"
+              className="group flex flex-col rounded-xl sm:rounded-3xl bg-white dark:bg-[#0c1220] overflow-hidden transition-all duration-300"
             >
               {/* Image Banner */}
               <div className="relative h-28 sm:h-56 w-full overflow-hidden bg-gray-100 dark:bg-white/5">

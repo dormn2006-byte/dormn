@@ -20,7 +20,7 @@ const FeaturedListings = ({ featuredPGs = [], loading = false }) => {
           </div>
 
           <Link
-            to="/explore"
+            to="/pgs"
             className="text-[#4E700F] text-sm sm:text-base font-medium hover:underline flex items-center group whitespace-nowrap pb-1"
           >
             View all PGs

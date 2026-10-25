@@ -18,10 +18,10 @@ const imageFor = (pg, index = 0) => {
   return raw.startsWith("http") ? raw : `${IMAGE_BASE_URL}/uploads/${raw}`;
 };
 
-const SponsoredCard = memo(({ pg, index, className = "" }) => (
+const SponsoredCard = memo(({ pg, index, className = "aspect-square" }) => (
   <Link
     to={`/pg/${pg.id}`}
-    className={`group relative block aspect-square overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-900 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${className}`}
+    className={`group relative block overflow-hidden rounded-3xl border border-gray-200 dark:border-gray-800 bg-gray-900 shadow-sm transition-all duration-300 hover:shadow-[0_0_30px_rgba(147,183,51,0.6)] hover:border-[#93B733] hover:-translate-y-1 ${className}`}
   >
     <img
       src={imageFor(pg, index)}
@@ -34,21 +34,21 @@ const SponsoredCard = memo(({ pg, index, className = "" }) => (
     />
     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
 
-    <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-lg border border-[#93B733]/50 bg-black/75 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#93B733] backdrop-blur-sm sm:text-[10px]">
+    <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-lg border border-amber-400/50 bg-black/75 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-400 backdrop-blur-sm sm:text-[10px]">
       <BadgeCheck size={11} />
-      Sponsored
+      Top Rated
     </span>
 
-    <div className="absolute inset-x-0 bottom-0 p-3 text-white">
-      <h4 className="truncate text-sm font-black leading-tight sm:text-base group-hover:text-[#bbf246] transition-colors">
+    <div className="absolute inset-x-0 bottom-0 p-3 sm:p-5 text-white">
+      <h4 className="truncate text-base font-black leading-tight sm:text-xl group-hover:text-amber-400 transition-colors drop-shadow-md">
         {pg.title || "PG"}
       </h4>
-      <p className="mt-0.5 truncate text-[11px] font-semibold text-gray-200 sm:text-xs">
+      <p className="mt-1 truncate text-xs font-semibold text-gray-200 sm:text-sm drop-shadow-md">
         {[pg.area, pg.city].filter(Boolean).join(", ")}
         {pg.price ? (
           <>
             {" • "}
-            <span className="font-bold text-[#93B733]">₹{Number(pg.price).toLocaleString()}/mo</span>
+            <span className="font-bold text-amber-400">₹{Number(pg.price).toLocaleString()}/mo</span>
           </>
         ) : null}
       </p>
@@ -59,8 +59,8 @@ SponsoredCard.displayName = "SponsoredCard";
 
 const SectionHeading = ({ count }) => (
   <div className="mb-3 flex items-center justify-between px-1">
-    <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 sm:text-sm">
-      Sponsored
+    <h3 className="text-xs font-black uppercase tracking-wider text-gray-900 dark:text-white sm:text-sm">
+      Top Rated
     </h3>
     {count > 0 && (
       <span className="rounded-full border border-[#93B733]/30 bg-[#0D3A1D]/10 px-2.5 py-1 text-[10px] font-bold text-[#93B733] dark:bg-white/10">
@@ -121,9 +121,14 @@ const SponsoredShowcase = ({ sponsoredPGs = [], variant = "hero" }) => {
   return (
     <div className="flex w-full flex-col gap-3">
       <SectionHeading count={pgs.length} />
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid gap-3 ${currentChunk.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
         {currentChunk.map((pg, index) => (
-          <SponsoredCard key={pg.id} pg={pg} index={safePage * HERO_PAGE_SIZE + index} />
+          <SponsoredCard 
+            key={pg.id} 
+            pg={pg} 
+            index={safePage * HERO_PAGE_SIZE + index} 
+            className={currentChunk.length === 1 ? 'aspect-[3/4]' : 'aspect-square'}
+          />
         ))}
       </div>
       {pages.length > 1 && (
@@ -135,7 +140,7 @@ const SponsoredShowcase = ({ sponsoredPGs = [], variant = "hero" }) => {
               aria-label={`Sponsored page ${i + 1}`}
               onClick={() => setPage(i)}
               className={`h-1.5 rounded-full transition-all ${
-                i === safePage ? "w-5 bg-[#93B733]" : "w-1.5 bg-gray-300 dark:bg-white/20"
+                i === safePage ? "w-5 bg-amber-400" : "w-1.5 bg-gray-300 dark:bg-white/20"
               }`}
             />
           ))}

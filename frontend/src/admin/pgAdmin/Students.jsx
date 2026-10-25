@@ -5,7 +5,7 @@ import {
   MapPin, UserCheck, Loader2,
 } from "lucide-react";
 import api from "../../services/api";
-import RejectReasonModal from "../shared/RejectReasonModal";
+import FilterTabs from "./components/FilterTabs";
 
 const Students = () => {
   const [students, setStudents] = useState([]);
@@ -139,7 +139,7 @@ const Students = () => {
   }, [toast]);
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto">
+    <div className="space-y-6 w-full">
 
       {toast && (
         <div className={`rounded-2xl border px-5 py-3.5 text-sm font-bold ${
@@ -152,36 +152,21 @@ const Students = () => {
       )}
 
       {/* Big Bold Action Bar & Filter Tabs */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-3 sm:p-5 shadow-sm">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-3xl bg-white dark:bg-[#0c1220] p-3 sm:p-5">
 
-        {/* Large Status Filter Tabs */}
-        <div className="flex items-center gap-2.5 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
-          {[
+        {/* Responsive Filter Tabs (Mobile Dropdown + Desktop Segmented Pills) */}
+        <FilterTabs
+          tabs={[
             { id: "all", label: "All Applicants", count: counts.all },
             { id: "kyc", label: "KYC Review", count: counts.kyc },
             { id: "paid", label: "Paid & Verified", count: counts.paid },
             { id: "unpaid", label: "Approved (Unpaid)", count: counts.unpaid },
             { id: "pending", label: "Pending Approval", count: counts.pending },
             { id: "rejected", label: "Declined", count: counts.rejected },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2.5 rounded-2xl px-3 py-2 sm:px-5 sm:py-3.5 text-xs sm:text-sm font-black transition-all shrink-0 ${
-                activeTab === tab.id
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/25"
-                  : "bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10"
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span className={`rounded-xl px-2 sm:px-2.5 py-0.5 text-xs font-black ${
-                activeTab === tab.id ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-white/10 text-gray-800 dark:text-gray-200"
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
-        </div>
+          ]}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+        />
 
         {/* Large Search Field */}
         <div className="relative w-full lg:w-80">
@@ -198,12 +183,12 @@ const Students = () => {
 
       {/* Tenant Cards Showcase - Big, Clear & Bold */}
       {loading ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center shadow-sm">
+        <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-200 dark:border-gray-800 border-t-blue-500 mx-auto mb-4"></div>
           <p className="text-sm font-bold text-gray-500 dark:text-gray-400">Loading tenant directory...</p>
         </div>
       ) : filteredStudents.length === 0 ? (
-        <div className="rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center shadow-sm">
+        <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-8 sm:p-16 text-center">
           <Users size={36} className="text-gray-400 mx-auto mb-4" />
           <h3 className="text-base sm:text-xl font-black text-gray-900 dark:text-white">No tenants found</h3>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">No tenants match your current filters.</p>
@@ -218,7 +203,7 @@ const Students = () => {
             return (
               <div
                 key={s.id}
-                className="group flex flex-col rounded-3xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0c1220] overflow-hidden p-4 sm:p-6 shadow-md hover:shadow-2xl transition-all duration-300 justify-between space-y-3 sm:space-y-5"
+                className="group flex flex-col rounded-3xl bg-white dark:bg-[#0c1220] overflow-hidden p-4 sm:p-6 transition-all duration-300 justify-between space-y-3 sm:space-y-5"
               >
                 {/* Header Details */}
                 <div className="flex items-start justify-between gap-3">

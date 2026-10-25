@@ -31,8 +31,16 @@ import api from "../../services/api";
 import DeleteAccountModal from "../../components/auth/DeleteAccountModal";
 import BankAccountCard from "./components/BankAccountCard";
 import BankAccountModal from "./components/BankAccountModal";
+import FilterTabs from "./components/FilterTabs";
 
-// ── Compact Reusable Input Components ──────────────────────────────
+// ── Modern Reusable Input Components ──────────────────────────────
+const inputCls = (disabled, hasIcon, extra = "") =>
+  `w-full rounded-xl border border-gray-200 dark:border-white/10 text-xs sm:text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none transition-all shadow-xs ${
+    disabled
+      ? "bg-gray-100/70 dark:bg-white/[0.03] text-gray-500 dark:text-gray-400 cursor-not-allowed border-dashed"
+      : "bg-white dark:bg-[#151922] text-gray-900 dark:text-white hover:border-gray-300 dark:hover:border-white/20 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+  } ${hasIcon ? "pl-9 lg:pl-10" : "px-3 lg:px-3.5"} pr-3 ${extra}`;
+
 const InputField = ({
   label,
   icon: Icon,
@@ -45,17 +53,29 @@ const InputField = ({
   className = "",
   uppercase = false,
   rows,
-  maxLength
+  maxLength,
+  badge,
+  hint
 }) => (
   <div className={className}>
-    <label className="block text-[10px] lg:text-xs font-bold text-gray-500 dark:text-gray-400 lg:text-gray-700 dark:lg:text-gray-300 mb-0.5 lg:mb-1.5 truncate">
-      {label}
-    </label>
+    <div className="flex items-center justify-between mb-1 lg:mb-1.5">
+      <label className="block text-[11px] lg:text-xs font-semibold text-gray-700 dark:text-gray-300 truncate">
+        {label}
+        {required && <span className="text-rose-500 ml-0.5">*</span>}
+      </label>
+      {badge && (
+        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400">
+          {badge}
+        </span>
+      )}
+    </div>
     <div className="relative">
       {Icon && (
         <Icon
-          size={12}
-          className={`absolute left-2 sm:left-2.5 lg:left-3.5 ${rows ? "top-2 lg:top-3" : "top-1/2 -translate-y-1/2"} text-gray-400 pointer-events-none lg:w-4 lg:h-4`}
+          size={14}
+          className={`absolute left-3 lg:left-3.5 ${
+            rows ? "top-3" : "top-1/2 -translate-y-1/2"
+          } text-gray-400 pointer-events-none transition-colors lg:w-4 lg:h-4`}
         />
       )}
       {rows ? (
@@ -65,9 +85,7 @@ const InputField = ({
           onChange={onChange}
           placeholder={placeholder}
           disabled={disabled}
-          className={`w-full rounded-md sm:rounded-lg lg:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161616] ${
-            Icon ? "pl-6 sm:pl-7 lg:pl-10" : "px-2 sm:px-2.5 lg:px-3.5"
-          } pr-2 lg:pr-3 py-1 lg:py-2.5 text-xs lg:text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none focus:border-blue-500`}
+          className={inputCls(disabled, Boolean(Icon), "py-2.5")}
         />
       ) : (
         <input
@@ -78,14 +96,13 @@ const InputField = ({
           disabled={disabled}
           required={required}
           maxLength={maxLength}
-          className={`w-full h-8 lg:h-11 rounded-md sm:rounded-lg lg:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161616] ${
-            Icon ? "pl-6 sm:pl-7 lg:pl-10" : "px-2 sm:px-2.5 lg:px-3.5"
-          } pr-2 lg:pr-3.5 text-xs lg:text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none focus:border-blue-500 ${
-            disabled ? "bg-gray-100 dark:bg-[#121212] cursor-not-allowed opacity-75" : ""
-          } ${uppercase ? "uppercase" : ""}`}
+          className={inputCls(disabled, Boolean(Icon), `h-9 lg:h-11 ${uppercase ? "uppercase" : ""}`)}
         />
       )}
     </div>
+    {hint && (
+      <p className="text-[10px] lg:text-[11px] text-gray-400 dark:text-gray-500 mt-1">{hint}</p>
+    )}
   </div>
 );
 
@@ -101,7 +118,10 @@ const PasswordInput = ({
   minLength
 }) => (
   <div>
-    <label className="block text-[10px] lg:text-xs font-bold text-gray-500 dark:text-gray-400 lg:text-gray-700 dark:lg:text-gray-300 mb-0.5 lg:mb-1.5 truncate">{label}</label>
+    <label className="block text-[11px] lg:text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 lg:mb-1.5 truncate">
+      {label}
+      {required && <span className="text-rose-500 ml-0.5">*</span>}
+    </label>
     <div className="relative">
       <input
         type={show ? "text" : "password"}
@@ -111,18 +131,34 @@ const PasswordInput = ({
         disabled={disabled}
         required={required}
         minLength={minLength}
-        className="w-full h-8 lg:h-11 rounded-md sm:rounded-lg lg:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161616] pl-2.5 lg:pl-3.5 pr-8 lg:pr-10 text-xs lg:text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 disabled:opacity-50"
+        className={inputCls(disabled, false, "h-9 lg:h-11 pr-10")}
       />
       <button
         type="button"
         onClick={onToggle}
-        className="absolute right-2.5 lg:right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white cursor-pointer"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white cursor-pointer p-1"
       >
-        {show ? <EyeOff size={14} className="lg:w-4 lg:h-4" /> : <Eye size={14} className="lg:w-4 lg:h-4" />}
+        {show ? <EyeOff size={15} /> : <Eye size={15} />}
       </button>
     </div>
   </div>
 );
+
+const SectionCard = ({ icon: Icon, iconColor = "text-blue-500 bg-blue-500/10", title, desc, children }) => (
+  <div className="rounded-2xl bg-white dark:bg-[#111] p-3.5 sm:p-6 lg:p-7 space-y-4 sm:space-y-5">
+    <div className="flex items-start gap-2.5 sm:gap-3 pb-3 sm:pb-4 border-b border-gray-100 dark:border-white/5">
+      <div className={`p-2 sm:p-2.5 rounded-xl ${iconColor} shrink-0`}>
+        <Icon size={16} className="sm:w-[18px] sm:h-[18px]" />
+      </div>
+      <div>
+        <h3 className="text-xs sm:text-base font-bold text-gray-900 dark:text-white">{title}</h3>
+        {desc && <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">{desc}</p>}
+      </div>
+    </div>
+    {children}
+  </div>
+);
+
 
 // ── Tab Config ──────────────────────────────────────────────────────
 const TABS = [
@@ -279,6 +315,13 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
     fetchBankAccounts();
   }, []);
 
+  // Synchronize tab with search query param (e.g. ?tab=payouts)
+  useEffect(() => {
+    if (tabParam && ["profile", "payouts", "kyc", "security", "tier"].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
+
   // Ensure fresh accounts are fetched whenever user opens the Bank & Payouts tab
   useEffect(() => {
     if (activeTab === "payouts") {
@@ -398,12 +441,6 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
         phone: profileData.phone,
         secondary_phone: profileData.secondaryPhone,
         gender: profileData.gender,
-        business_name: profileData.businessName,
-        office_address: profileData.officeAddress,
-        city: profileData.city,
-        state: profileData.state,
-        pincode: profileData.pincode,
-        operating_since: profileData.operatingSince,
         pan_number: profileData.panNumber,
         gstin: profileData.gstin,
         aadhaar_masked: profileData.aadhaarMasked
@@ -411,7 +448,7 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
       if (res.data?.success) {
         syncUser(res.data.user);
         setIsProfileSaved(true);
-        showToast("Profile & business details updated successfully!");
+        showToast("Profile details updated successfully!");
       }
     } catch (err) {
       showToast(err.response?.data?.message || "Failed to update profile details.", true);
@@ -555,101 +592,53 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
   };
 
   return (
-    <div className="space-y-2.5 sm:space-y-3 lg:space-y-4.5 max-w-[1200px] mx-auto pb-6">
-      {/* ── Top Hero Header Card ── */}
-      <div className="rounded-xl lg:rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#111] p-2.5 sm:p-3.5 lg:p-5 shadow-xs lg:shadow-sm relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 lg:gap-4 relative z-10">
-          <div className="flex items-center gap-2.5 lg:gap-3.5 w-full sm:w-auto">
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 lg:h-13 lg:w-13 shrink-0 items-center justify-center rounded-lg lg:rounded-xl bg-gradient-to-tr from-pink-500 via-rose-500 to-cyan-500 text-sm sm:text-base lg:text-xl font-black text-white shadow-xs">
-              {(profileData.fullName?.charAt(0) || "O").toUpperCase()}
-            </div>
-            
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 lg:gap-2 flex-wrap">
-                <h1 className="text-sm sm:text-base lg:text-xl font-black text-gray-900 dark:text-white tracking-tight truncate">
-                  {profileData.fullName}
-                </h1>
-                <span className="inline-flex items-center gap-0.5 lg:gap-1 rounded-md bg-blue-500/10 px-1.5 lg:px-2.5 py-0.2 lg:py-0.5 text-[9px] lg:text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                  <ShieldCheck size={10} className="lg:w-3.5 lg:h-3.5" /> Verified
-                </span>
-                <span className="inline-flex items-center gap-0.5 lg:gap-1 rounded-md bg-emerald-500/10 px-1.5 lg:px-2.5 py-0.2 lg:py-0.5 text-[9px] lg:text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  <Zap size={9} className="fill-current lg:w-3 lg:h-3" /> {user?.subscription_tier ? `${user.subscription_tier.charAt(0).toUpperCase() + user.subscription_tier.slice(1)} Tier` : "Free Tier"}
-                </span>
-              </div>
-
-              <p className="text-[10px] lg:text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5 lg:mt-1 flex flex-wrap items-center gap-x-1.5 lg:gap-x-2 gap-y-0.5">
-                <span className="truncate max-w-[140px] sm:max-w-none font-semibold text-gray-700 dark:text-gray-300">{profileData.businessName || "PG Owner"}</span>
-                <span>•</span>
-                <span>ID: #{storedUser?.id || "OWN-17"}</span>
-                <span>•</span>
-                <span>Since {profileData.operatingSince || "2024"}</span>
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => handleTabChange("security")}
-            className="self-start sm:self-auto flex items-center justify-center gap-1.5 rounded-lg lg:rounded-xl bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 px-2.5 py-1 lg:px-4 lg:py-2 text-[10px] sm:text-[11px] lg:text-xs font-bold text-gray-700 dark:text-gray-300 transition border border-gray-200 dark:border-white/10 cursor-pointer shrink-0"
-          >
-            <Lock size={12} className="text-cyan-500 lg:w-3.5 lg:h-3.5" />
-            <span>Manage Password</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ── Tabs Navigation Bar ── */}
-      <div className="flex items-center gap-1 lg:gap-2 overflow-x-auto pb-0.5 scrollbar-none">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => handleTabChange(id)}
-            className={`flex items-center gap-1 lg:gap-1.5 rounded-lg lg:rounded-xl px-2.5 py-1 lg:px-4 lg:py-2.5 text-[11px] lg:text-xs font-bold transition-all shrink-0 cursor-pointer ${
-              activeTab === id
-                ? "bg-blue-600 text-white shadow-xs"
-                : "bg-white dark:bg-[#111] border border-gray-200/80 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-            }`}
-          >
-            <Icon size={12} className="lg:w-3.5 lg:h-3.5" />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
+    <div className="space-y-4 sm:space-y-6 w-full pb-16">
+      {/* ── Responsive Profile Tabs (Mobile Dropdown + Desktop Segmented Pills) ── */}
+      <FilterTabs
+        tabs={TABS}
+        activeTab={activeTab}
+        onChange={handleTabChange}
+      />
 
       {/* ── Toast Alerts ── */}
       {successMessage && (
-        <div className="flex items-center gap-1.5 lg:gap-2 rounded-lg lg:rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-2 lg:p-3 text-[11px] lg:text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-          <CheckCircle2 size={13} className="shrink-0 lg:w-4 lg:h-4" />
+        <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-xs font-semibold text-emerald-600 dark:text-emerald-400 animate-in fade-in">
+          <CheckCircle2 size={16} className="shrink-0" />
           <span>{successMessage}</span>
         </div>
       )}
       {errorMessage && (
-        <div className="flex items-center gap-1.5 lg:gap-2 rounded-lg lg:rounded-xl bg-rose-500/10 border border-rose-500/20 p-2 lg:p-3 text-[11px] lg:text-xs font-semibold text-rose-600 dark:text-rose-400">
-          <AlertCircle size={13} className="shrink-0 lg:w-4 lg:h-4" />
+        <div className="flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-xs font-semibold text-rose-600 dark:text-rose-400 animate-in fade-in">
+          <AlertCircle size={16} className="shrink-0" />
           <span>{errorMessage}</span>
         </div>
       )}
 
       {/* ── TAB 1: PROFILE & BUSINESS DETAILS ── */}
       {activeTab === "profile" && (
-        <form onSubmit={handleSaveProfile} className="space-y-2.5 sm:space-y-3 lg:space-y-4">
-          <div className="rounded-xl lg:rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#111] p-3 sm:p-3.5 lg:p-6 shadow-xs lg:shadow-sm">
-            <h3 className="text-xs lg:text-sm font-black text-gray-900 dark:text-white flex items-center gap-1.5 lg:gap-2 mb-2.5 lg:mb-4">
-              <User size={14} className="text-blue-500 lg:w-4 lg:h-4" />
-              <span>Personal Contact Details</span>
-            </h3>
-            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:gap-4">
+        <form onSubmit={handleSaveProfile} className="space-y-6">
+          <SectionCard
+            icon={User}
+            iconColor="text-blue-600 dark:text-blue-400 bg-blue-500/10"
+            title="Personal Contact Details"
+            desc="Your primary landlord identity and verified communication channels."
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
               <InputField
                 label="Full Name"
                 icon={User}
                 value={profileData.fullName}
                 onChange={(e) => updateField("fullName", e.target.value)}
+                placeholder="Enter your legal name"
                 required
               />
               <InputField
-                label="Registered Email (Locked)"
+                label="Registered Email"
                 icon={Mail}
                 value={profileData.email}
                 disabled
+                badge="Locked / Verified"
+                hint="Contact Dormn support if you need to update your registered email."
               />
               <InputField
                 label="Primary Phone Number"
@@ -657,7 +646,7 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
                 type="tel"
                 value={profileData.phone}
                 onChange={(e) => updateField("phone", e.target.value)}
-                placeholder="10-digit number"
+                placeholder="10-digit mobile number"
               />
               <InputField
                 label="WhatsApp / Emergency Phone"
@@ -668,83 +657,55 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
                 placeholder="WhatsApp contact number"
               />
             </div>
-          </div>
+          </SectionCard>
 
-          <div className="rounded-xl lg:rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#111] p-3 sm:p-3.5 lg:p-6 shadow-xs lg:shadow-sm">
-            <h3 className="text-xs lg:text-sm font-black text-gray-900 dark:text-white flex items-center gap-1.5 lg:gap-2 mb-2.5 lg:mb-4">
-              <Building size={14} className="text-cyan-500 lg:w-4 lg:h-4" />
-              <span>PG Brand &amp; Office Credentials</span>
-            </h3>
-            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:gap-4">
-              <InputField
-                label="PG Brand / Business Name"
-                icon={Building}
-                value={profileData.businessName}
-                onChange={(e) => updateField("businessName", e.target.value)}
-                placeholder="Enter PG brand name"
-              />
-              <InputField
-                label="Operating Since"
-                value={profileData.operatingSince}
-                onChange={(e) => updateField("operatingSince", e.target.value)}
-                placeholder="e.g. 2024"
-              />
-              <InputField
-                className="col-span-2"
-                label="Registered Office Address"
-                icon={MapPin}
-                rows={1}
-                value={profileData.officeAddress}
-                onChange={(e) => updateField("officeAddress", e.target.value)}
-                placeholder="Enter registered office address"
-              />
-              <InputField
-                label="City"
-                value={profileData.city}
-                onChange={(e) => updateField("city", e.target.value)}
-                placeholder="Enter city"
-              />
-              <div>
-                <label className="block text-[10px] lg:text-xs font-bold text-gray-500 dark:text-gray-400 lg:text-gray-700 dark:lg:text-gray-300 mb-0.5 lg:mb-1.5 truncate">
-                  State &amp; PIN Code
-                </label>
-                <div className="grid grid-cols-2 gap-1.5 lg:gap-2">
-                  <input
-                    type="text"
-                    value={profileData.state}
-                    onChange={(e) => updateField("state", e.target.value)}
-                    placeholder="State"
-                    className="w-full h-8 lg:h-11 rounded-md sm:rounded-lg lg:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161616] px-2 lg:px-3.5 text-xs lg:text-sm text-gray-900 dark:text-white placeholder:text-gray-400 outline-none focus:border-blue-500"
-                  />
-                  <input
-                    type="text"
-                    value={profileData.pincode}
-                    onChange={(e) => updateField("pincode", e.target.value)}
-                    placeholder="PIN"
-                    className="w-full h-8 lg:h-11 rounded-md sm:rounded-lg lg:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161616] px-2 lg:px-3.5 text-xs lg:text-sm text-gray-900 dark:text-white placeholder:text-gray-400 outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
+          {/* Action Footer Bar */}
+          <div className="rounded-2xl bg-white dark:bg-[#111] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              {isProfileSaved ? (
+                <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">
+                  <CheckCircle2 size={16} />
+                  All profile details are up to date
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-gray-500 dark:text-gray-400 font-medium">
+                  <Clock size={15} />
+                  Remember to save your changes before leaving this page
+                </span>
+              )}
             </div>
-            <div className="pt-3 lg:pt-4 flex justify-end">
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="w-full sm:w-auto flex items-center justify-center gap-1.5 rounded-lg lg:rounded-xl bg-blue-600 hover:bg-blue-500 h-8 lg:h-11 px-4 lg:px-6 text-xs lg:text-sm font-bold text-white transition shadow-xs lg:shadow-sm cursor-pointer disabled:opacity-50"
-              >
-                {isProfileSaved ? <Check size={13} className="lg:w-4 lg:h-4 stroke-[2.5]" /> : <Save size={13} className="lg:w-4 lg:h-4" />}
-                <span>{isSaving ? "Saving..." : isProfileSaved ? "Saved" : "Save Profile Details"}</span>
-              </button>
-            </div>
+
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 h-11 px-6 text-sm font-semibold text-white transition-all shadow-sm hover:shadow active:scale-[0.98] cursor-pointer disabled:opacity-50"
+            >
+              {isSaving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Saving Changes...</span>
+                </>
+              ) : isProfileSaved ? (
+                <>
+                  <Check size={16} className="stroke-[3]" />
+                  <span>Changes Saved</span>
+                </>
+              ) : (
+                <>
+                  <Save size={16} />
+                  <span>Save Profile Details</span>
+                </>
+              )}
+            </button>
           </div>
         </form>
       )}
 
       {/* ── TAB 2: BANK & PAYOUT DETAILS ── */}
       {activeTab === "payouts" && (
-        <div className="space-y-3 sm:space-y-4">
-          <div className="rounded-xl lg:rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#111] p-3 sm:p-4 lg:p-6 shadow-xs lg:shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-white/10">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-white dark:bg-[#111] p-5 sm:p-6 lg:p-7">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-white/5">
               <div>
                 <h3 className="text-sm sm:text-base font-black text-gray-900 dark:text-white flex items-center gap-1.5 lg:gap-2">
                   <CreditCard size={16} className="text-emerald-500" />
@@ -821,33 +782,33 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
 
       {/* ── TAB 3: LEGAL KYC & VERIFICATION ── */}
       {activeTab === "kyc" && (
-        <div className="space-y-2.5 sm:space-y-3 lg:space-y-4">
-          <div className="rounded-xl lg:rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#111] p-3 sm:p-3.5 lg:p-6 shadow-xs lg:shadow-sm">
-            <div className="flex items-center justify-between mb-1.5 lg:mb-2">
-              <h3 className="text-xs lg:text-sm font-black text-gray-900 dark:text-white flex items-center gap-1.5 lg:gap-2">
-                <BadgeCheck size={14} className="text-blue-500 lg:w-4 lg:h-4" />
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-white dark:bg-[#111] p-5 sm:p-6 lg:p-7">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <BadgeCheck size={18} className="text-blue-500" />
                 <span>Government KYC &amp; Verification</span>
               </h3>
-              <span className="inline-flex items-center gap-0.5 lg:gap-1 rounded-md bg-blue-500/10 px-1.5 lg:px-2.5 py-0.2 lg:py-0.5 text-[9px] lg:text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                <ShieldCheck size={10} className="lg:w-3.5 lg:h-3.5" /> Level 3
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                <ShieldCheck size={13} /> Level 3 Verified
               </span>
             </div>
-            <p className="text-[10px] lg:text-xs text-gray-500 dark:text-gray-400 mb-2.5 lg:mb-4 leading-relaxed">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">
               Submit your official tax and identity documents for landlord accreditation, regulatory compliance, and verified badges.
             </p>
 
             {/* Current Verified Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 lg:gap-3 mb-3 lg:mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
               {[
                 { label: "PAN Card", val: profileData.panNumber, badge: profileData.panNumber ? "Verified / Active" : "Action Required" },
                 { label: "GSTIN (Optional)", val: profileData.gstin, badge: profileData.gstin ? "Active GST" : "Not Provided" },
                 { label: "Aadhaar Document", val: profileData.aadhaarMasked, badge: profileData.aadhaarMasked ? "UIDAI Compliant" : "Action Required", span: "col-span-2 sm:col-span-1" }
               ].map(({ label, val, badge, span }) => (
-                <div key={label} className={`p-2 sm:p-2.5 lg:p-4 rounded-lg lg:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161616] ${span || ""}`}>
-                  <span className="text-[9px] lg:text-xs font-semibold uppercase text-gray-400 block mb-0.5">{label}</span>
-                  <span className="text-xs lg:text-sm font-bold text-gray-900 dark:text-white font-mono truncate block">{val || "Not provided"}</span>
-                  <div className={`mt-1 lg:mt-1.5 flex items-center gap-1 text-[10px] lg:text-xs font-semibold ${val ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
-                    {val ? <CheckCircle2 size={10} className="lg:w-3.5 lg:h-3.5" /> : <AlertCircle size={10} className="lg:w-3.5 lg:h-3.5" />}
+                <div key={label} className={`p-3.5 sm:p-4 rounded-xl bg-gray-50 dark:bg-[#161616] ${span || ""}`}>
+                  <span className="text-[10px] lg:text-[11px] font-semibold uppercase tracking-wider text-gray-400 block mb-1">{label}</span>
+                  <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white font-mono truncate block">{val || "Not provided"}</span>
+                  <div className={`mt-2 flex items-center gap-1.5 text-xs font-semibold ${val ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                    {val ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
                     <span>{badge}</span>
                   </div>
                 </div>
@@ -908,35 +869,35 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
 
       {/* ── TAB 4: SECURITY & PASSWORD ── */}
       {activeTab === "security" && (
-        <div className="space-y-2.5 sm:space-y-3 lg:space-y-4">
-          <div className="rounded-xl lg:rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#111] p-3 sm:p-3.5 lg:p-6 shadow-xs lg:shadow-sm">
-            <div className="pb-2 lg:pb-3 border-b border-gray-100 dark:border-white/10 mb-2.5 lg:mb-4">
-              <h3 className="text-xs lg:text-sm font-black text-gray-900 dark:text-white flex items-center gap-1.5 lg:gap-2">
-                <Lock size={14} className="text-cyan-500 lg:w-4 lg:h-4" />
+        <div className="space-y-6">
+          <div className="rounded-2xl bg-white dark:bg-[#111] p-5 sm:p-6 lg:p-7">
+            <div className="pb-4 border-b border-gray-100 dark:border-white/5 mb-5">
+              <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Lock size={18} className="text-cyan-500" />
                 <span>Security &amp; Password Settings</span>
               </h3>
-              <p className="text-[10px] lg:text-xs text-gray-500 dark:text-gray-400 mt-0.5 lg:mt-1">
-                Manage your landlord credentials and two-step verification security.
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Manage your landlord account credentials, login passwords, and two-step verification security.
               </p>
             </div>
 
             {/* STATE 1: IDLE VIEW */}
             {passwordMode === "idle" && (
-              <div className="p-2.5 sm:p-3 lg:p-5 rounded-lg lg:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161616] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 lg:gap-4">
+              <div className="p-4 sm:p-5 rounded-xl bg-gray-50 dark:bg-[#161616] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <span className="text-[9px] lg:text-xs font-semibold uppercase tracking-wide text-gray-400 block mb-0.5">
+                  <span className="text-[10px] lg:text-[11px] font-semibold uppercase tracking-wider text-gray-400 block mb-1">
                     Current Password Status
                   </span>
-                  <div className="flex items-center gap-1.5 lg:gap-2">
-                    <span className="text-xs sm:text-sm lg:text-base font-bold tracking-widest text-gray-900 dark:text-white">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm sm:text-base font-bold tracking-widest text-gray-900 dark:text-white">
                       ••••••••••••
                     </span>
-                    <span className="inline-flex items-center gap-0.5 lg:gap-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 lg:px-2.5 py-0.2 lg:py-0.5 text-[9px] lg:text-xs font-semibold border border-emerald-500/20">
-                      <CheckCircle2 size={10} className="lg:w-3.5 lg:h-3.5" /> Protected
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-semibold">
+                      <CheckCircle2 size={13} /> Protected
                     </span>
                   </div>
-                  <p className="text-[10px] lg:text-xs text-gray-500 dark:text-gray-400 mt-0.5 lg:mt-1 font-medium">
-                    We recommend updating your password periodically.
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 font-medium">
+                    Your password was last verified securely. We recommend updating your password periodically.
                   </p>
                 </div>
 
@@ -1135,7 +1096,7 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
                       onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
                       placeholder="123456"
                       disabled={otpSecondsLeft <= 0}
-                      className="w-full h-8 lg:h-11 rounded-md sm:rounded-lg lg:rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#161616] px-2 lg:px-3 text-center text-xs lg:text-sm font-bold tracking-widest text-gray-900 dark:text-white outline-none focus:border-blue-500 disabled:opacity-50"
+                      className={inputCls(otpSecondsLeft <= 0, false, "h-9 lg:h-11 px-3 text-center tracking-widest font-bold")}
                       required
                     />
                   </div>
@@ -1223,8 +1184,8 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
 
       {/* ── TAB 5: MEMBERSHIP TIER ── */}
       {activeTab === "tier" && (
-        <div className="space-y-2.5 sm:space-y-3 lg:space-y-4">
-          <div className="rounded-xl lg:rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-blue-600/10 p-3 sm:p-3.5 lg:p-6 text-gray-900 dark:text-white shadow-xs lg:shadow-sm relative overflow-hidden">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-blue-600/10 p-5 sm:p-6 lg:p-7 text-gray-900 dark:text-white relative overflow-hidden">
             <div className="flex items-center justify-between mb-2 lg:mb-3">
               <div className="flex items-center gap-1.5 lg:gap-2">
                 <Zap size={15} className="text-emerald-500 dark:text-emerald-400 lg:w-5 lg:h-5" />
@@ -1261,16 +1222,16 @@ const OwnerProfile = ({ defaultTab = "profile" }) => {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 lg:gap-4 p-2.5 sm:p-3 lg:p-5 rounded-xl lg:rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white dark:bg-[#111]">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 lg:gap-4 p-4 sm:p-5 lg:p-6 rounded-2xl bg-white dark:bg-[#111]">
             <div>
               <h4 className="text-xs lg:text-sm font-black text-gray-900 dark:text-white">Need to change your subscription?</h4>
-              <p className="text-[10px] lg:text-xs text-gray-500 dark:text-gray-400 mt-0.5">Explore annual discounts and enterprise packages</p>
+              <p className="text-[10px] lg:text-xs text-gray-500 dark:text-gray-400 mt-0.5">Membership pricing and packages will be allotted soon</p>
             </div>
             <button
               onClick={() => navigate("/owner/pricing")}
               className="w-full sm:w-auto rounded-lg lg:rounded-xl bg-blue-600 hover:bg-blue-500 text-white h-8 lg:h-10 px-3.5 lg:px-5 text-[11px] lg:text-xs font-bold transition shadow-xs lg:shadow-sm cursor-pointer shrink-0 text-center"
             >
-              Explore Plans
+              View Plans
             </button>
           </div>
         </div>

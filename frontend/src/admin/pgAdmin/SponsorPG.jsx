@@ -60,16 +60,16 @@ const SlotCard = ({ label, icon: Icon, slot }) => {
   const isFull = available <= 0;
 
   return (
-    <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] p-5 shadow-sm">
+    <div className="rounded-2xl sm:rounded-3xl bg-white dark:bg-[#0c1220] p-3.5 sm:p-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#4E700F] dark:text-[#93B733]">
-            <Icon size={18} />
+          <span className="flex h-7 w-7 sm:h-9 sm:w-9 items-center justify-center rounded-lg sm:rounded-xl bg-[#93B733]/15 text-[#4E700F] dark:text-[#93B733]">
+            <Icon size={15} />
           </span>
-          <span className="text-sm font-black text-gray-900 dark:text-white">{label}</span>
+          <span className="text-xs sm:text-sm font-black text-gray-900 dark:text-white">{label}</span>
         </div>
         <span
-          className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+          className={`rounded-full border px-2 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider ${
             isFull
               ? "border-rose-500/30 bg-rose-500/15 text-rose-600 dark:text-rose-400"
               : "border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
@@ -79,15 +79,15 @@ const SlotCard = ({ label, icon: Icon, slot }) => {
         </span>
       </div>
 
-      <div className="mt-4 flex items-end justify-between">
+      <div className="mt-2.5 sm:mt-4 flex items-end justify-between">
         <div>
-          <p className="text-2xl font-black text-gray-900 dark:text-white">
+          <p className="text-lg sm:text-2xl font-black text-gray-900 dark:text-white leading-tight">
             {used}
-            <span className="text-base font-bold text-gray-400"> / {total}</span>
+            <span className="text-xs sm:text-base font-bold text-gray-400"> / {total}</span>
           </p>
-          <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">slots in use</p>
+          <p className="text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-gray-400">slots in use</p>
         </div>
-        <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
+        <div className="h-1.5 sm:h-2 w-16 sm:w-24 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
           <div
             className={`h-full rounded-full ${isFull ? "bg-rose-500" : "bg-[#93B733]"}`}
             style={{ width: `${total ? Math.min(100, (used / total) * 100) : 0}%` }}
@@ -249,7 +249,7 @@ const SponsorPG = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -278,33 +278,33 @@ const SponsorPG = () => {
       )}
 
       {/* Slot availability */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-2.5 sm:gap-4 grid-cols-2">
         <SlotCard label="Home Page" icon={Home} slot={slots?.home} />
         <SlotCard label="Explore Page" icon={Compass} slot={slots?.explore} />
       </div>
 
       {/* Purchase */}
-      <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] p-5 sm:p-6 shadow-sm space-y-5">
-        <h2 className="text-base sm:text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-          <Sparkles size={18} className="text-[#93B733]" />
+      <div className="rounded-2xl sm:rounded-3xl bg-white dark:bg-[#0c1220] p-4 sm:p-6 space-y-4 sm:space-y-5">
+        <h2 className="text-sm sm:text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+          <Sparkles size={16} className="text-[#93B733]" />
           Buy a Sponsored Slot
         </h2>
 
         {/* PG */}
         <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+          <label className="mb-1 block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
             Select a PG
           </label>
           {approvedPGs.length === 0 ? (
-            <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-400">
-              <AlertCircle size={15} className="shrink-0" />
+            <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 sm:px-4 sm:py-3 text-xs font-bold text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-400">
+              <AlertCircle size={14} className="shrink-0" />
               <span>You have no approved PGs yet. Only approved listings can be sponsored.</span>
             </div>
           ) : (
             <select
               value={selectedPgId}
               onChange={(e) => setSelectedPgId(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50/60 dark:bg-[#111a2c] px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:border-[#93B733]"
+              className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50/60 dark:bg-[#111a2c] px-3 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm font-semibold text-gray-900 dark:text-white outline-none focus:border-[#93B733]"
             >
               <option value="">Choose a PG…</option>
               {approvedPGs.map((pg) => (
@@ -317,8 +317,8 @@ const SponsorPG = () => {
           )}
 
           {selectedAlreadyPaid && (
-            <p className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400">
-              <AlertCircle size={13} className="shrink-0" />
+            <p className="mt-1.5 flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-amber-600 dark:text-amber-400">
+              <AlertCircle size={12} className="shrink-0" />
               You have already paid for this PG on the {selectedPlacement.label} placement.
             </p>
           )}
@@ -326,10 +326,10 @@ const SponsorPG = () => {
 
         {/* Placement */}
         <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+          <label className="mb-1 block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
             Placement
           </label>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-2 sm:gap-3 sm:grid-cols-2">
             {PLACEMENTS.map((p) => {
               const Icon = p.icon;
               const isSelected = placement === p.id;
@@ -340,25 +340,25 @@ const SponsorPG = () => {
                   key={p.id}
                   type="button"
                   onClick={() => setPlacement(p.id)}
-                  className={`flex items-start gap-3 rounded-2xl border-2 p-4 text-left transition-all cursor-pointer ${
+                  className={`flex items-start gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border-2 p-3 sm:p-4 text-left transition-all cursor-pointer ${
                     isSelected
                       ? "border-[#93B733] bg-[#93B733]/10"
                       : "border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.03] hover:border-[#93B733]/40"
                   }`}
                 >
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${isSelected ? "bg-[#93B733] text-white" : "bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-300"}`}>
-                    <Icon size={18} />
+                  <span className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg sm:rounded-xl ${isSelected ? "bg-[#93B733] text-white" : "bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-300"}`}>
+                    <Icon size={16} />
                   </span>
                   <span className="min-w-0">
-                    <span className="flex items-center gap-2 text-sm font-black text-gray-900 dark:text-white">
+                    <span className="flex items-center gap-1.5 text-xs sm:text-sm font-black text-gray-900 dark:text-white">
                       {p.label}
                       {full && (
-                        <span className="rounded-full border border-rose-500/30 bg-rose-500/15 px-2 py-0.5 text-[9px] font-black uppercase text-rose-600 dark:text-rose-400">
+                        <span className="rounded-full border border-rose-500/30 bg-rose-500/15 px-1.5 py-0.2 text-[8px] sm:text-[9px] font-black uppercase text-rose-600 dark:text-rose-400">
                           Full
                         </span>
                       )}
                     </span>
-                    <span className="mt-0.5 block text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                    <span className="mt-0.5 block text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-gray-400 leading-tight">
                       {p.desc}
                     </span>
                   </span>
@@ -369,21 +369,21 @@ const SponsorPG = () => {
         </div>
 
         {/* Summary + pay */}
-        <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-3 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/70 dark:bg-white/[0.03] p-3 sm:p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 sm:gap-4">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Price</p>
-              <p className="text-xl font-black text-gray-900 dark:text-white flex items-center">
-                <IndianRupee size={16} className="mr-0.5" />
+              <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Price</p>
+              <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white flex items-center">
+                <IndianRupee size={15} className="mr-0.5" />
                 {Number(price).toLocaleString()}
               </p>
             </div>
-            <div className="h-10 w-px bg-gray-200 dark:bg-white/10" />
+            <div className="h-8 sm:h-10 w-px bg-gray-200 dark:bg-white/10" />
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Duration</p>
-              <p className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1">
+              <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Duration</p>
+              <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white flex items-center gap-1">
                 {durationDays}
-                <span className="text-sm font-bold text-gray-400">days</span>
+                <span className="text-xs sm:text-sm font-bold text-gray-400">days</span>
               </p>
             </div>
           </div>
@@ -392,17 +392,17 @@ const SponsorPG = () => {
             type="button"
             onClick={handlePay}
             disabled={paying || !selectedPgId || placementFull || selectedAlreadyPaid || approvedPGs.length === 0}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#93B733] hover:bg-[#82a32d] px-6 py-3.5 text-sm font-black text-white shadow-md transition cursor-pointer active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-[#93B733] hover:bg-[#82a32d] px-4 py-2.5 sm:px-6 sm:py-3.5 text-xs sm:text-sm font-black text-white shadow-md transition cursor-pointer active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <BadgeCheck size={18} />
+            <BadgeCheck size={16} />
             {paying ? "Starting payment…" : `Pay ₹${Number(price).toLocaleString()} & Sponsor`}
-            <ArrowRight size={16} />
+            <ArrowRight size={15} />
           </button>
         </div>
       </div>
 
       {/* Existing sponsorships */}
-      <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0c1220] p-5 sm:p-6 shadow-sm">
+      <div className="rounded-3xl bg-white dark:bg-[#0c1220] p-5 sm:p-6">
         <h2 className="mb-4 text-base sm:text-lg font-black text-gray-900 dark:text-white">
           Your Sponsorships
         </h2>
@@ -425,7 +425,7 @@ const SponsorPG = () => {
             {sponsorships.map((s) => (
               <div
                 key={s.id}
-                className="flex flex-col gap-3 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 rounded-2xl bg-gray-50/60 dark:bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#93B733]/15 text-[#4E700F] dark:text-[#93B733]">

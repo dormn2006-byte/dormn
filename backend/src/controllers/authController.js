@@ -23,6 +23,7 @@ import {
   sendPasswordChangedAlert,
 } from "../utils/emailService.js";
 import { validatePasswordStrength, logSecurityAudit } from "../utils/securityAuditService.js";
+import { compressBase64ToWebP } from "../utils/imageProcessor.js";
 import { encrypt } from "../utils/encryptionService.js";
 
 export const formatBankAccountsList = (accounts = []) =>
@@ -50,6 +51,7 @@ export const formatAuthUser = (user) => ({
   profile_image: user.profile_image || null,
   is_email_verified: Boolean(user.is_email_verified) || user.auth_provider === "google",
   auth_provider: user.auth_provider || "local",
+  onboarding_completed: Boolean(user.onboarding_completed),
   subscription_tier: user.subscription_tier,
   subscription_status: user.subscription_status,
   max_pg_listings: user.max_pg_listings,
@@ -70,6 +72,24 @@ export const formatAuthUser = (user) => ({
   bank_accounts: formatBankAccountsList(user.bank_accounts),
   is_payout_configured: Boolean(user.account_number && user.ifsc_code),
 });
+
+/** Helper to determine if a user has completed onboarding / profile details */
+export const isUserOnboarded = async (user) => {
+  if (!user) return false;
+  if (["superadmin", "admin", "event_admin", "event_manager"].includes(user.role)) return true;
+  if (user.onboarding_completed) return true;
+  if (user.role === "owner" && (user.business_name || user.office_address || user.pincode)) return true;
+  if (user.role === "student") {
+    try {
+      const StudentProfile = (await import("../schemas/studentProfileSchema.js")).default;
+      const profile = await StudentProfile.findOne({
+        $or: [{ user_id: Number(user.id || user._id) }, { user_id: String(user.id || user._id) }]
+      }).select("_id").lean();
+      if (profile) return true;
+    } catch {}
+  }
+  return false;
+};
 
 /** Helper to resolve user from request session or email */
 const getRequestUser = async (req) => {
@@ -215,7 +235,7 @@ export const requestOTP = async (req, res) => {
     if (!email) return res.status(400).json({ success: false, message: "Email required" });
 
     const user = await findUserByEmail(email);
-    if (!user || user.auth_provider === "google") return res.status(404).json({ success: false, message: "User not found, try another way" });
+    if (!user) return res.status(404).json({ success: false, message: "User not found, try another way" });
 
     const otp = await generateAndSaveOTP(user.id, 5);
     await sendOTPEmail(email, otp);
@@ -238,17 +258,9 @@ export const loginUser = async (req, res) => {
     }
 
     const user = await findUserByEmail(email);
-    if (!user || user.auth_provider === "google") {
-      logSecurityAudit({ req, eventType: "LOGIN_FAILED", email, status: "FAILED", details: "User not found or Google provider mismatch" });
-      return res.status(404).json({ success: false, message: "User not found, try another way" });
-    }
-
-    if (user.auth_provider === "google") {
-      logSecurityAudit({ req, eventType: "LOGIN_FAILED", userId: user.id, email, status: "FAILED", details: "Attempted password/OTP login on Google account" });
-      return res.status(404).json({
-        success: false,
-        message: "User not found, try another way",
-      });
+    if (!user) {
+      logSecurityAudit({ req, eventType: "LOGIN_FAILED", email, status: "FAILED", details: "User not found" });
+      return res.status(404).json({ success: false, message: "User doesn't exist or invalid credentials or try another way" });
     }
 
     if (otp) {
@@ -262,10 +274,18 @@ export const loginUser = async (req, res) => {
       const isPasswordMatched = await bcrypt.compare(password, user.password);
       if (!isPasswordMatched) {
         logSecurityAudit({ req, eventType: "LOGIN_FAILED", userId: user.id, email, status: "FAILED", details: "Invalid password credentials" });
-        return res.status(401).json({ success: false, message: "Invalid credentials" });
+        if (user.auth_provider === "google") {
+          return res.status(400).json({
+            success: false,
+            isGoogleAccount: true,
+            message: "User doesn't exist or invalid credentials or try another way",
+          });
+        }
+        return res.status(401).json({ success: false, message: "User doesn't exist or invalid credentials or try another way" });
       }
     }
 
+    const onboarded = await isUserOnboarded(user);
     const token = signToken(user);
     if (user.email) sendLoginAlert(user.email, user.full_name).catch(() => {});
 
@@ -291,6 +311,7 @@ export const loginUser = async (req, res) => {
         profile_image: user.profile_image,
         is_email_verified: Boolean(user.is_email_verified) || user.auth_provider === "google",
         auth_provider: user.auth_provider || "local",
+        onboarding_completed: onboarded,
         subscription_tier: user.subscription_tier,
         subscription_status: user.subscription_status,
       }
@@ -413,7 +434,6 @@ export const googleAuth = async (req, res) => {
 
     const cleanEmail = String(email).trim().toLowerCase();
     let user = await findUserByEmail(cleanEmail);
-
     if (user && user.auth_provider === "local") {
       logSecurityAudit({ req, eventType: "LOGIN_FAILED", userId: user.id, email: cleanEmail, status: "FAILED", details: "Attempted Google login on local account" });
       return res.status(404).json({
@@ -435,7 +455,10 @@ export const googleAuth = async (req, res) => {
       });
     }
 
+    let isNewUser = false;
+
     if (!user) {
+      isNewUser = true;
       const assignedRole = ["owner", "student"].includes(role) ? role : "student";
       const cleanGender = ["male", "female"].includes(gender) ? gender : "prefer_not_to_say";
       const cleanedPhone = phone ? String(phone).trim().replace(/\D/g, "") : null;
@@ -451,6 +474,7 @@ export const googleAuth = async (req, res) => {
         gender: cleanGender,
         is_email_verified: 1,
         auth_provider: "google",
+        onboarding_completed: false,
         ...(assignedRole === "owner" && {
           subscription_tier: "free",
           subscription_status: "trial",
@@ -469,21 +493,32 @@ export const googleAuth = async (req, res) => {
         profile_image: picture,
         is_email_verified: 1,
         auth_provider: "google",
+        onboarding_completed: false,
       };
       sendWelcomeEmail(cleanEmail, user.full_name, assignedRole).catch(() => {});
     } else {
-      // If user exists, mark email as verified since authenticated via Google
+      // Existing user: mark email verified and link profile image if absent
+      const updates = {};
       if (!user.is_email_verified) {
-        await User.updateOne({ _id: user.id }, { is_email_verified: 1 });
+        updates.is_email_verified = 1;
         user.is_email_verified = 1;
+      }
+      if (!user.profile_image && picture) {
+        updates.profile_image = picture;
+        user.profile_image = picture;
+      }
+      if (Object.keys(updates).length > 0) {
+        await User.updateOne({ _id: user.id }, { $set: updates });
       }
     }
 
+    const onboarded = isNewUser ? false : await isUserOnboarded(user);
     const authToken = signToken(user);
     sendLoginAlert(user.email, user.full_name).catch(() => {});
 
     return res.status(200).json({
       success: true,
+      isNewUser,
       message: "Google authentication successful",
       token: authToken,
       user: {
@@ -497,6 +532,7 @@ export const googleAuth = async (req, res) => {
         auth_provider: user.auth_provider || "google",
         subscription_tier: user.subscription_tier,
         subscription_status: user.subscription_status,
+        onboarding_completed: onboarded,
       }
     });
   } catch (error) {
@@ -570,17 +606,29 @@ export const updateProfile = async (req, res) => {
     const {
       full_name, phone, secondary_phone, gender, profile_image,
       business_name, office_address, city, state, pincode, operating_since,
-      pan_number, gstin, aadhaar_masked
+      pan_number, gstin, aadhaar_masked, role, onboarding_completed
     } = req.body;
 
     const user = await findUserById(userId);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
+    let updatedRole = user.role;
+    if (role && (role === "student" || role === "owner") && user.role !== "superadmin" && user.role !== "admin") {
+      updatedRole = role;
+    }
+
+    const updatedOnboarding = onboarding_completed !== undefined
+      ? Boolean(onboarding_completed)
+      : (user.onboarding_completed || (updatedRole === "owner" && Boolean(business_name || office_address)));
+
     const updatedName = full_name !== undefined ? full_name : user.full_name;
     const updatedPhone = phone !== undefined ? phone : user.phone;
     const updatedSecPhone = secondary_phone !== undefined ? encrypt(secondary_phone) : (user.secondary_phone ? encrypt(user.secondary_phone) : null);
     const updatedGender = gender !== undefined ? gender : user.gender;
-    const updatedImage = profile_image !== undefined ? profile_image : user.profile_image;
+    let updatedImage = profile_image !== undefined ? profile_image : user.profile_image;
+    if (updatedImage && typeof updatedImage === "string" && updatedImage.startsWith("data:image/")) {
+      updatedImage = await compressBase64ToWebP(updatedImage);
+    }
     const updatedBusiness = business_name !== undefined ? business_name : user.business_name;
     const updatedAddress = office_address !== undefined ? office_address : user.office_address;
     const updatedCity = city !== undefined ? city : user.city;
@@ -594,6 +642,8 @@ export const updateProfile = async (req, res) => {
     await User.updateOne(
       { _id: userId },
       {
+        role: updatedRole,
+        onboarding_completed: updatedOnboarding,
         full_name: updatedName,
         phone: updatedPhone,
         secondary_phone: updatedSecPhone,
@@ -612,11 +662,13 @@ export const updateProfile = async (req, res) => {
     );
 
     const updatedUser = await findUserById(userId);
+    const newToken = signToken(updatedUser);
 
     return res.status(200).json({
       success: true,
       message: "Profile updated successfully",
-      user: formatAuthUser(updatedUser)
+      user: formatAuthUser(updatedUser),
+      token: newToken
     });
   } catch (error) {
     console.error("Update Profile Error:", error);
@@ -1113,12 +1165,14 @@ export const getVerificationStatus = async (req, res) => {
   try {
     const user = await findUserById(req.user?.id);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    const onboarded = await isUserOnboarded(user);
     return res.status(200).json({
       success: true,
       email: user.email,
       role: user.role,
       is_email_verified: Boolean(user.is_email_verified) || user.auth_provider === "google",
       auth_provider: user.auth_provider || "local",
+      onboarding_completed: onboarded,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Server error" });

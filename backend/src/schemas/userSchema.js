@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema(
       enum: ["student", "owner", "superadmin", "event_admin", "event_manager", "admin"],
       default: "student",
     },
+    onboarding_completed: { type: Boolean, default: false },
     gender: { type: String, default: null },
     phone: { type: String, default: null },
     profile_image: { type: String, default: null },

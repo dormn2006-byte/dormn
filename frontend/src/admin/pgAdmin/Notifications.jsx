@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
+import FilterTabs from "./components/FilterTabs";
 
 const Notifications = () => {
   const navigate = useNavigate();
@@ -114,8 +115,8 @@ const Notifications = () => {
         const rentInfo = b.booked_price || b.price ? `₹${Number(b.booked_price || b.price).toLocaleString('en-IN')}/mo` : "";
         const formattedDate = b.booking_date ? new Date(b.booking_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : (b.created_at ? new Date(b.created_at).toLocaleDateString('en-IN') : "Recent");
 
-        let notifTitle = `Booking Request #${b.id}`;
-        let whatIsComing = "";
+        let notifTitle;
+        let whatIsComing;
         if (isPending) {
           notifTitle = `Incoming Tenant: ${b.student_name || "Applicant"}`;
           whatIsComing = `Incoming move-in request for ${roomInfo}${rentInfo ? ` (${rentInfo})` : ""}. Student applied on ${formattedDate}. Review & approve application.`;
@@ -387,44 +388,25 @@ const Notifications = () => {
   });
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto">
+    <div className="space-y-6 w-full">
       
       {/* Action Bar & Category Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-5 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl bg-white dark:bg-[#111] p-5">
         
-        {/* Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          {["All", "Payments", "Bookings", "Maintenance", "Unread", "Pending", "Approved"].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveFilter(tab)}
-              className={`rounded-xl px-4 py-2.5 text-xs font-black transition-all shrink-0 flex items-center gap-1.5 ${
-                activeFilter === tab
-                  ? "bg-[#0D3A1D] text-white dark:bg-[#0D3A1D] dark:text-white dark:border dark:border-[#93B733]/50 shadow-md"
-                  : "bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10"
-              }`}
-            >
-              {tab === "Maintenance" && <Wrench size={13} className="text-[#93B733]" />}
-              {tab === "Payments" && <Send size={13} className="text-[#93B733]" />}
-              <span>{tab}</span>
-              {tab === "Payments" && paymentCount > 0 && (
-                <span className="rounded-full bg-amber-500 px-1.5 py-0.2 text-[9px] font-black text-white">
-                  {paymentCount}
-                </span>
-              )}
-              {tab === "Maintenance" && maintenanceCount > 0 && (
-                <span className="rounded-full bg-amber-500 px-1.5 py-0.2 text-[9px] font-black text-white">
-                  {maintenanceCount}
-                </span>
-              )}
-              {tab === "Unread" && unreadCount > 0 && (
-                <span className="rounded-full bg-rose-500 px-1.5 py-0.2 text-[9px] font-black text-white">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+        {/* Responsive Filter Tabs (Mobile Dropdown + Desktop Segmented Pills) */}
+        <FilterTabs
+          tabs={[
+            { id: "All", label: "All" },
+            { id: "Payments", label: "Payments", icon: Send, count: paymentCount > 0 ? paymentCount : undefined, isAlert: paymentCount > 0 },
+            { id: "Bookings", label: "Bookings" },
+            { id: "Maintenance", label: "Maintenance", icon: Wrench, count: maintenanceCount > 0 ? maintenanceCount : undefined, isAlert: maintenanceCount > 0 },
+            { id: "Unread", label: "Unread", count: unreadCount > 0 ? unreadCount : undefined, isAlert: unreadCount > 0 },
+            { id: "Pending", label: "Pending" },
+            { id: "Approved", label: "Approved" },
+          ]}
+          activeTab={activeFilter}
+          onChange={setActiveFilter}
+        />
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 shrink-0">
@@ -451,12 +433,12 @@ const Notifications = () => {
       {/* Notifications List Grid */}
       <div className="grid grid-cols-1 gap-3.5">
         {loading ? (
-          <div className="flex flex-col items-center justify-center rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-12 text-center shadow-sm">
+          <div className="flex flex-col items-center justify-center rounded-3xl bg-white dark:bg-[#111] p-12 text-center">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 dark:border-gray-800 border-t-[#93B733] mb-3"></div>
             <p className="text-xs font-bold text-gray-500">Fetching live notifications and requests...</p>
           </div>
         ) : filteredNotifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] p-12 text-center shadow-sm">
+          <div className="flex flex-col items-center justify-center rounded-3xl bg-white dark:bg-[#111] p-12 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#93B733]/15 text-[#93B733] mb-3">
               <Bell size={24} />
             </div>
@@ -472,18 +454,18 @@ const Notifications = () => {
                 setResolutionNote(notif.resolutionNote || "");
                 markNotificationRead(notif);
               }}
-              className={`group relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 rounded-3xl border p-5 cursor-pointer transition-all duration-200 ${
+              className={`group relative flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 cursor-pointer transition-all duration-200 ${
                 notif.unread
-                  ? "border-[#93B733]/40 bg-emerald-50/20 dark:bg-[#93B733]/5 shadow-sm"
-                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] hover:border-gray-300 dark:hover:border-white/20"
+                  ? "bg-emerald-50/20 dark:bg-[#93B733]/5"
+                  : "bg-white dark:bg-[#111]"
               }`}
             >
               {/* Left Side: Avatar & Details */}
-              <div className="flex items-start gap-4 flex-1 min-w-0">
+              <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
                 <div
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr ${notif.avatarColor} text-base font-black text-white shadow-md`}
+                  className={`flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-gradient-to-tr ${notif.avatarColor} text-sm sm:text-base font-black text-white shadow-md`}
                 >
-                  {notif.type === 'maintenance' ? <Wrench size={20} /> : notif.senderName.charAt(0)}
+                  {notif.type === 'maintenance' ? <Wrench size={18} className="sm:w-5 sm:h-5" /> : notif.senderName.charAt(0)}
                 </div>
 
                 <div className="flex-1 min-w-0">

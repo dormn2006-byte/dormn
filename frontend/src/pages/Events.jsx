@@ -122,6 +122,28 @@ export default function Events() {
     return liveEvents.find((e) => e.id === selectedEventId) || null;
   }, [selectedEventId, liveEvents]);
 
+  // Featured Events for Hero Slider
+  const featuredEvents = useMemo(() => {
+    let activeEvents = liveEvents.filter((e) => !isEventCompleted(e));
+    if (user?.city) {
+      const cityEvents = activeEvents.filter(
+        (e) => e.city?.toLowerCase() === user.city.toLowerCase()
+      );
+      if (cityEvents.length > 0) return cityEvents.slice(0, 5);
+    }
+    return activeEvents.slice(0, 5);
+  }, [liveEvents, user]);
+
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+
+  useEffect(() => {
+    if (featuredEvents.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSlideIndex((prev) => (prev + 1) % featuredEvents.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [featuredEvents.length, currentSlideIndex]);
+
   // Filtered Events - automatically removes completed events from the public catalog
   const filteredEvents = useMemo(() => {
     return liveEvents.filter((item) => {
@@ -443,68 +465,94 @@ export default function Events() {
       />
       <Navbar />
 
-      {/* Electric Party Hero Section */}
-      <div className="events-hero-bg relative overflow-hidden bg-gradient-to-r from-purple-50 via-pink-50/70 to-indigo-50/60 dark:from-purple-950/90 dark:via-[#120D26] dark:to-[#0A0718] border-b border-purple-200/70 dark:border-purple-500/20 text-gray-900 dark:text-white pt-8 pb-10 sm:pt-10 sm:pb-12 px-4 sm:px-6 lg:px-12 z-10">
-        <div className="absolute -right-16 -bottom-16 w-80 h-80 rounded-full bg-pink-600/15 dark:bg-pink-600/20 blur-3xl pointer-events-none"></div>
-        <div className="absolute left-10 top-0 w-72 h-72 rounded-full bg-purple-600/20 dark:bg-purple-600/25 blur-3xl pointer-events-none"></div>
-
-        <div className="max-w-6xl mx-auto relative z-10">
-          <div className="inline-flex items-center gap-2.5 rounded-xl bg-purple-100/90 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-500/30 pl-1.5 pr-3.5 py-1 text-xs font-black text-purple-900 dark:text-purple-300 mb-3 backdrop-blur-md">
-            <img src="/events-logo.png" alt="Dormn Party" className="h-5 w-5 object-contain" />
-            <span>DORMN PARTY & NIGHTLIFE HQ</span>
-          </div>
-
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-950 via-pink-900 to-indigo-950 dark:from-white dark:via-pink-100 dark:to-purple-300">
-            Discover{" "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 dark:from-pink-400 dark:via-purple-400 dark:to-indigo-400">
-              Club Nights & Concerts
-            </span>
-          </h1>
-
-          <p className="text-xs sm:text-sm font-semibold text-purple-900/80 dark:text-purple-200/80 max-w-2xl mb-5 leading-relaxed">
-            Live concerts, high-energy nightclub dancefloors, and campus fest experiences. Singles pay, couples enter FREE.
-          </p>
-
-          {/* Search Bar */}
-          <div className="relative w-full max-w-2xl mt-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-500 dark:text-purple-300/60" size={17} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by club, concert, artist, or city..."
-              className="events-input-bg w-full pl-11 pr-4 py-3 sm:py-3.5 rounded-full bg-white dark:bg-black/60 border border-purple-200 dark:border-purple-500/30 text-gray-900 dark:text-white placeholder-purple-400/60 dark:placeholder-purple-300/40 text-xs sm:text-sm font-medium outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition backdrop-blur-xl shadow-xs dark:shadow-inner"
+      {/* Electric Party Hero Section with Featured Event Slider */}
+      <div className="relative overflow-hidden bg-gray-900 border-b border-purple-200/70 dark:border-purple-500/20 text-white h-[50vh] min-h-[400px] max-h-[600px] flex items-center z-10 transition-all duration-700">
+        
+        {/* Full-width Background Image */}
+        {featuredEvents.length > 0 && (
+          <div className="absolute inset-0 z-0 transition-opacity duration-1000">
+            <img 
+              src={featuredEvents[currentSlideIndex]?.coverImage} 
+              className="w-full h-full object-cover" 
+              alt={featuredEvents[currentSlideIndex]?.title} 
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-purple-700 hover:text-purple-950 dark:text-purple-300 dark:hover:text-white cursor-pointer"
-              >
-                Clear
-              </button>
-            )}
+            {/* Dark gradient overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
           </div>
+        )}
+
+        <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 w-full relative z-10 py-16">
+          
+          {/* Dynamic Event Slider */}
+          {featuredEvents.length > 0 ? (
+            <div className="flex items-center justify-between w-full animate-[fadeIn_0.5s_ease-out]">
+              
+              {/* Left Arrow (Desktop only) */}
+              <button 
+                onClick={() => setCurrentSlideIndex((prev) => (prev - 1 + featuredEvents.length) % featuredEvents.length)}
+                className="hidden md:flex p-3 rounded-full bg-black/30 hover:bg-black/60 text-white backdrop-blur-md transition -ml-4 border border-white/10"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              </button>
+
+              {/* Slider Content */}
+              <div className="flex-1 flex flex-col items-start gap-4 md:gap-6 w-full max-w-4xl px-2 md:px-8">
+                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white capitalize leading-tight drop-shadow-lg line-clamp-2 md:line-clamp-3">
+                  {featuredEvents[currentSlideIndex].title}
+                </h1>
+                
+                <div>
+                  <button 
+                    onClick={() => setSearchParams({ id: featuredEvents[currentSlideIndex].id })}
+                    className="px-8 py-3 rounded-full bg-pink-600 hover:bg-pink-700 text-white font-black uppercase tracking-wide hover:scale-105 transition-transform shadow-lg cursor-pointer"
+                  >
+                    Book now
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Arrow (Desktop only) */}
+              <button 
+                onClick={() => setCurrentSlideIndex((prev) => (prev + 1) % featuredEvents.length)}
+                className="hidden md:flex p-3 rounded-full bg-black/30 hover:bg-black/60 text-white backdrop-blur-md transition -mr-4 border border-white/10"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+
+            </div>
+          ) : (
+            <div className="py-20 text-left px-8">
+              <h1 className="text-4xl sm:text-6xl font-black text-white">Discover Club Nights & Concerts</h1>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Main Grid Content Area */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-12 mt-6 sm:mt-8 relative z-10">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-            {activeCategory === "all"
-              ? "All Clubs & Arena Experiences"
-              : activeCategory === "clubs"
-              ? "Hottest Nightclubs & Bars"
-              : activeCategory === "concerts"
-              ? "Live Concerts & Stadium Fests"
-              : "College Fests & Standup Events"}
-          </h2>
-          <span className="text-xs font-bold text-purple-700 dark:text-purple-300/80">
-            {filteredEvents.length} {filteredEvents.length === 1 ? "experience" : "experiences"} live
-          </span>
+      {/* Global Search Bar - Placed below the hero slider */}
+      <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 mt-6 relative z-10">
+        <div className="relative w-full max-w-3xl">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-500 dark:text-purple-300/60" size={17} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by club, concert, artist, or city..."
+            className="events-input-bg w-full pl-11 pr-4 py-3 sm:py-3.5 rounded-full bg-white dark:bg-[#120D26]/90 border border-purple-200 dark:border-purple-500/30 text-gray-900 dark:text-white placeholder-purple-400/60 dark:placeholder-purple-300/40 text-xs sm:text-sm font-medium outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition shadow-sm"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-purple-700 hover:text-purple-950 dark:text-purple-300 dark:hover:text-white cursor-pointer"
+            >
+              Clear
+            </button>
+          )}
         </div>
+      </div>
 
-        {/* Listings Grid */}
+      {/* Main Content Area - Category Rows or Grid */}
+      <div className="max-w-[1440px] 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 mt-6 sm:mt-10 relative z-10">
         {filteredEvents.length === 0 ? (
           <div className="events-card-bg bg-white dark:bg-[#0D0B1C]/90 border border-purple-200 dark:border-purple-500/25 rounded-3xl p-12 text-center shadow-xl backdrop-blur-xl">
             <Sparkles className="mx-auto text-pink-600 dark:text-pink-400/70 mb-3" size={40} />
@@ -517,11 +565,51 @@ export default function Events() {
                 : "Check back soon for upcoming concerts, nightclub events, and campus meetups! Event managers will post new listings shortly."}
             </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-            {filteredEvents.map((item) => (
-              <EventCard key={item.id} item={item} onSelect={(id) => setSearchParams({ id })} />
+        ) : activeCategory === "all" && !searchQuery ? (
+          <div className="space-y-4">
+            {[
+              { id: 'clubs', title: 'Hottest Nightclubs & Bars', items: filteredEvents.filter(e => e.category === 'clubs') },
+              { id: 'concerts', title: 'Live Concerts & Stadium Fests', items: filteredEvents.filter(e => e.category === 'concerts') },
+              { id: 'events', title: 'College Fests & Standup Events', items: filteredEvents.filter(e => e.category === 'events') },
+            ].map(cat => cat.items.length > 0 && (
+              <div key={cat.id} className="mb-10 sm:mb-12">
+                <div className="flex items-center justify-between mb-4 sm:mb-5 pr-2">
+                  <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                    {cat.title}
+                  </h2>
+                  <button 
+                    onClick={() => { setActiveCategory(cat.id); setSearchParams({ category: cat.id }); }}
+                    className="text-xs font-black uppercase tracking-wider text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition"
+                  >
+                    View more &rarr;
+                  </button>
+                </div>
+                {/* Horizontal Scroll Row */}
+                <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 sm:gap-6 pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  {cat.items.map((item) => (
+                    <div key={item.id} className="snap-start shrink-0 w-[240px] sm:w-[280px] md:w-[320px]">
+                      <EventCard item={item} onSelect={(id) => setSearchParams({ id })} />
+                    </div>
+                  ))}
+                </div>
+              </div>
             ))}
+          </div>
+        ) : (
+          <div className="mb-10 sm:mb-12">
+            <div className="flex items-center justify-between mb-4 sm:mb-5">
+              <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                {activeCategory === "clubs" ? "Hottest Nightclubs & Bars" : activeCategory === "concerts" ? "Live Concerts & Stadium Fests" : activeCategory === "events" ? "College Fests & Standup Events" : "Search Results"}
+              </h2>
+              <span className="text-xs font-bold text-purple-700 dark:text-purple-300/80">
+                {filteredEvents.length} {filteredEvents.length === 1 ? "experience" : "experiences"} live
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-5 sm:gap-6">
+              {filteredEvents.map((item) => (
+                <EventCard key={item.id} item={item} onSelect={(id) => setSearchParams({ id })} />
+              ))}
+            </div>
           </div>
         )}
       </div>

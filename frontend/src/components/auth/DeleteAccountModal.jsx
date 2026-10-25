@@ -51,7 +51,7 @@ function DeleteAccountModal({ isOpen, onClose }) {
         setTimeout(() => inputRefs.current[0]?.focus(), 50);
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to send deletion code.");
+      setError(!err.response ? "Unable to connect to server. Please check your backend connection." : (err.response?.data?.message || "Failed to send deletion code. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -97,7 +97,7 @@ function DeleteAccountModal({ isOpen, onClose }) {
         navigate("/", { state: { accountDeleted: true }, replace: true });
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Deletion failed. Please verify your OTP.");
+      setError(!err.response ? "Unable to connect to server. Please check backend connection." : (err.response?.data?.message || "Deletion failed. Please verify your OTP."));
     } finally {
       setLoading(false);
     }

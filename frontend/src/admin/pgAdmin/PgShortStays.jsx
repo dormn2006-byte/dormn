@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import api from "../../services/api";
 import { formatStayDate, getShortStayStatusMeta } from "../../utils/shortStayUtils";
+import FilterTabs from "./components/FilterTabs";
 
 const ShortStayStatusBadge = ({ status }) => {
   const meta = getShortStayStatusMeta(status);
@@ -126,7 +127,7 @@ export default function PgShortStays() {
   }, [shortStays]);
 
   return (
-    <div className="space-y-5 pb-16 max-w-7xl mx-auto px-3 sm:px-6">
+    <div className="space-y-6 w-full pb-12">
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 rounded-2xl bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-5 py-3 shadow-2xl flex items-center gap-3 border border-white/10 animate-in fade-in slide-in-from-top-4">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -134,39 +135,15 @@ export default function PgShortStays() {
         </div>
       )}
 
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-indigo-50 via-white to-emerald-50/40 dark:from-indigo-950/20 dark:via-black dark:to-emerald-950/20 p-5 sm:p-6 rounded-3xl border border-indigo-100 dark:border-white/10 shadow-xs">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 text-xs font-black uppercase tracking-wider mb-2">
-            <CalendarRange size={14} /> Short Stays & Daily Guests
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Short Stay Bookings
-          </h1>
-          <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-0.5 font-medium">
-            Review and approve 4–5 days or daily guest requests from students and temporary residents.
-          </p>
-        </div>
-
-        <button
-          onClick={() => fetchShortStays(true)}
-          disabled={refreshing}
-          className="self-start md:self-auto inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-white dark:bg-[#151515] border border-gray-200 dark:border-white/10 text-xs font-black text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition shadow-xs cursor-pointer"
-        >
-          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-          <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
-        </button>
-      </div>
-
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { label: "Total Requests", val: stats.total, sub: "All short stay bookings", border: "border-gray-200 dark:border-white/10", bg: "bg-white dark:bg-[#111]" },
-          { label: "Pending Review", val: stats.pending, sub: "Awaiting your approval", icon: Clock, border: "border-amber-500/30", bg: "bg-amber-50/40 dark:bg-amber-950/20", color: "text-amber-800 dark:text-amber-300" },
-          { label: "Approved Stays", val: stats.approved, sub: "Confirmed by you", icon: CheckCircle2, border: "border-emerald-500/30", bg: "bg-emerald-50/40 dark:bg-emerald-950/20", color: "text-emerald-800 dark:text-emerald-300" },
-          { label: "Active Today", val: stats.activeToday, sub: "Currently residing guests", icon: Sparkles, border: "border-indigo-500/30", bg: "bg-indigo-50/40 dark:bg-indigo-950/20", color: "text-indigo-800 dark:text-indigo-300" },
+          { label: "Total Requests", val: stats.total, sub: "All short stay bookings", bg: "bg-white dark:bg-[#111]" },
+          { label: "Pending Review", val: stats.pending, sub: "Awaiting your approval", icon: Clock, bg: "bg-amber-50/40 dark:bg-amber-950/20", color: "text-amber-800 dark:text-amber-300" },
+          { label: "Approved Stays", val: stats.approved, sub: "Confirmed by you", icon: CheckCircle2, bg: "bg-emerald-50/40 dark:bg-emerald-950/20", color: "text-emerald-800 dark:text-emerald-300" },
+          { label: "Active Today", val: stats.activeToday, sub: "Currently residing guests", icon: Sparkles, bg: "bg-indigo-50/40 dark:bg-indigo-950/20", color: "text-indigo-800 dark:text-indigo-300" },
         ].map((s, i) => (
-          <div key={i} className={`p-4 rounded-2xl border ${s.border} ${s.bg} shadow-xs`}>
+          <div key={i} className={`p-4 rounded-2xl ${s.bg}`}>
             <div className="flex items-center justify-between">
               <span className={`text-[11px] font-bold uppercase tracking-wider ${s.color || "text-gray-400"}`}>{s.label}</span>
               {s.icon && <s.icon size={15} className={s.color || "text-gray-400"} />}
@@ -178,27 +155,18 @@ export default function PgShortStays() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-[#111] p-3 rounded-2xl border border-gray-200 dark:border-white/10 shadow-xs">
-        <div className="flex items-center gap-1 overflow-x-auto scrollbar-none pb-1 sm:pb-0">
-          {[
-            { key: "all", label: `All (${shortStays.length})` },
-            { key: "pending", label: `Pending (${stats.pending})` },
-            { key: "approved", label: `Approved (${stats.approved})` },
-            { key: "history", label: "Completed / Other" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition shrink-0 cursor-pointer ${
-                activeTab === tab.key
-                  ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900 shadow-xs"
-                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-[#111] p-3 rounded-2xl">
+        {/* Responsive Filter Tabs (Mobile Dropdown + Desktop Segmented Pills) */}
+        <FilterTabs
+          tabs={[
+            { id: "all", label: "All", count: shortStays.length },
+            { id: "pending", label: "Pending", count: stats.pending },
+            { id: "approved", label: "Approved", count: stats.approved },
+            { id: "history", label: "Completed / Other" },
+          ]}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+        />
 
         <div className="flex items-center gap-2">
           {distinctPgs.length > 1 && (
@@ -224,6 +192,16 @@ export default function PgShortStays() {
               className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black text-xs font-medium text-gray-800 dark:text-gray-200 placeholder:text-gray-400 outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
+
+          <button
+            onClick={() => fetchShortStays(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition shrink-0 cursor-pointer"
+            title="Refresh short stays"
+          >
+            <RefreshCw size={13} className={refreshing ? "animate-spin text-[#93B733]" : "text-[#93B733]"} />
+            <span>Refresh</span>
+          </button>
         </div>
       </div>
 
@@ -234,7 +212,7 @@ export default function PgShortStays() {
           <p className="text-xs font-bold text-gray-500">Loading short stay requests...</p>
         </div>
       ) : filteredStays.length === 0 ? (
-        <div className="p-10 text-center rounded-3xl border border-dashed border-gray-200 dark:border-white/10 bg-white dark:bg-[#111]">
+        <div className="p-10 text-center rounded-3xl bg-white dark:bg-[#111]">
           <CalendarRange className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
           <h3 className="text-sm font-black text-gray-800 dark:text-gray-200">No Short Stays Found</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-1 font-medium">
@@ -252,17 +230,17 @@ export default function PgShortStays() {
             return (
               <div
                 key={stay.id}
-                className="flex flex-col justify-between p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111] hover:border-indigo-400/40 transition-all shadow-xs"
+                className="flex flex-col justify-between p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-white dark:bg-[#111] transition-all"
               >
                 <div>
-                  <div className="flex items-start justify-between gap-2 pb-3 border-b border-gray-100 dark:border-white/5">
+                  <div className="flex items-start justify-between gap-2 pb-2.5 sm:pb-3 border-b border-gray-100 dark:border-white/5">
                     <div>
                       <div className="flex items-center gap-1.5 text-xs font-black text-gray-900 dark:text-white">
-                        <Building2 size={14} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+                        <Building2 size={13} className="text-indigo-600 dark:text-indigo-400 shrink-0 sm:w-3.5 sm:h-3.5" />
                         <span className="truncate">{stay.pg_title || `PG #${stay.pg_id}`}</span>
                       </div>
                       {(stay.pg_area || stay.pg_city) && (
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium pl-5">
+                        <p className="text-[10px] sm:text-[11px] text-gray-500 dark:text-gray-400 font-medium pl-4 sm:pl-5">
                           {[stay.pg_area, stay.pg_city].filter(Boolean).join(", ")}
                         </p>
                       )}

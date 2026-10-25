@@ -13,41 +13,27 @@ body,
   -webkit-text-size-adjust: 100%;
 }
 
-/* On mobile (< 1024px): keep mobile font rendering completely untouched */
-@media (max-width: 1023px) {
-  body {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+/* Razor-sharp clean text rendering across all screens & display scaling */
+html,
+body {
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "kern" 1, "liga" 1;
 }
 
-/* On laptop & desktop (>= 1024px): Crystal-clear sharp subpixel text rendering */
-@media (min-width: 1024px) {
-  html,
-  body {
-    -webkit-font-smoothing: auto !important;
-    -moz-osx-font-smoothing: auto !important;
-    text-rendering: optimizeLegibility !important;
-    font-feature-settings: "kern" 1, "liga" 1;
-  }
+/* Ensure crisp rendering for UI sidebars, navigation and menus */
+aside, nav, button, input {
+  text-rendering: geometricPrecision;
+}
 
-  /* Make SVG icons and line graphics crisp without pixel blur */
-  svg {
-    shape-rendering: geometricPrecision;
-  }
+/* Make SVG icons and line graphics crisp without pixel blur */
+svg {
+  shape-rendering: geometricPrecision;
+}
 
-  /* Prevent Chromium rasterization texture blur during transforms/hovers on laptop displays */
-  .transform,
-  [class*="hover:-translate"],
-  [class*="hover:scale"] {
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-    transform-style: preserve-3d;
-  }
-
-  img {
-    image-rendering: auto;
-  }
+img {
+  image-rendering: auto;
 }
 
 /* Pure Black Dark Theme for Whole Application */
@@ -658,5 +644,26 @@ html.dark .events-dock-container {
   .thumbnail-marquee-item {
     width: calc((100cqw - 36px) / 4);
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   OWNER DASHBOARD CLOUDFLARE-STYLE TYPOGRAPHY (INTER / SYSTEM-UI)
+   ══════════════════════════════════════════════════════════════ */
+.owner-portal-root,
+.owner-portal-root *,
+.owner-portal-root input,
+.owner-portal-root button,
+.owner-portal-root select,
+.owner-portal-root textarea {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: geometricPrecision !important;
+}
+
+.owner-portal-root {
+  letter-spacing: -0.011em;
+  scrollbar-gutter: auto !important;
 }
 
